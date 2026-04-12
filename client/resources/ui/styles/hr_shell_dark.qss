@@ -1,0 +1,155 @@
+/* JobHub — HR Portal (dark) */
+
+QMainWindow#HRDashboard {
+  background: #0f172a;
+}
+
+QFrame#sidebar {
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  min-width: 240px;
+  max-width: 280px;
+}
+
+QLabel#brandTitle {
+  color: #34d399;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+QLabel#brandSubtitle {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+QPushButton#navButton {
+  text-align: left;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+QPushButton#navButton:checked,
+QPushButton#navButton:hover {
+  background: #064e3b;
+  color: #6ee7b7;
+}
+
+QPushButton#logoutButton {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #475569;
+  background: #334155;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+QStackedWidget#stackedPages {
+  background: #0f172a;
+}
+
+QWidget#pageDash {
+  background: #0f172a;
+}
+
+QLabel#pageTitle {
+  font-size: 28px;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+QLabel#pageSubtitle {
+  font-size: 15px;
+  color: #94a3b8;
+}
+
+QLabel#sectionTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-top: 8px;
+}
+
+QFrame#chartCard {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+}
+
+QFrame#statCard {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  min-width: 160px;
+}
+
+QFrame#statIconFrame {
+  background: #064e3b;
+  border-radius: 10px;
+  border: none;
+}
+
+QLabel#labelStatTitle {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+QLabel#labelStatValue {
+  font-size: 26px;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+QLabel#labelStatHint {
+  font-size: 12px;
+  color: #34d399;
+  font-weight: 600;
+}
+
+QLineEdit,
+QPlainTextEdit {
+  border: 1px solid #475569;
+  border-radius: 10px;
+  padding: 10px;
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+QPushButton#btnSaveDraft {
+  background: #334155;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 600;
+}
+
+QPushButton#btnSubmitJob {
+  background: #059669;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-weight: 600;
+}
+
+QTableWidget {
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: #1e293b;
+  gridline-color: #334155;
+}
+
+QHeaderView::section {
+  background: #1e293b;
+  padding: 10px;
+  border: none;
+  border-bottom: 1px solid #334155;
+  font-weight: 600;
+  color: #cbd5e1;
+}

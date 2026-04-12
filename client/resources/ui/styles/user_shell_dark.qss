@@ -1,0 +1,199 @@
+/* JobHub — User / ứng viên (dark) */
+
+QMainWindow#DashboardShell {
+  background: #0f172a;
+}
+
+QFrame#sidebar {
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  min-width: 240px;
+  max-width: 268px;
+}
+
+QLabel#brandTitle {
+  color: #60a5fa;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+QLabel#brandSubtitle {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+QPushButton#navButton {
+  text-align: left;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+QPushButton#navButton:checked,
+QPushButton#navButton:hover {
+  background: #1e3a5f;
+  color: #93c5fd;
+}
+
+QPushButton#logoutButton {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #475569;
+  background: #334155;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+QPushButton#logoutButton:hover {
+  background: #475569;
+}
+
+QStackedWidget#mainStack {
+  background: #0f172a;
+}
+
+QWidget#pageHome,
+QWidget#pageCv {
+  background: #0f172a;
+}
+
+QLabel#pageTitle {
+  font-size: 28px;
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: -0.5px;
+}
+
+QLabel#pageSubtitle {
+  font-size: 15px;
+  color: #94a3b8;
+}
+
+QFrame#searchBarFrame {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 28px;
+}
+
+QFrame#searchBarFrame QLabel {
+  font-size: 16px;
+}
+
+QLineEdit#lineSearch {
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  padding: 4px 8px;
+  color: #f1f5f9;
+}
+
+QScrollArea#scrollJobs {
+  border: none;
+  background: transparent;
+}
+
+QWidget#scrollJobsContents {
+  background: transparent;
+}
+
+QFrame#jobCard {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+}
+
+QFrame#jobCard:hover {
+  border-color: #475569;
+}
+
+QLabel#labelJobTitle {
+  font-weight: 700;
+  font-size: 16px;
+  color: #f1f5f9;
+}
+
+QLabel#labelJobCompany {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+QFrame#jobCard QLabel#labelJobType {
+  background: #1e3a5f;
+  color: #93c5fd;
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+QLabel#labelJobDesc {
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+QLabel#labelSalary,
+QLabel#labelLocation {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+QToolButton#btnBookmark {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  padding: 4px;
+}
+
+QToolButton#btnBookmark:checked {
+  color: #60a5fa;
+}
+
+QComboBox {
+  border: 1px solid #475569;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 13px;
+  min-height: 20px;
+}
+
+QPushButton#btnApply {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+QPushButton#btnApply:hover {
+  background: #1d4ed8;
+}
+
+QPushButton#btnPickCv,
+QPushButton#btnUploadCv {
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 600;
+}
+
+QPushButton#btnUploadCv {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+}
+
+QPushButton#btnPickCv {
+  background: #334155;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+}

@@ -1,0 +1,153 @@
+from datetime import datetime, timedelta
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from ..db import get_db
+from ..deps import get_current_user
+from ..models import HRApprovalStatus, HRProfile, Job, JobStatus, User, UserRole
+from ..schemas import AdminDecision, JobOut, StatsOut, UserOut
+
+router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _require_admin(user: User) -> User:
+    if user.role != UserRole.admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+    return user
+
+
+@router.get("/dashboard", response_model=StatsOut)
+def admin_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> StatsOut:
+    _require_admin(user)
+    total_users = db.scalar(select(func.count()).select_from(User).where(User.role == UserRole.candidate)) or 0
+    total_hr = db.scalar(select(func.count()).select_from(User).where(User.role == UserRole.hr)) or 0
+    total_jobs = db.scalar(select(func.count()).select_from(Job)) or 0
+    since = datetime.utcnow() - timedelta(days=1)
+    activity = db.scalar(select(func.count()).select_from(Job).where(Job.created_at >= since)) or 0
+    monthly_users = db.execute(
+        select(func.month(User.created_at), func.count())
+        .where(User.role == UserRole.candidate)
+        .group_by(func.month(User.created_at))
+        .order_by(func.month(User.created_at))
+    ).all()
+    monthly_jobs = db.execute(
+        select(func.month(Job.created_at), func.count()).group_by(func.month(Job.created_at)).order_by(func.month(Job.created_at))
+    ).all()
+    labels = [f"T{max(1, min(12, i))}" for i in range(1, 7)]
+    u_vals = [0] * 6
+    j_vals = [0] * 6
+    for m, c in monthly_users:
+        idx = (int(m or 1) - 1) % 6
+        u_vals[idx] = int(c)
+    for m, c in monthly_jobs:
+        idx = (int(m or 1) - 1) % 6
+        j_vals[idx] = int(c)
+    values = [u + j for u, j in zip(u_vals, j_vals)]
+    return StatsOut(
+        labels=labels,
+        values=values,
+        cards={
+            "users": int(total_users),
+            "hr": int(total_hr),
+            "jobs": int(total_jobs),
+            "activity_today": int(activity),
+        },
+    )
+
+
+@router.get("/pending/hr", response_model=list[UserOut])
+def pending_hr(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[User]:
+    _require_admin(user)
+    rows = db.scalars(
+        select(User)
+        .join(HRProfile, HRProfile.user_id == User.id)
+        .where(HRProfile.approval_status == HRApprovalStatus.pending)
+    ).all()
+    return list(rows)
+
+
+@router.post("/hr/{target_user_id}/approve")
+def approve_hr(
+    target_user_id: int,
+    body: AdminDecision,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_admin(user)
+    target = db.get(User, target_user_id)
+    if not target or target.role != UserRole.hr or not target.hr_profile:
+        raise HTTPException(status_code=404, detail="HR not found")
+    target.hr_profile.approval_status = HRApprovalStatus.approved
+    target.hr_profile.admin_note = body.note
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/hr/{target_user_id}/reject")
+def reject_hr(
+    target_user_id: int,
+    body: AdminDecision,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_admin(user)
+    target = db.get(User, target_user_id)
+    if not target or target.role != UserRole.hr or not target.hr_profile:
+        raise HTTPException(status_code=404, detail="HR not found")
+    target.hr_profile.approval_status = HRApprovalStatus.rejected
+    target.hr_profile.admin_note = body.note
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/pending/jobs", response_model=list[JobOut])
+def pending_jobs(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
+    _require_admin(user)
+    rows = db.scalars(select(Job).where(Job.status == JobStatus.pending_approval).order_by(Job.id.desc())).all()
+    return list(rows)
+
+
+@router.post("/jobs/{job_id}/approve", response_model=JobOut)
+def approve_job(
+    job_id: int,
+    body: AdminDecision,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Job:
+    _require_admin(user)
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job.status = JobStatus.published
+    job.admin_note = body.note
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/jobs/{job_id}/reject", response_model=JobOut)
+def reject_job(
+    job_id: int,
+    body: AdminDecision,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Job:
+    _require_admin(user)
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job.status = JobStatus.rejected
+    job.admin_note = body.note
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.get("/users", response_model=list[UserOut])
+def list_users(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[User]:
+    _require_admin(user)
+    rows = db.scalars(select(User).order_by(User.id.desc()).limit(500)).all()
+    return list(rows)

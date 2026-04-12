@@ -1,0 +1,11 @@
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzc4NTcyNjEyLCJyb2xlIjoiY2FuZGlkYXRlIn0.piTiTvPCoSEQJnoeiPuOEQ3xcdi28pruu9RYVrBqB8c",
+  "user": {
+    "id": 1,
+    "email": "test@gmail.com",
+    "full_name": "Aira",
+    "avatar_storage_key": null,
+    "role": "candidate",
+    "created_at": "2026-04-12T07:56:52"
+  }
+}

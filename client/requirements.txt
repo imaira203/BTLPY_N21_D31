@@ -1,0 +1,4 @@
+PySide6>=6.10.1
+requests>=2.32.0
+matplotlib>=3.9.0
+pydantic-settings>=2.6.0

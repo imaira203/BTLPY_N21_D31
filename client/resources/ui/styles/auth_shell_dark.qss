@@ -1,0 +1,184 @@
+/* JobHub — Đăng nhập / Đăng ký (dark) */
+
+QMainWindow#AuthWindow {
+  background: #0f172a;
+}
+
+QWidget#authRoot {
+  background: transparent;
+}
+
+QFrame#brandPanel {
+  background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+    stop:0 #0c1a3d, stop:1 #1e3a8a);
+  border: none;
+  min-width: 380px;
+}
+
+QLabel#brandLogo {
+  color: #f8fafc;
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+QLabel#brandTagline {
+  color: rgba(248, 250, 252, 0.88);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+QLabel#brandFooter {
+  color: rgba(248, 250, 252, 0.45);
+  font-size: 12px;
+}
+
+QFrame#formOuter {
+  background: #0f172a;
+  border: none;
+}
+
+QFrame#authCard {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 16px;
+}
+
+QLabel#labelTheme {
+  font-size: 13px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+QCheckBox#checkDarkMode {
+  font-size: 13px;
+  font-weight: 600;
+  color: #cbd5e1;
+  spacing: 8px;
+}
+
+QLabel#formHeaderTitle {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+QLabel#formHeaderSub {
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+QFrame#authCard QTabWidget::pane {
+  border: none;
+  background: transparent;
+  padding-top: 8px;
+}
+
+QFrame#authCard QTabWidget QTabBar::tab {
+  background: transparent;
+  color: #94a3b8;
+  padding: 10px 20px;
+  margin-right: 4px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+QFrame#authCard QTabWidget QTabBar::tab:selected {
+  color: #60a5fa;
+  border-bottom: 2px solid #60a5fa;
+}
+
+QFrame#authCard QTabWidget QTabBar::tab:hover:!selected {
+  color: #cbd5e1;
+}
+
+QFrame#authCard QTabWidget QWidget QLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+QFrame#authCard QLineEdit {
+  border: 1px solid #475569;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  background: #0f172a;
+  color: #f1f5f9;
+  min-height: 20px;
+  selection-background-color: #3b82f6;
+  selection-color: #ffffff;
+}
+
+QFrame#authCard QLineEdit:focus {
+  border: 1px solid #60a5fa;
+  background: #1e293b;
+}
+
+QFrame#authCard QLineEdit::placeholder {
+  color: #64748b;
+}
+
+QFrame#authCard QPlainTextEdit {
+  border: 1px solid #475569;
+  border-radius: 12px;
+  padding: 10px;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 14px;
+  selection-background-color: #3b82f6;
+  selection-color: #ffffff;
+}
+
+QFrame#authCard QPlainTextEdit:focus {
+  border: 1px solid #60a5fa;
+  background: #1e293b;
+}
+
+QPushButton#btnLogin,
+QPushButton#btnRegister {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  min-height: 22px;
+}
+
+QPushButton#btnLogin:hover,
+QPushButton#btnRegister:hover {
+  background: #1d4ed8;
+}
+
+QPushButton#btnLogin:pressed,
+QPushButton#btnRegister:pressed {
+  background: #1e40af;
+}
+
+QCheckBox#checkHr {
+  font-size: 14px;
+  color: #cbd5e1;
+  spacing: 8px;
+}
+
+QGroupBox {
+  font-weight: 600;
+  color: #f1f5f9;
+  border: 1px solid #475569;
+  border-radius: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+QScrollArea#authScroll {
+  border: none;
+  background: transparent;
+}
+
+QWidget#authScrollContents {
+  background: transparent;
+}

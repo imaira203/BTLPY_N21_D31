@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>HRDashboard</class>
+ <widget class="QMainWindow" name="HRDashboard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1100</width>
+    <height>720</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>JobHub — HR</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="horizontalLayout_root">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QFrame" name="sidebar">
+      <property name="objectName">
+       <string>sidebar</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_side">
+       <item>
+        <widget class="QLabel" name="brandTitle">
+         <property name="objectName">
+          <string>brandTitle</string>
+         </property>
+         <property name="text">
+          <string>JobHub</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="brandSubtitle">
+         <property name="objectName">
+          <string>brandSubtitle</string>
+         </property>
+         <property name="text">
+          <string>HR Portal</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="navDash">
+         <property name="objectName">
+          <string>navButton</string>
+         </property>
+         <property name="text">
+          <string>Dashboard</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="navPost">
+         <property name="objectName">
+          <string>navButton</string>
+         </property>
+         <property name="text">
+          <string>Đăng tin tuyển dụng</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="navJobs">
+         <property name="objectName">
+          <string>navButton</string>
+         </property>
+         <property name="text">
+          <string>Quản lý tin đăng</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="navCands">
+         <property name="objectName">
+          <string>navButton</string>
+         </property>
+         <property name="text">
+          <string>Danh sách ứng viên</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btnLogout">
+         <property name="objectName">
+          <string>logoutButton</string>
+         </property>
+         <property name="text">
+          <string>Đăng xuất</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QStackedWidget" name="stackedPages">
+      <widget class="QWidget" name="pageDash">
+       <property name="objectName">
+        <string>pageDash</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_dash">
+        <property name="spacing">
+         <number>16</number>
+        </property>
+        <property name="leftMargin">
+         <number>28</number>
+        </property>
+        <property name="topMargin">
+         <number>24</number>
+        </property>
+        <property name="rightMargin">
+         <number>28</number>
+        </property>
+        <property name="bottomMargin">
+         <number>20</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="labelDashTitle">
+          <property name="objectName">
+           <string>pageTitle</string>
+          </property>
+          <property name="text">
+           <string>Dashboard</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelDashSub">
+          <property name="objectName">
+           <string>pageSubtitle</string>
+          </property>
+          <property name="text">
+           <string>Tổng quan hoạt động tuyển dụng</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_cards"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelChartSection">
+          <property name="objectName">
+           <string>sectionTitle</string>
+          </property>
+          <property name="text">
+           <string>Biểu đồ ứng viên theo tháng</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QFrame" name="chartCard">
+          <property name="objectName">
+           <string>chartCard</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_chart">
+           <property name="leftMargin">
+            <number>8</number>
+           </property>
+           <property name="topMargin">
+            <number>8</number>
+           </property>
+           <property name="rightMargin">
+            <number>8</number>
+           </property>
+           <property name="bottomMargin">
+            <number>8</number>
+           </property>
+           <item>
+            <widget class="QWidget" name="chartHolder" native="true"/>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="pagePost">
+       <layout class="QVBoxLayout" name="verticalLayout_post">
+        <item>
+         <widget class="QLabel" name="labelPostTitle">
+          <property name="text">
+           <string>Đăng tin tuyển dụng</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">font-size: 18px; font-weight: 700;</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QFormLayout" name="formJob">
+          <item row="0" column="0">
+           <widget class="QLabel" name="ljt">
+            <property name="text">
+             <string>Tiêu đề</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="lineJobTitle"/>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="ljd">
+            <property name="text">
+             <string>Mô tả</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QPlainTextEdit" name="plainJobDesc">
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>120</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="ljs">
+            <property name="text">
+             <string>Lương</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLineEdit" name="lineSalary"/>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="ljloc">
+            <property name="text">
+             <string>Địa điểm</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QLineEdit" name="lineLocation"/>
+          </item>
+          <item row="4" column="0">
+           <widget class="QLabel" name="ljtype">
+            <property name="text">
+             <string>Loại hình</string>
+            </property>
+           </widget>
+          </item>
+          <item row="4" column="1">
+           <widget class="QLineEdit" name="lineJobType"/>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_post_btns">
+          <item>
+           <widget class="QPushButton" name="btnSaveDraft">
+            <property name="text">
+             <string>Lưu nháp</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnSubmitJob">
+            <property name="text">
+             <string>Gửi duyệt</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_post">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelHrStatus">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="verticalSpacer_post">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="pageJobs">
+       <layout class="QVBoxLayout" name="verticalLayout_jobs">
+        <item>
+         <widget class="QLabel" name="labelMyJobs">
+          <property name="text">
+           <string>Quản lý tin đăng</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="tableJobs">
+          <column>
+           <property name="text">
+            <string>ID</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Tiêu đề</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Trạng thái</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Hành động</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="pageCands">
+       <layout class="QVBoxLayout" name="verticalLayout_cands">
+        <item>
+         <widget class="QLabel" name="labelCands">
+          <property name="text">
+           <string>Danh sách ứng viên</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="tableCands">
+          <column>
+           <property name="text">
+            <string>Ứng viên</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Email</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Việc</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>Trạng thái</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

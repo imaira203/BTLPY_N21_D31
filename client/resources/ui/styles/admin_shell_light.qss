@@ -1,0 +1,133 @@
+/* JobHub — Admin Panel */
+
+QMainWindow#AdminDashboard {
+  background: #f8fafc;
+}
+
+QFrame#sidebar {
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  min-width: 240px;
+  max-width: 280px;
+}
+
+QLabel#brandTitle {
+  color: #7c3aed;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+QLabel#brandSubtitle {
+  color: #64748b;
+  font-size: 13px;
+}
+
+QPushButton#navButton {
+  text-align: left;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+QPushButton#navButton:checked,
+QPushButton#navButton:hover {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+QPushButton#logoutButton {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  font-weight: 500;
+}
+
+QStackedWidget#stackedPages {
+  background: #f8fafc;
+}
+
+QWidget#pageDash {
+  background: #f8fafc;
+}
+
+QLabel#pageTitle {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+QLabel#pageSubtitle {
+  font-size: 15px;
+  color: #64748b;
+}
+
+QLabel#sectionTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 8px;
+}
+
+QFrame#chartCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+QFrame#statCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  min-width: 160px;
+}
+
+QFrame#statIconFrame {
+  background: #ede9fe;
+  border-radius: 10px;
+  border: none;
+}
+
+QLabel#labelStatTitle {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+QLabel#labelStatValue {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+QLabel#labelStatHint {
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 600;
+}
+
+QTableWidget {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  gridline-color: #f1f5f9;
+}
+
+QHeaderView::section {
+  background: #f8fafc;
+  padding: 10px;
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  font-weight: 600;
+  color: #475569;
+}
+
+QPushButton {
+  border-radius: 8px;
+  padding: 8px 12px;
+}

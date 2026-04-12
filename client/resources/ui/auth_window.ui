@@ -1,0 +1,437 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AuthWindow</class>
+ <widget class="QMainWindow" name="AuthWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1000</width>
+    <height>640</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>760</width>
+    <height>500</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>JobHub — Đăng nhập</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="objectName">
+    <string>authRoot</string>
+   </property>
+   <layout class="QHBoxLayout" name="horizontalLayout_root">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QFrame" name="brandPanel">
+      <property name="objectName">
+       <string>brandPanel</string>
+      </property>
+      <property name="minimumSize">
+       <size>
+        <width>380</width>
+        <height>0</height>
+       </size>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_brand">
+       <property name="leftMargin">
+        <number>40</number>
+       </property>
+       <property name="topMargin">
+        <number>48</number>
+       </property>
+       <property name="rightMargin">
+        <number>40</number>
+       </property>
+       <property name="bottomMargin">
+        <number>48</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="label_brand_logo">
+         <property name="objectName">
+          <string>brandLogo</string>
+         </property>
+         <property name="text">
+          <string>JobHub</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_brand_tagline">
+         <property name="objectName">
+          <string>brandTagline</string>
+         </property>
+         <property name="text">
+          <string>Nền tảng kết nối nhà tuyển dụng và ứng viên hiện đại.</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_brand">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_brand_footer">
+         <property name="objectName">
+          <string>brandFooter</string>
+         </property>
+         <property name="text">
+          <string>© 2026 JobHub</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QFrame" name="formOuter">
+      <property name="objectName">
+       <string>formOuter</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_form_outer">
+       <property name="spacing">
+        <number>12</number>
+       </property>
+       <property name="leftMargin">
+        <number>32</number>
+       </property>
+       <property name="topMargin">
+        <number>24</number>
+       </property>
+       <property name="rightMargin">
+        <number>32</number>
+       </property>
+       <property name="bottomMargin">
+        <number>24</number>
+       </property>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_theme">
+         <property name="spacing">
+          <number>12</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="labelTheme">
+           <property name="objectName">
+            <string>labelTheme</string>
+           </property>
+           <property name="text">
+            <string>Giao diện</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QCheckBox" name="checkDarkMode">
+           <property name="objectName">
+            <string>checkDarkMode</string>
+           </property>
+           <property name="text">
+            <string>Chế độ tối</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_theme">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QScrollArea" name="authScroll">
+         <property name="objectName">
+          <string>authScroll</string>
+         </property>
+         <property name="widgetResizable">
+          <bool>true</bool>
+         </property>
+         <widget class="QWidget" name="authScrollContents">
+          <property name="objectName">
+           <string>authScrollContents</string>
+          </property>
+          <layout class="QVBoxLayout" name="verticalLayout_scroll">
+           <property name="spacing">
+            <number>0</number>
+           </property>
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QFrame" name="authCard">
+             <property name="objectName">
+              <string>authCard</string>
+             </property>
+             <layout class="QVBoxLayout" name="verticalLayout_card">
+              <property name="spacing">
+               <number>20</number>
+              </property>
+              <property name="leftMargin">
+               <number>32</number>
+              </property>
+              <property name="topMargin">
+               <number>28</number>
+              </property>
+              <property name="rightMargin">
+               <number>32</number>
+              </property>
+              <property name="bottomMargin">
+               <number>28</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="label_form_title">
+                <property name="objectName">
+                 <string>formHeaderTitle</string>
+                </property>
+                <property name="text">
+                 <string>Chào mừng trở lại</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_form_sub">
+                <property name="objectName">
+                 <string>formHeaderSub</string>
+                </property>
+                <property name="text">
+                 <string>Đăng nhập hoặc tạo tài khoản để tiếp tục.</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QTabWidget" name="tabWidget">
+                <property name="currentIndex">
+                 <number>0</number>
+                </property>
+                <widget class="QWidget" name="tab_login">
+                 <attribute name="title">
+                  <string>Đăng nhập</string>
+                 </attribute>
+                 <layout class="QVBoxLayout" name="verticalLayout_login">
+                  <property name="spacing">
+                   <number>16</number>
+                  </property>
+                  <item>
+                   <layout class="QVBoxLayout" name="verticalFieldEmail">
+                    <item>
+                     <widget class="QLabel" name="label_lemail">
+                      <property name="text">
+                       <string>Email</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLineEdit" name="lineLoginEmail">
+                      <property name="placeholderText">
+                       <string>you@company.com</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <layout class="QVBoxLayout" name="verticalFieldPass">
+                    <item>
+                     <widget class="QLabel" name="label_lpass">
+                      <property name="text">
+                       <string>Mật khẩu</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLineEdit" name="lineLoginPassword">
+                      <property name="echoMode">
+                       <enum>QLineEdit::Password</enum>
+                      </property>
+                      <property name="placeholderText">
+                       <string>••••••••</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="btnLogin">
+                    <property name="text">
+                     <string>Đăng nhập</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+                <widget class="QWidget" name="tab_register">
+                 <attribute name="title">
+                  <string>Đăng ký</string>
+                 </attribute>
+                 <layout class="QVBoxLayout" name="verticalLayout_reg">
+                  <property name="spacing">
+                   <number>14</number>
+                  </property>
+                  <item>
+                   <layout class="QVBoxLayout" name="verticalFieldFn">
+                    <item>
+                     <widget class="QLabel" name="label_fn">
+                      <property name="text">
+                       <string>Họ tên</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLineEdit" name="lineRegFullName">
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <layout class="QVBoxLayout" name="verticalFieldRemail">
+                    <item>
+                     <widget class="QLabel" name="label_remail">
+                      <property name="text">
+                       <string>Email</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLineEdit" name="lineRegEmail">
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <layout class="QVBoxLayout" name="verticalFieldRpass">
+                    <item>
+                     <widget class="QLabel" name="label_rpass">
+                      <property name="text">
+                       <string>Mật khẩu</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLineEdit" name="lineRegPassword">
+                      <property name="echoMode">
+                       <enum>QLineEdit::Password</enum>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item>
+                   <widget class="QCheckBox" name="checkIsHr">
+                    <property name="objectName">
+                     <string>checkHr</string>
+                    </property>
+                    <property name="text">
+                     <string>Bạn là nhà tuyển dụng?</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QGroupBox" name="groupHr">
+                    <property name="title">
+                     <string>Thông tin doanh nghiệp</string>
+                    </property>
+                    <property name="enabled">
+                     <bool>false</bool>
+                    </property>
+                    <layout class="QFormLayout" name="form_hr">
+                     <item row="0" column="0">
+                      <widget class="QLabel" name="label_co">
+                       <property name="text">
+                        <string>Tên công ty</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="0" column="1">
+                      <widget class="QLineEdit" name="lineCompany">
+                      </widget>
+                     </item>
+                     <item row="1" column="0">
+                      <widget class="QLabel" name="label_phone">
+                       <property name="text">
+                        <string>Điện thoại</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="1" column="1">
+                      <widget class="QLineEdit" name="linePhone">
+                      </widget>
+                     </item>
+                     <item row="2" column="0">
+                      <widget class="QLabel" name="label_desc">
+                       <property name="text">
+                        <string>Mô tả</string>
+                       </property>
+                      </widget>
+                     </item>
+                     <item row="2" column="1">
+                      <widget class="QPlainTextEdit" name="plainCompanyDesc">
+                       <property name="maximumSize">
+                        <size>
+                         <width>16777215</width>
+                         <height>88</height>
+                        </size>
+                       </property>
+                      </widget>
+                     </item>
+                    </layout>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QPushButton" name="btnRegister">
+                    <property name="text">
+                     <string>Tạo tài khoản</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </widget>
+              </item>
+             </layout>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
