@@ -5,6 +5,12 @@
 
 # Nhớ chia branch server và client. hoạt động trên 2 branch. sau test ok mới merge vào master rồi push lên
 
+
+## Ai làm UI thì chạy server sau đó check list API hiện có ở 
+```bash 
+http://127.0.0.1:8000/docs#/
+```
+
 ## Yêu cầu môi trường
 
 - **Python** 3.11+ (đã thử với 3.14; nên dùng bản ổn định 3.11–3.12 nếu gặp lỗi gói).
