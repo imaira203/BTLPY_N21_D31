@@ -19,10 +19,12 @@ http://127.0.0.1:8000/docs#/
 
 ```bash
 # Server
-pip install fastapi uvicorn[standard] sqlalchemy pymysql pydantic pydantic-settings python-jose[cryptography] passlib[bcrypt] python-multipart
+cd server
+pip install requirements.txt
 
 # Client
-pip install PySide6 requests matplotlib pydantic pydantic-settings
+cd client
+pip install requirements.txt
 ```
 
 ## 1. Cơ sở dữ liệu MySQL
@@ -40,8 +42,6 @@ mysql -u root -p jobhub < database/schema.sql
 ```
 
 Hoặc mở file `database/schema.sql` trong MySQL Workbench / phpMyAdmin và thực thi.
-
-> **Lưu ý:** Nếu bạn đã có bảng `users` tạo từ phiên bản cũ thiếu cột `avatar_storage_key`, khi **khởi động server** lần đầu, code sẽ cố gắng thêm cột tự động. Nếu vẫn lỗi, chạy thủ công: `database/migrate_add_avatar_column.sql`.
 
 ## 2. Máy chủ API (`server/`)
 
