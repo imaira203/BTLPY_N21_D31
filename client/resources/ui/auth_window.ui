@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1000</width>
+    <width>1130</width>
     <height>640</height>
    </rect>
   </property>
@@ -19,10 +19,7 @@
   <property name="windowTitle">
    <string>JobHub — Đăng nhập</string>
   </property>
-  <widget class="QWidget" name="centralwidget">
-   <property name="objectName">
-    <string>authRoot</string>
-   </property>
+  <widget class="QWidget" name="authRoot">
    <layout class="QHBoxLayout" name="horizontalLayout_root">
     <property name="spacing">
      <number>0</number>
@@ -41,9 +38,6 @@
     </property>
     <item>
      <widget class="QFrame" name="brandPanel">
-      <property name="objectName">
-       <string>brandPanel</string>
-      </property>
       <property name="minimumSize">
        <size>
         <width>380</width>
@@ -64,20 +58,14 @@
         <number>48</number>
        </property>
        <item>
-        <widget class="QLabel" name="label_brand_logo">
-         <property name="objectName">
-          <string>brandLogo</string>
-         </property>
+        <widget class="QLabel" name="brandLogo">
          <property name="text">
           <string>JobHub</string>
          </property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="label_brand_tagline">
-         <property name="objectName">
-          <string>brandTagline</string>
-         </property>
+        <widget class="QLabel" name="brandTagline">
          <property name="text">
           <string>Nền tảng kết nối nhà tuyển dụng và ứng viên hiện đại.</string>
          </property>
@@ -91,13 +79,16 @@
          <property name="orientation">
           <enum>Qt::Vertical</enum>
          </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>0</width>
+           <height>0</height>
+          </size>
+         </property>
         </spacer>
        </item>
        <item>
-        <widget class="QLabel" name="label_brand_footer">
-         <property name="objectName">
-          <string>brandFooter</string>
-         </property>
+        <widget class="QLabel" name="brandFooter">
          <property name="text">
           <string>© 2026 JobHub</string>
          </property>
@@ -108,9 +99,6 @@
     </item>
     <item>
      <widget class="QFrame" name="formOuter">
-      <property name="objectName">
-       <string>formOuter</string>
-      </property>
       <layout class="QVBoxLayout" name="verticalLayout_form_outer">
        <property name="spacing">
         <number>12</number>
@@ -134,9 +122,6 @@
          </property>
          <item>
           <widget class="QLabel" name="labelTheme">
-           <property name="objectName">
-            <string>labelTheme</string>
-           </property>
            <property name="text">
             <string>Giao diện</string>
            </property>
@@ -144,9 +129,6 @@
          </item>
          <item>
           <widget class="QCheckBox" name="checkDarkMode">
-           <property name="objectName">
-            <string>checkDarkMode</string>
-           </property>
            <property name="text">
             <string>Chế độ tối</string>
            </property>
@@ -157,21 +139,29 @@
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
           </spacer>
          </item>
         </layout>
        </item>
        <item>
         <widget class="QScrollArea" name="authScroll">
-         <property name="objectName">
-          <string>authScroll</string>
-         </property>
          <property name="widgetResizable">
           <bool>true</bool>
          </property>
          <widget class="QWidget" name="authScrollContents">
-          <property name="objectName">
-           <string>authScrollContents</string>
+          <property name="geometry">
+           <rect>
+            <x>0</x>
+            <y>0</y>
+            <width>663</width>
+            <height>624</height>
+           </rect>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_scroll">
            <property name="spacing">
@@ -191,9 +181,6 @@
            </property>
            <item>
             <widget class="QFrame" name="authCard">
-             <property name="objectName">
-              <string>authCard</string>
-             </property>
              <layout class="QVBoxLayout" name="verticalLayout_card">
               <property name="spacing">
                <number>20</number>
@@ -211,20 +198,14 @@
                <number>28</number>
               </property>
               <item>
-               <widget class="QLabel" name="label_form_title">
-                <property name="objectName">
-                 <string>formHeaderTitle</string>
-                </property>
+               <widget class="QLabel" name="formHeaderTitle">
                 <property name="text">
                  <string>Chào mừng trở lại</string>
                 </property>
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_form_sub">
-                <property name="objectName">
-                 <string>formHeaderSub</string>
-                </property>
+               <widget class="QLabel" name="formHeaderSub">
                 <property name="text">
                  <string>Đăng nhập hoặc tạo tài khoản để tiếp tục.</string>
                 </property>
@@ -309,8 +290,7 @@
                      </widget>
                     </item>
                     <item>
-                     <widget class="QLineEdit" name="lineRegFullName">
-                     </widget>
+                     <widget class="QLineEdit" name="lineRegFullName"/>
                     </item>
                    </layout>
                   </item>
@@ -324,8 +304,7 @@
                      </widget>
                     </item>
                     <item>
-                     <widget class="QLineEdit" name="lineRegEmail">
-                     </widget>
+                     <widget class="QLineEdit" name="lineRegEmail"/>
                     </item>
                    </layout>
                   </item>
@@ -348,10 +327,7 @@
                    </layout>
                   </item>
                   <item>
-                   <widget class="QCheckBox" name="checkIsHr">
-                    <property name="objectName">
-                     <string>checkHr</string>
-                    </property>
+                   <widget class="QCheckBox" name="checkHr">
                     <property name="text">
                      <string>Bạn là nhà tuyển dụng?</string>
                     </property>
@@ -359,11 +335,11 @@
                   </item>
                   <item>
                    <widget class="QGroupBox" name="groupHr">
-                    <property name="title">
-                     <string>Thông tin doanh nghiệp</string>
-                    </property>
                     <property name="enabled">
                      <bool>false</bool>
+                    </property>
+                    <property name="title">
+                     <string>Thông tin doanh nghiệp</string>
                     </property>
                     <layout class="QFormLayout" name="form_hr">
                      <item row="0" column="0">
@@ -374,8 +350,7 @@
                       </widget>
                      </item>
                      <item row="0" column="1">
-                      <widget class="QLineEdit" name="lineCompany">
-                      </widget>
+                      <widget class="QLineEdit" name="lineCompany"/>
                      </item>
                      <item row="1" column="0">
                       <widget class="QLabel" name="label_phone">
@@ -385,8 +360,7 @@
                       </widget>
                      </item>
                      <item row="1" column="1">
-                      <widget class="QLineEdit" name="linePhone">
-                      </widget>
+                      <widget class="QLineEdit" name="linePhone"/>
                      </item>
                      <item row="2" column="0">
                       <widget class="QLabel" name="label_desc">
