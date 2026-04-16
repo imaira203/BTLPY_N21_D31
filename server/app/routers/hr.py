@@ -1,13 +1,16 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import HRApprovalStatus, Job, JobApplication, JobStatus, User, UserRole
+from ..models import CVDocument, HRApprovalStatus, Job, JobApplication, JobStatus, User, UserRole
 from ..schemas import JobCreate, JobOut, StatsOut
+from ..storage_paths import resolve_existing_file
 
 router = APIRouter(prefix="/hr", tags=["hr"])
 
@@ -89,6 +92,59 @@ def my_jobs(user: Annotated[User, Depends(get_current_user)], db: Annotated[Sess
     return list(rows)
 
 
+@router.get("/jobs/{job_id}", response_model=JobOut)
+def get_job_detail(
+    job_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Job:
+    _require_hr(user)
+    job = db.get(Job, job_id)
+    if not job or job.hr_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Not found")
+    return job
+
+
+@router.put("/jobs/{job_id}", response_model=JobOut)
+def update_job(
+    job_id: int,
+    body: JobCreate,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Job:
+    _require_approved_hr(user)
+    job = db.get(Job, job_id)
+    if not job or job.hr_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Not found")
+    job.title = body.title
+    job.description = body.description
+    job.salary_text = body.salary_text
+    job.location = body.location
+    job.job_type = body.job_type
+    if job.status in (JobStatus.draft, JobStatus.rejected):
+        job.status = JobStatus.draft if body.as_draft else JobStatus.pending_approval
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.delete("/jobs/{job_id}")
+def delete_job(
+    job_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_hr(user)
+    job = db.get(Job, job_id)
+    if not job or job.hr_user_id != user.id:
+        raise HTTPException(status_code=404, detail="Not found")
+    if job.status == JobStatus.published:
+        raise HTTPException(status_code=400, detail="Không thể xóa tin đã publish")
+    db.delete(job)
+    db.commit()
+    return {"ok": True}
+
+
 @router.put("/jobs/{job_id}/submit", response_model=JobOut)
 def submit_job(
     job_id: int,
@@ -124,6 +180,7 @@ def list_applications_for_hr(
     rows = db.execute(q).all()
     out: list[dict] = []
     for app, job, cand in rows:
+        cv = db.get(CVDocument, app.cv_id) if app.cv_id else None
         out.append(
             {
                 "application_id": app.id,
@@ -131,7 +188,55 @@ def list_applications_for_hr(
                 "candidate_name": cand.full_name or cand.email,
                 "candidate_email": cand.email,
                 "status": app.status.value,
+                "cv_id": app.cv_id,
+                "cv_name": cv.original_name if cv else None,
                 "created_at": app.created_at.isoformat(),
             }
         )
     return out
+
+
+@router.get("/applications/{application_id}/cv/download")
+def download_application_cv(
+    application_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    _require_hr(user)
+    row = db.execute(
+        select(JobApplication, Job, CVDocument)
+        .join(Job, Job.id == JobApplication.job_id)
+        .join(CVDocument, CVDocument.id == JobApplication.cv_id)
+        .where(JobApplication.id == application_id, Job.hr_user_id == user.id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Không tìm thấy CV ứng viên")
+    app, _job, cv = row
+    path = resolve_existing_file(settings, cv.stored_filename)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="File CV không tồn tại")
+    media_type = cv.mime_type or "application/octet-stream"
+    return FileResponse(path=str(path), filename=cv.original_name, media_type=media_type)
+
+
+@router.get("/applications/{application_id}/cv/view")
+def view_application_cv(
+    application_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    _require_hr(user)
+    row = db.execute(
+        select(JobApplication, Job, CVDocument)
+        .join(Job, Job.id == JobApplication.job_id)
+        .join(CVDocument, CVDocument.id == JobApplication.cv_id)
+        .where(JobApplication.id == application_id, Job.hr_user_id == user.id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Không tìm thấy CV ứng viên")
+    app, _job, cv = row
+    path = resolve_existing_file(settings, cv.stored_filename)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="File CV không tồn tại")
+    media_type = cv.mime_type or "application/pdf"
+    return FileResponse(path=str(path), filename=cv.original_name, media_type=media_type)

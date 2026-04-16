@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
-    QSlider,
     QTabWidget,
 )
 
@@ -20,7 +19,6 @@ from .. import session_store
 from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
 from ..paths import resource_ui
-from ..ui_theme import get_ui_theme, set_ui_theme
 from .qss_loader import apply_theme_qss
 from .ui_loader import load_ui
 
@@ -41,11 +39,6 @@ class AuthWindow:
             lo = form_outer.layout()
             if lo is not None and lo.count() >= 2:
                 lo.setStretch(1, 1)
-
-        self.switch_theme = win.findChild(QSlider, "switchTheme")
-        if self.switch_theme:
-            self.switch_theme.setValue(1 if get_ui_theme() == "dark" else 0)
-            self.switch_theme.valueChanged.connect(self._on_theme_toggled)
 
         self.line_login_email = win.findChild(QLineEdit, "lineLoginEmail")
         self.line_login_password = win.findChild(QLineEdit, "lineLoginPassword")
@@ -76,10 +69,6 @@ class AuthWindow:
             self.btn_login.clicked.connect(self._do_login)
         if self.btn_register:
             self.btn_register.clicked.connect(self._do_register)
-
-    def _on_theme_toggled(self, value: int) -> None:
-        set_ui_theme("dark" if bool(value) else "light")
-        apply_theme_qss(self.win, "auth_shell")
 
     def _toggle_hr(self, checked: bool) -> None:
         if self.group_hr:

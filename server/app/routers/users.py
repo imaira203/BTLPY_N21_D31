@@ -3,13 +3,15 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import User
-from ..schemas import HRProfileOut, UserOut
+from ..schemas import HRProfileOut, UpdateEmailIn, UpdatePasswordIn, UserOut
+from ..security import hash_password, verify_password
 from ..storage_paths import absolute_path, relative_key, resolve_existing_file
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -27,6 +29,37 @@ def my_hr_profile(user: Annotated[User, Depends(get_current_user)]) -> HRProfile
     if user.role.value != "hr" or user.hr_profile is None:
         return None
     return user.hr_profile
+
+
+@router.put("/me/email", response_model=UserOut)
+def update_me_email(
+    body: UpdateEmailIn,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Mật khẩu hiện tại không đúng")
+    exists = db.scalar(select(User).where(User.email == body.new_email, User.id != user.id))
+    if exists:
+        raise HTTPException(status_code=400, detail="Email đã được sử dụng")
+    user.email = body.new_email
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.put("/me/password", response_model=UserOut)
+def update_me_password(
+    body: UpdatePasswordIn,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Mật khẩu hiện tại không đúng")
+    user.password_hash = hash_password(body.new_password)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.post("/me/avatar", response_model=UserOut)

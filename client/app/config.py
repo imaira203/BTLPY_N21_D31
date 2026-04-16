@@ -36,13 +36,6 @@ class ClientSettings(BaseSettings):
         description="True = demo offline: API trả dữ liệu mẫu, không gọi máy chủ.",
     )
 
-    mock_user_role: str = Field(
-        default="candidate",
-        validation_alias=AliasChoices("MOCK_USER_ROLE", "JOBHUB_MOCK_USER_ROLE"),
-        description="Khi use_mock_data: role cho /users/me — candidate | hr | admin.",
-    )
-
-
 @lru_cache(maxsize=1)
 def get_settings() -> ClientSettings:
     return ClientSettings()
@@ -73,4 +66,4 @@ def log_client_startup() -> None:
         logger.info("API gốc dùng cho request=%s", eff)
     logger.debug("UI_THEME env default (when ui_theme.json missing)=%s", s.ui_theme)
     if s.use_mock_data:
-        logger.info("JOBHUB_USE_MOCK_DATA=1 — chế độ demo, không gọi API thật (role mock=%s)", s.mock_user_role)
+        logger.info("JOBHUB_USE_MOCK_DATA=1 — chế độ demo, không gọi API thật")

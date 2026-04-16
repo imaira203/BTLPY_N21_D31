@@ -9,6 +9,10 @@ def resource_ui(name: str) -> Path:
     return project_root() / "resources" / "ui" / name
 
 
+def resource_icon(name: str) -> Path:
+    return project_root() / "resources" / "icons" / name
+
+
 def data_dir() -> Path:
     d = project_root() / "jobhub_data"
     d.mkdir(parents=True, exist_ok=True)

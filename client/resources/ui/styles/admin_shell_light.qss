@@ -116,6 +116,9 @@ QTableWidget {
   border-radius: 12px;
   background: #ffffff;
   gridline-color: #f1f5f9;
+  color: #0f172a;
+  selection-background-color: #eff6ff;
+  selection-color: #1d4ed8;
 }
 
 QHeaderView::section {
@@ -130,4 +133,12 @@ QHeaderView::section {
 QPushButton {
   border-radius: 8px;
   padding: 8px 12px;
+}
+
+QLabel#labelUsers,
+QLabel#labelHr,
+QLabel#labelJobs {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
 }

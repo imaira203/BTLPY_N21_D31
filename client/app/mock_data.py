@@ -1,4 +1,3 @@
-"""Dữ liệu mẫu khi bật JOBHUB_USE_MOCK_DATA (demo không cần máy chủ)."""
 
 from __future__ import annotations
 
@@ -60,16 +59,20 @@ MOCK_HR_JOBS: list[dict] = [
 
 MOCK_HR_APPLICATIONS: list[dict] = [
     {
+        "application_id": 9001,
         "candidate_name": "Trần Thị B",
         "candidate_email": "b.tran@email.com",
         "job_title": "Senior Backend Engineer",
         "status": "pending",
+        "cv_name": "TranThiB_CV.pdf",
     },
     {
+        "application_id": 9002,
         "candidate_name": "Lê Văn C",
         "candidate_email": "c.le@email.com",
         "job_title": "Product Designer (UI/UX)",
         "status": "reviewed",
+        "cv_name": "LeVanC_Portfolio.pdf",
     },
 ]
 
