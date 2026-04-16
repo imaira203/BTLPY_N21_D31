@@ -128,9 +128,40 @@
           </widget>
          </item>
          <item>
-          <widget class="QCheckBox" name="checkDarkMode">
+          <widget class="QLabel" name="labelThemeMode">
            <property name="text">
             <string>Chế độ tối</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QSlider" name="switchTheme">
+           <property name="minimumSize">
+            <size>
+             <width>46</width>
+             <height>24</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>46</width>
+             <height>24</height>
+            </size>
+           </property>
+           <property name="cursor">
+            <cursorShape>PointingHandCursor</cursorShape>
+           </property>
+           <property name="minimum">
+            <number>0</number>
+           </property>
+           <property name="maximum">
+            <number>1</number>
+           </property>
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="tracking">
+            <bool>true</bool>
            </property>
           </widget>
          </item>
@@ -226,6 +257,12 @@
                   </property>
                   <item>
                    <layout class="QVBoxLayout" name="verticalFieldEmail">
+                   <property name="sizeConstraint">
+                    <enum>QLayout::SetFixedSize</enum>
+                   </property>
+                    <property name="spacing">
+                     <number>4</number>
+                    </property>
                     <item>
                      <widget class="QLabel" name="label_lemail">
                       <property name="text">
@@ -236,7 +273,7 @@
                     <item>
                      <widget class="QLineEdit" name="lineLoginEmail">
                       <property name="placeholderText">
-                       <string>you@company.com</string>
+                       <string>you@email.com</string>
                       </property>
                      </widget>
                     </item>
@@ -244,6 +281,12 @@
                   </item>
                   <item>
                    <layout class="QVBoxLayout" name="verticalFieldPass">
+                   <property name="sizeConstraint">
+                    <enum>QLayout::SetFixedSize</enum>
+                   </property>
+                    <property name="spacing">
+                     <number>4</number>
+                    </property>
                     <item>
                      <widget class="QLabel" name="label_lpass">
                       <property name="text">
@@ -270,6 +313,19 @@
                     </property>
                    </widget>
                   </item>
+                 <item>
+                  <spacer name="verticalSpacerLoginBottom">
+                   <property name="orientation">
+                    <enum>Qt::Vertical</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>20</width>
+                     <height>40</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
                  </layout>
                 </widget>
                 <widget class="QWidget" name="tab_register">
@@ -335,6 +391,9 @@
                   </item>
                   <item>
                    <widget class="QGroupBox" name="groupHr">
+                    <property name="visible">
+                     <bool>false</bool>
+                    </property>
                     <property name="enabled">
                      <bool>false</bool>
                     </property>

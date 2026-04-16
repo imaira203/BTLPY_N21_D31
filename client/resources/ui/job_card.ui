@@ -33,7 +33,7 @@
      <item>
       <widget class="QToolButton" name="btnBookmark">
        <property name="text">
-        <string>🔖</string>
+        <string/>
        </property>
        <property name="autoRaise">
         <bool>true</bool>
@@ -100,7 +100,7 @@
    <item>
     <widget class="QPushButton" name="btnApply">
      <property name="text">
-      <string>✈ Ứng tuyển ngay</string>
+      <string>Xem chi tiết</string>
      </property>
     </widget>
    </item>

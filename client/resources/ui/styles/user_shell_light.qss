@@ -24,7 +24,10 @@ QLabel#brandSubtitle {
   margin-top: 2px;
 }
 
-QPushButton#navButton {
+QPushButton#navHome,
+QPushButton#navSaved,
+QPushButton#navCv,
+QPushButton#navProfile {
   text-align: left;
   padding: 12px 16px;
   border: none;
@@ -35,13 +38,19 @@ QPushButton#navButton {
   font-weight: 500;
 }
 
-QPushButton#navButton:checked,
-QPushButton#navButton:hover {
+QPushButton#navHome:checked,
+QPushButton#navSaved:checked,
+QPushButton#navCv:checked,
+QPushButton#navProfile:checked,
+QPushButton#navHome:hover,
+QPushButton#navSaved:hover,
+QPushButton#navCv:hover,
+QPushButton#navProfile:hover {
   background: #eff6ff;
   color: #1d4ed8;
 }
 
-QPushButton#logoutButton {
+QPushButton#btnLogout {
   padding: 12px 16px;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
@@ -50,11 +59,11 @@ QPushButton#logoutButton {
   font-weight: 500;
 }
 
-QPushButton#logoutButton:hover {
+QPushButton#btnLogout:hover {
   background: #f1f5f9;
 }
 
-QStackedWidget#mainStack {
+QStackedWidget#stackedPages {
   background: #f8fafc;
 }
 
@@ -63,14 +72,15 @@ QWidget#pageCv {
   background: #f8fafc;
 }
 
-QLabel#pageTitle {
+QLabel#labelHomeTitle,
+QLabel#labelCvTitle {
   font-size: 28px;
   font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.5px;
 }
 
-QLabel#pageSubtitle {
+QLabel#labelHomeSub {
   font-size: 15px;
   color: #64748b;
 }

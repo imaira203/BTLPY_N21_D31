@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QFrame,
@@ -11,6 +12,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSlider,
     QTabWidget,
 )
 
@@ -40,10 +42,10 @@ class AuthWindow:
             if lo is not None and lo.count() >= 2:
                 lo.setStretch(1, 1)
 
-        self.check_dark = win.findChild(QCheckBox, "checkDarkMode")
-        if self.check_dark:
-            self.check_dark.setChecked(get_ui_theme() == "dark")
-            self.check_dark.toggled.connect(self._on_theme_toggled)
+        self.switch_theme = win.findChild(QSlider, "switchTheme")
+        if self.switch_theme:
+            self.switch_theme.setValue(1 if get_ui_theme() == "dark" else 0)
+            self.switch_theme.valueChanged.connect(self._on_theme_toggled)
 
         self.line_login_email = win.findChild(QLineEdit, "lineLoginEmail")
         self.line_login_password = win.findChild(QLineEdit, "lineLoginPassword")
@@ -52,7 +54,7 @@ class AuthWindow:
         self.line_reg_name = win.findChild(QLineEdit, "lineRegFullName")
         self.line_reg_email = win.findChild(QLineEdit, "lineRegEmail")
         self.line_reg_password = win.findChild(QLineEdit, "lineRegPassword")
-        self.check_is_hr = win.findChild(QCheckBox, "checkIsHr")
+        self.check_is_hr = win.findChild(QCheckBox, "checkHr")
         self.group_hr = win.findChild(QGroupBox, "groupHr")
         self.line_company = win.findChild(QLineEdit, "lineCompany")
         self.line_phone = win.findChild(QLineEdit, "linePhone")
@@ -60,21 +62,29 @@ class AuthWindow:
         self.btn_register = win.findChild(QPushButton, "btnRegister")
 
         self.tab = win.findChild(QTabWidget, "tabWidget")
+        if self.tab:
+            self.tab.setDocumentMode(True)
+            self.tab.setElideMode(Qt.ElideNone)
+            tb = self.tab.tabBar()
+            tb.setExpanding(False)
+            tb.setDrawBase(False)
 
         if self.check_is_hr and self.group_hr:
             self.check_is_hr.toggled.connect(self._toggle_hr)
+            self._toggle_hr(self.check_is_hr.isChecked())
         if self.btn_login:
             self.btn_login.clicked.connect(self._do_login)
         if self.btn_register:
             self.btn_register.clicked.connect(self._do_register)
 
-    def _on_theme_toggled(self, checked: bool) -> None:
-        set_ui_theme("dark" if checked else "light")
+    def _on_theme_toggled(self, value: int) -> None:
+        set_ui_theme("dark" if bool(value) else "light")
         apply_theme_qss(self.win, "auth_shell")
 
     def _toggle_hr(self, checked: bool) -> None:
         if self.group_hr:
             self.group_hr.setEnabled(checked)
+            self.group_hr.setVisible(checked)
 
     def _do_login(self) -> None:
         email = self.line_login_email.text().strip() if self.line_login_email else ""

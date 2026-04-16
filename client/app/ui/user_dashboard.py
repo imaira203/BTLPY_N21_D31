@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QStackedWidget,
@@ -36,12 +37,12 @@ class UserDashboard:
         self.win = win
         apply_theme_qss(self.win, "user_shell")
 
-        self.stack = win.findChild(QStackedWidget, "stackedPages")
-        self.nav_home = win.findChild(QPushButton, "navHome")
-        self.nav_saved = win.findChild(QPushButton, "navSaved")
-        self.nav_cv = win.findChild(QPushButton, "navCv")
-        self.nav_profile = win.findChild(QPushButton, "navProfile")
-        self.btn_logout = win.findChild(QPushButton, "btnLogout")
+        self.stack = win.findChild(QStackedWidget, "stackedPages") or win.findChild(QStackedWidget, "mainStack")
+        self.nav_home = self._find_button(["navHome"], "Trang chủ")
+        self.nav_saved = self._find_button(["navSaved"], "Việc đã lưu")
+        self.nav_cv = self._find_button(["navCv"], "CV của tôi")
+        self.nav_profile = self._find_button(["navProfile"], "Hồ sơ")
+        self.btn_logout = self._find_button(["btnLogout", "logoutButton"], "Đăng xuất")
         self.line_search = win.findChild(QLineEdit, "lineSearch")
 
         self.scroll = win.findChild(QScrollArea, "scrollJobs")
@@ -57,8 +58,17 @@ class UserDashboard:
         self.list_cvs = page_cv.findChild(QListWidget, "listCvs") if page_cv else None
         self.btn_pick = win.findChild(QPushButton, "btnPickCv")
         self.btn_upload = win.findChild(QPushButton, "btnUploadCv")
+        self.page_job_detail = win.findChild(QWidget, "pageJobDetail")
+        self.btn_back_jobs = win.findChild(QPushButton, "btnBackToJobs")
+        self.label_detail_title = win.findChild(QLabel, "labelDetailTitle")
+        self.label_detail_company = win.findChild(QLabel, "labelDetailCompany")
+        self.label_detail_meta = win.findChild(QLabel, "labelDetailMeta")
+        self.plain_job_detail = win.findChild(QPlainTextEdit, "plainJobDetail")
+        self.combo_detail_cv = win.findChild(QComboBox, "comboDetailCv")
+        self.btn_detail_apply = win.findChild(QPushButton, "btnDetailApply")
 
         self._cv_path: str | None = None
+        self._selected_job_id: int | None = None
 
         self._nav_group = QButtonGroup(self.win)
         for b in (self.nav_home, self.nav_saved, self.nav_cv, self.nav_profile):
@@ -79,11 +89,25 @@ class UserDashboard:
             self.btn_pick.clicked.connect(self._pick_cv)
         if self.btn_upload:
             self.btn_upload.clicked.connect(self._upload_cv)
+        if self.btn_back_jobs:
+            self.btn_back_jobs.clicked.connect(lambda: self._go(0))
+        if self.btn_detail_apply:
+            self.btn_detail_apply.clicked.connect(self._apply_selected_job)
         if self.line_search:
             self.line_search.textChanged.connect(lambda _t: self._apply_job_filter())
 
         self._refresh_jobs()
         self._refresh_cv_list()
+
+    def _find_button(self, names: list[str], text_fallback: str) -> QPushButton | None:
+        for name in names:
+            b = self.win.findChild(QPushButton, name)
+            if b:
+                return b
+        for b in self.win.findChildren(QPushButton):
+            if b.text().strip() == text_fallback:
+                return b
+        return None
 
     def _go(self, index: int) -> None:
         if self.stack:
@@ -164,33 +188,62 @@ class UserDashboard:
             ld.setText((job.get("description") or "")[:220])
         sal = job.get("salary_text") or ""
         if ls:
-            ls.setText(f"$ {sal}" if sal else "")
+            ls.setText(sal)
         loc = job.get("location") or ""
         if ll:
-            ll.setText(f"📍 {loc}" if loc else "")
+            ll.setText(loc)
         if combo:
-            self._fill_cv_combo(combo)
+            combo.setVisible(False)
 
         if bm:
-            bm.setCheckable(True)
-            bm.setChecked(False)
-
-        def on_apply() -> None:
-            jid = int(job["id"])
-            cv_id = combo.currentData() if combo else None
-            if cv_id is None:
-                QMessageBox.warning(self.win, "JobHub", "Tải CV trong mục «CV của tôi» trước khi ứng tuyển.")
-                return
-            try:
-                jobhub_api.apply_job(jid, int(cv_id))
-            except ApiError as e:
-                QMessageBox.warning(self.win, "Ứng tuyển", str(e))
-                return
-            QMessageBox.information(self.win, "JobHub", "Đã gửi hồ sơ ứng tuyển.")
+            bm.setVisible(False)
 
         if btn:
-            btn.clicked.connect(on_apply)
+            btn.setText("Xem chi tiết")
+            btn.clicked.connect(lambda: self._open_job_detail(job))
         return card
+
+    def _open_job_detail(self, job: dict) -> None:
+        self._selected_job_id = int(job["id"])
+        if self.label_detail_title:
+            self.label_detail_title.setText(str(job.get("title") or "Chi tiết công việc"))
+        if self.label_detail_company:
+            self.label_detail_company.setText(str(job.get("company_name") or "Nhà tuyển dụng"))
+        if self.label_detail_meta:
+            self.label_detail_meta.setText(
+                " • ".join(
+                    x
+                    for x in [
+                        str(job.get("job_type") or ""),
+                        str(job.get("location") or ""),
+                        str(job.get("salary_text") or ""),
+                    ]
+                    if x
+                )
+            )
+        if self.plain_job_detail:
+            self.plain_job_detail.setPlainText(str(job.get("description") or ""))
+        if self.combo_detail_cv:
+            self._fill_cv_combo(self.combo_detail_cv)
+        if self.stack and self.page_job_detail:
+            self.stack.setCurrentWidget(self.page_job_detail)
+        if self.nav_home:
+            self.nav_home.setChecked(True)
+
+    def _apply_selected_job(self) -> None:
+        if self._selected_job_id is None or not self.combo_detail_cv:
+            return
+        cv_id = self.combo_detail_cv.currentData()
+        if cv_id is None:
+            QMessageBox.warning(self.win, "JobHub", "Tải CV trong mục «CV của tôi» trước khi ứng tuyển.")
+            return
+        try:
+            jobhub_api.apply_job(self._selected_job_id, int(cv_id))
+        except ApiError as e:
+            QMessageBox.warning(self.win, "Ứng tuyển", str(e))
+            return
+        QMessageBox.information(self.win, "JobHub", "Đã gửi hồ sơ ứng tuyển.")
+        self._go(0)
 
     def _fill_cv_combo(self, combo: QComboBox) -> None:
         combo.clear()
