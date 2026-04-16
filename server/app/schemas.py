@@ -42,6 +42,16 @@ class LoginIn(BaseModel):
     password: str
 
 
+class UpdateEmailIn(BaseModel):
+    new_email: EmailStr
+    current_password: str = Field(min_length=1)
+
+
+class UpdatePasswordIn(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=6)
+
+
 class HRProfileOut(BaseModel):
     id: int
     company_name: str

@@ -1,0 +1,11 @@
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzIiwiZXhwIjoxNzc4ODk4MzcwLCJyb2xlIjoiaHIifQ.AHfdJj73JKOD6jn504QnjJxtJeKWIaSj_q3zbCAFhAo",
+  "user": {
+    "id": 3,
+    "email": "test@hr.com",
+    "full_name": "test@hr.com",
+    "avatar_storage_key": null,
+    "role": "hr",
+    "created_at": "2026-04-16T01:42:13"
+  }
+}

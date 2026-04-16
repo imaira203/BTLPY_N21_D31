@@ -151,3 +151,85 @@ def list_users(user: Annotated[User, Depends(get_current_user)], db: Annotated[S
     _require_admin(user)
     rows = db.scalars(select(User).order_by(User.id.desc()).limit(500)).all()
     return list(rows)
+
+
+@router.get("/users/{target_user_id}", response_model=UserOut)
+def get_user_detail(
+    target_user_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    _require_admin(user)
+    target = db.get(User, target_user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    return target
+
+
+@router.post("/users/{target_user_id}/lock")
+def lock_user(
+    target_user_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_admin(user)
+    target = db.get(User, target_user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.role == UserRole.admin:
+        raise HTTPException(status_code=400, detail="Không thể khóa tài khoản admin")
+    target.is_active = False
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/users/{target_user_id}/unlock")
+def unlock_user(
+    target_user_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_admin(user)
+    target = db.get(User, target_user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    target.is_active = True
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/hr/{target_user_id}")
+def hr_detail(
+    target_user_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_admin(user)
+    target = db.get(User, target_user_id)
+    if not target or target.role != UserRole.hr or not target.hr_profile:
+        raise HTTPException(status_code=404, detail="HR not found")
+    hp = target.hr_profile
+    return {
+        "user_id": target.id,
+        "email": target.email,
+        "full_name": target.full_name,
+        "is_active": target.is_active,
+        "company_name": hp.company_name,
+        "contact_phone": hp.contact_phone,
+        "company_description": hp.company_description,
+        "approval_status": hp.approval_status.value,
+        "admin_note": hp.admin_note,
+    }
+
+
+@router.get("/jobs/{job_id}", response_model=JobOut)
+def job_detail(
+    job_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Job:
+    _require_admin(user)
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job

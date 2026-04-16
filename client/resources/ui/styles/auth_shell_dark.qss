@@ -50,11 +50,34 @@ QLabel#labelTheme {
   color: #94a3b8;
 }
 
-QCheckBox#checkDarkMode {
+QLabel#labelThemeMode {
   font-size: 13px;
   font-weight: 600;
   color: #cbd5e1;
-  spacing: 8px;
+}
+
+QSlider#switchTheme::groove:horizontal {
+  height: 22px;
+  border-radius: 11px;
+  background: #334155;
+}
+
+QSlider#switchTheme::sub-page:horizontal {
+  background: #2563eb;
+  border-radius: 11px;
+}
+
+QSlider#switchTheme::add-page:horizontal {
+  background: #334155;
+  border-radius: 11px;
+}
+
+QSlider#switchTheme::handle:horizontal {
+  width: 18px;
+  margin: 2px;
+  border-radius: 9px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
 }
 
 QLabel#formHeaderTitle {
@@ -71,13 +94,18 @@ QLabel#formHeaderSub {
 QFrame#authCard QTabWidget::pane {
   border: none;
   background: transparent;
-  padding-top: 8px;
+  top: -1px;
+}
+
+QFrame#authCard QTabWidget::tab-bar {
+  alignment: left;
 }
 
 QFrame#authCard QTabWidget QTabBar::tab {
   background: transparent;
   color: #94a3b8;
-  padding: 10px 20px;
+  padding: 8px 18px;
+  min-height: 22px;
   margin-right: 4px;
   border: none;
   border-bottom: 2px solid transparent;
@@ -110,6 +138,13 @@ QFrame#authCard QLineEdit {
   min-height: 20px;
   selection-background-color: #3b82f6;
   selection-color: #ffffff;
+}
+
+QFrame#authCard QLineEdit#lineLoginEmail,
+QFrame#authCard QLineEdit#lineLoginPassword {
+  padding: 6px 10px;
+  min-height: 14px;
+  max-height: 36px;
 }
 
 QFrame#authCard QLineEdit:focus {

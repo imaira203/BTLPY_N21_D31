@@ -24,7 +24,10 @@ QLabel#brandSubtitle {
   margin-top: 2px;
 }
 
-QPushButton#navButton {
+QPushButton#navHome,
+QPushButton#navSaved,
+QPushButton#navCv,
+QPushButton#navProfile {
   text-align: left;
   padding: 12px 16px;
   border: none;
@@ -35,13 +38,19 @@ QPushButton#navButton {
   font-weight: 500;
 }
 
-QPushButton#navButton:checked,
-QPushButton#navButton:hover {
+QPushButton#navHome:checked,
+QPushButton#navSaved:checked,
+QPushButton#navCv:checked,
+QPushButton#navProfile:checked,
+QPushButton#navHome:hover,
+QPushButton#navSaved:hover,
+QPushButton#navCv:hover,
+QPushButton#navProfile:hover {
   background: #1e3a5f;
   color: #93c5fd;
 }
 
-QPushButton#logoutButton {
+QPushButton#btnLogout {
   padding: 12px 16px;
   border-radius: 12px;
   border: 1px solid #475569;
@@ -50,29 +59,92 @@ QPushButton#logoutButton {
   font-weight: 500;
 }
 
-QPushButton#logoutButton:hover {
+QPushButton#btnLogout:hover {
   background: #475569;
 }
 
-QStackedWidget#mainStack {
+QStackedWidget#stackedPages {
   background: #0f172a;
 }
 
 QWidget#pageHome,
-QWidget#pageCv {
+QWidget#pageCv,
+QWidget#pageJobDetail {
   background: #0f172a;
 }
 
-QLabel#pageTitle {
+QLabel#labelHomeTitle,
+QLabel#labelCvTitle {
   font-size: 28px;
   font-weight: 800;
   color: #f1f5f9;
   letter-spacing: -0.5px;
 }
 
-QLabel#pageSubtitle {
+QLabel#labelHomeSub {
   font-size: 15px;
   color: #94a3b8;
+}
+
+QLabel#labelDetailTitle {
+  font-size: 26px;
+  font-weight: 800;
+  color: #f1f5f9;
+}
+
+QLabel#labelDetailCompany {
+  font-size: 15px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+QLabel#labelDetailMeta,
+QLabel#labelDetailCv {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+QPushButton#btnBackToJobs {
+  background: #334155;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-weight: 600;
+}
+
+QPushButton#btnBackToJobs:hover {
+  background: #475569;
+}
+
+QPlainTextEdit#plainJobDetail {
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 10px;
+}
+
+QComboBox#comboDetailCv {
+  border: 1px solid #475569;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+QPushButton#btnDetailApply {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+QPushButton#btnDetailApply:hover {
+  background: #1d4ed8;
 }
 
 QFrame#searchBarFrame {

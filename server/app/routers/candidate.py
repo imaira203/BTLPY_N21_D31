@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,7 +12,7 @@ from ..db import get_db
 from ..deps import get_current_user
 from ..models import CVDocument, HRProfile, Job, JobApplication, JobStatus, User, UserRole
 from ..schemas import ApplyIn, CVOut, JobOut
-from ..storage_paths import absolute_path, relative_key
+from ..storage_paths import absolute_path, relative_key, resolve_existing_file
 
 router = APIRouter(prefix="/candidate", tags=["candidate"])
 
@@ -56,6 +57,62 @@ def list_cvs(user: Annotated[User, Depends(get_current_user)], db: Annotated[Ses
     _require_candidate(user)
     rows = db.scalars(select(CVDocument).where(CVDocument.user_id == user.id).order_by(CVDocument.id.desc())).all()
     return list(rows)
+
+
+@router.get("/cvs/{cv_id}/download")
+def download_cv(
+    cv_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    _require_candidate(user)
+    cv = db.get(CVDocument, cv_id)
+    if not cv or cv.user_id != user.id:
+        raise HTTPException(status_code=404, detail="CV not found")
+    path = resolve_existing_file(settings, cv.stored_filename)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="CV file not found")
+    return FileResponse(path=str(path), filename=cv.original_name, media_type=cv.mime_type or "application/octet-stream")
+
+
+@router.get("/cvs/{cv_id}/view")
+def view_cv(
+    cv_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    _require_candidate(user)
+    cv = db.get(CVDocument, cv_id)
+    if not cv or cv.user_id != user.id:
+        raise HTTPException(status_code=404, detail="CV not found")
+    path = resolve_existing_file(settings, cv.stored_filename)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="CV file not found")
+    return FileResponse(path=str(path), filename=cv.original_name, media_type=cv.mime_type or "application/pdf")
+
+
+@router.delete("/cvs/{cv_id}")
+def delete_cv(
+    cv_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_candidate(user)
+    cv = db.get(CVDocument, cv_id)
+    if not cv or cv.user_id != user.id:
+        raise HTTPException(status_code=404, detail="CV not found")
+    used = db.scalar(select(JobApplication).where(JobApplication.cv_id == cv_id))
+    if used:
+        raise HTTPException(status_code=400, detail="CV đã dùng để ứng tuyển, không thể xóa")
+    path = resolve_existing_file(settings, cv.stored_filename)
+    db.delete(cv)
+    db.commit()
+    if path and path.is_file():
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    return {"ok": True}
 
 
 @router.get("/jobs", response_model=list[JobOut])

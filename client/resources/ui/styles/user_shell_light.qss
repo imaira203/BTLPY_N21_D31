@@ -24,7 +24,10 @@ QLabel#brandSubtitle {
   margin-top: 2px;
 }
 
-QPushButton#navButton {
+QPushButton#navHome,
+QPushButton#navSaved,
+QPushButton#navCv,
+QPushButton#navProfile {
   text-align: left;
   padding: 12px 16px;
   border: none;
@@ -35,13 +38,19 @@ QPushButton#navButton {
   font-weight: 500;
 }
 
-QPushButton#navButton:checked,
-QPushButton#navButton:hover {
+QPushButton#navHome:checked,
+QPushButton#navSaved:checked,
+QPushButton#navCv:checked,
+QPushButton#navProfile:checked,
+QPushButton#navHome:hover,
+QPushButton#navSaved:hover,
+QPushButton#navCv:hover,
+QPushButton#navProfile:hover {
   background: #eff6ff;
   color: #1d4ed8;
 }
 
-QPushButton#logoutButton {
+QPushButton#btnLogout {
   padding: 12px 16px;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
@@ -50,29 +59,229 @@ QPushButton#logoutButton {
   font-weight: 500;
 }
 
-QPushButton#logoutButton:hover {
+QPushButton#btnLogout:hover {
   background: #f1f5f9;
 }
 
-QStackedWidget#mainStack {
+QStackedWidget#stackedPages {
   background: #f8fafc;
 }
 
 QWidget#pageHome,
-QWidget#pageCv {
+QWidget#pageCv,
+QWidget#pageJobDetail {
   background: #f8fafc;
 }
 
-QLabel#pageTitle {
+QWidget#pageSaved,
+QWidget#pageProfile {
+  background: #f8fafc;
+}
+
+QLabel#labelHomeTitle,
+QLabel#labelCvTitle {
   font-size: 28px;
   font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.5px;
 }
 
-QLabel#pageSubtitle {
+QLabel#labelSavedTitle,
+QLabel#labelProfileTitle {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.5px;
+}
+
+QLabel#labelHomeSub {
   font-size: 15px;
   color: #64748b;
+}
+
+QLabel#labelSavedSub,
+QLabel#labelCvHint,
+QLabel#labelProfileSub,
+QLabel#labelProfileName,
+QLabel#labelProfileEmail,
+QLabel#labelProfileRole {
+  font-size: 14px;
+  color: #475569;
+}
+
+QLabel#labelProfileSectionInfo,
+QLabel#labelProfileSectionEmail,
+QLabel#labelProfileSectionPassword {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 6px;
+}
+
+QLabel#labelProfileNameKey,
+QLabel#labelProfileEmailKey,
+QLabel#labelProfileRoleKey {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+QLabel#labelProfileName,
+QLabel#labelProfileEmail,
+QLabel#labelProfileRole {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+QFrame#savedCard,
+QFrame#profileCard,
+QFrame#profileAvatarCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+QLabel#labelAvatarPreview {
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 43px;
+  color: #1d4ed8;
+  font-size: 34px;
+}
+
+QLabel#labelAvatarTitle {
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+QPushButton#btnChangeAvatar {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 600;
+  max-width: 140px;
+}
+
+QListWidget#listSavedJobs,
+QListWidget#listCvs {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 6px;
+}
+
+QListWidget#listSavedJobs::item,
+QListWidget#listCvs::item {
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+
+QListWidget#listSavedJobs::item:selected,
+QListWidget#listCvs::item:selected {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+QWidget#cvRow {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+QLabel#cvRowLabel {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+QLabel#labelDetailTitle {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+QLabel#labelDetailCompany {
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+}
+
+QLabel#labelDetailMeta,
+QLabel#labelDetailCv {
+  font-size: 13px;
+  color: #64748b;
+}
+
+QPushButton#btnBackToJobs {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-weight: 600;
+}
+
+QPushButton#btnBackToJobs:hover {
+  background: #f1f5f9;
+}
+
+QPushButton#btnSaveJobIcon {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #f59e0b;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+QPushButton#btnSaveJobIcon:hover {
+  background: #fffbeb;
+}
+
+QPlainTextEdit#plainJobDetail {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 10px;
+}
+
+QComboBox#comboDetailCv {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+QComboBox#comboDetailCv QAbstractItemView,
+QComboBox QAbstractItemView {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 4px;
+  selection-background-color: #eff6ff;
+  selection-color: #1d4ed8;
+  outline: 0;
+}
+
+QPushButton#btnDetailApply {
+  background: #1d4ed8;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+QPushButton#btnDetailApply:hover {
+  background: #1e40af;
 }
 
 QFrame#searchBarFrame {
@@ -185,6 +394,12 @@ QPushButton#btnUploadCv {
   font-weight: 600;
 }
 
+QPushButton#btnRefreshProfile {
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 600;
+}
+
 QPushButton#btnUploadCv {
   background: #1d4ed8;
   color: #ffffff;
@@ -195,4 +410,115 @@ QPushButton#btnPickCv {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   color: #334155;
+}
+
+QPushButton#btnRefreshProfile {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+QLineEdit#lineNewEmail,
+QLineEdit#lineCurrentPasswordForEmail,
+QLineEdit#lineCurrentPassword,
+QLineEdit#lineNewPassword,
+QLineEdit#lineConfirmPassword {
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+QPushButton#btnUpdateEmail,
+QPushButton#btnUpdatePassword {
+  background: #1d4ed8;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+
+QPushButton#btnUpdateEmail:hover,
+QPushButton#btnUpdatePassword:hover {
+  background: #1e40af;
+}
+
+QPushButton#btnCvView {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  border-radius: 8px;
+  min-width: 36px;
+  max-width: 36px;
+  min-height: 30px;
+  max-height: 30px;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+QPushButton#btnCvDelete {
+  background: #ef4444;
+  border: none;
+  color: #ffffff;
+  border-radius: 8px;
+  min-width: 36px;
+  max-width: 36px;
+  min-height: 30px;
+  max-height: 30px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+QPushButton#btnSavedJobOpen {
+  text-align: center;
+  border: none;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 10px;
+  background: #1d4ed8;
+  border-radius: 10px;
+}
+
+QPushButton#btnSavedJobOpen:hover {
+  background: #1e40af;
+}
+
+QPushButton#btnSavedRemoveIcon {
+  border: none;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 10px;
+  min-width: 34px;
+  max-width: 34px;
+  min-height: 34px;
+  max-height: 34px;
+}
+
+QWidget#savedJobRow {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+QLabel#labelSavedJobTitle {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+QLabel#labelSavedJobCompany {
+  color: #475569;
+  font-size: 13px;
+}
+
+QLabel#labelSavedJobMeta {
+  color: #64748b;
+  font-size: 13px;
 }

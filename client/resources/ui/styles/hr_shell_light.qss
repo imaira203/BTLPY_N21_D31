@@ -11,6 +11,10 @@ QFrame#sidebar {
   max-width: 280px;
 }
 
+QLabel {
+  color: #0f172a;
+}
+
 QLabel#brandTitle {
   color: #10b981;
   font-size: 24px;
@@ -74,6 +78,19 @@ QLabel#sectionTitle {
   margin-top: 8px;
 }
 
+QLabel#labelPostTitle,
+QLabel#labelMyJobs,
+QLabel#labelCands {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+QLabel#labelHrStatus {
+  font-size: 13px;
+  color: #475569;
+}
+
 QFrame#chartCard {
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -117,6 +134,7 @@ QPlainTextEdit {
   border-radius: 10px;
   padding: 10px;
   background: #ffffff;
+  color: #0f172a;
 }
 
 QPushButton#btnSaveDraft {
@@ -142,6 +160,9 @@ QTableWidget {
   border-radius: 12px;
   background: #ffffff;
   gridline-color: #f1f5f9;
+  color: #0f172a;
+  selection-background-color: #ecfdf5;
+  selection-color: #047857;
 }
 
 QHeaderView::section {
