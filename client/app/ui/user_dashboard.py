@@ -43,7 +43,6 @@ class UserDashboard:
         if not isinstance(win, QMainWindow):
             raise TypeError("dashboard_shell.ui phải là QMainWindow")
         self.win = win
-        apply_theme_qss(self.win, "user_shell")
 
         self.stack = win.findChild(QStackedWidget, "stackedPages") or win.findChild(QStackedWidget, "mainStack")
         self.nav_home = self._find_button(["navHome"], "Trang chủ")
@@ -460,7 +459,8 @@ class UserDashboard:
             role_vi = {"candidate": "Ứng viên", "hr": "Nhà tuyển dụng", "admin": "Quản trị viên"}.get(role, role)
             self.label_profile_role.setText(role_vi)
         if self.label_avatar_preview:
-            self.label_avatar_preview.setText("👤")
+            self.label_avatar_preview.setPixmap(QIcon(str(resource_icon("ic_user.svg"))).pixmap(QSize(64, 64)))
+            self.label_avatar_preview.setText("")
 
     def _change_avatar(self) -> None:
         from PySide6.QtWidgets import QFileDialog

@@ -1,0 +1,484 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>QuanLyUser</class>
+ <widget class="QMainWindow" name="QuanLyUser">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1100</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>JobHub - Quản lý người dùng</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">
+/* Reset &amp; Base */
+QMainWindow { background-color: #F8FAFC; }
+* { font-family: 'Inter', 'Segoe UI', sans-serif; }
+
+/* Main Area Container */
+#mainArea { background-color: #F8FAFC; }
+
+/* Header Section */
+#headerWidget {
+    background-color: transparent;
+    margin-bottom: 10px;
+}
+#pageTitle {
+    font-size: 26px;
+    font-weight: 800;
+    color: #0F172A;
+    letter-spacing: -0.5px;
+}
+#pageSubtitle {
+    font-size: 14px;
+    color: #64748B;
+}
+
+/* Stats Row */
+.StatCard {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+}
+.StatTitle { color: #64748B; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.StatValue { color: #0F172A; font-size: 20px; font-weight: 700; }
+
+/* Filter Bar */
+#filterBar {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 10px;
+}
+QLineEdit#searchInput {
+    background-color: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 10px 15px;
+    font-size: 14px;
+    color: #1E293B;
+}
+QLineEdit#searchInput:focus {
+    background-color: #FFFFFF;
+    border: 2px solid #6366F1;
+}
+QComboBox {
+    background-color: #F1F5F9;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 500;
+}
+QComboBox:hover { background-color: #E2E8F0; }
+QComboBox::drop-down { border: none; width: 30px; }
+
+/* Table Card */
+#tableCard {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 16px;
+}
+
+QTableWidget {
+    background-color: transparent;
+    border: none;
+    gridline-color: #F1F5F9;
+    outline: none;
+}
+QTableWidget::item {
+    padding: 15px;
+    color: #334155;
+    border-bottom: 1px solid #F1F5F9;
+}
+QTableWidget::item:selected {
+    background-color: #F8FAFC;
+    color: #6366F1;
+    font-weight: 600;
+}
+
+QHeaderView::section {
+    background-color: #F8FAFC;
+    color: #64748B;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 15px;
+    border: none;
+    border-bottom: 2px solid #EEF2FF;
+}
+
+/* Pagination */
+#paginationFrame {
+    background-color: #FFFFFF;
+    border-top: 1px solid #F1F5F9;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+}
+#pageInfo { color: #64748B; font-size: 13px; }
+
+QPushButton.pageBtn {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    min-width: 36px;
+    min-height: 36px;
+    font-weight: 600;
+    color: #475569;
+}
+QPushButton.pageBtn:hover {
+    background-color: #F1F5F9;
+    border-color: #CBD5E1;
+}
+   </string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QWidget" name="mainArea" native="true">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <property name="spacing">
+        <number>24</number>
+       </property>
+       <property name="leftMargin">
+        <number>32</number>
+       </property>
+       <property name="topMargin">
+        <number>32</number>
+       </property>
+       <property name="rightMargin">
+        <number>32</number>
+       </property>
+       <property name="bottomMargin">
+        <number>32</number>
+       </property>
+       <item>
+        <widget class="QWidget" name="headerWidget" native="true">
+         <layout class="QHBoxLayout" name="horizontalLayout">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <layout class="QVBoxLayout" name="titleLayout">
+            <property name="spacing">
+             <number>4</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="pageTitle">
+              <property name="text">
+               <string>Quản lý người dùng</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="pageSubtitle">
+              <property name="text">
+               <string>Xem và quản lý tất cả các tài khoản ứng viên trong hệ thống.</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnAddUser">
+            <property name="minimumSize">
+             <size>
+              <width>140</width>
+              <height>44</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: #6366F1; color: white; border-radius: 10px; font-weight: 700; font-size: 14px; } QPushButton:hover { background-color: #4F46E5; }</string>
+            </property>
+            <property name="text">
+             <string>+ Thêm User</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QFrame" name="filterBar">
+         <layout class="QHBoxLayout" name="horizontalLayout_2">
+          <property name="spacing">
+           <number>16</number>
+          </property>
+          <item>
+           <widget class="QLineEdit" name="searchInput">
+            <property name="minimumSize">
+             <size>
+              <width>350</width>
+              <height>0</height>
+             </size>
+            </property>
+            <property name="placeholderText">
+             <string>Tìm kiếm theo tên, email, số điện thoại...</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="statusFilter">
+            <property name="minimumSize">
+             <size>
+              <width>180</width>
+              <height>44</height>
+             </size>
+            </property>
+            <item>
+             <property name="text">
+              <string>Tất cả trạng thái</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Hoạt động</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Bị khóa</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="roleFilter">
+            <property name="minimumSize">
+             <size>
+              <width>180</width>
+              <height>44</height>
+             </size>
+            </property>
+            <item>
+             <property name="text">
+              <string>Tất cả vai trò</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Ứng viên</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>HR</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QFrame" name="tableCard">
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QTableWidget" name="userTable">
+            <property name="rowCount">
+             <number>0</number>
+            </property>
+            <property name="columnCount">
+             <number>8</number>
+            </property>
+            <column>
+             <property name="text">
+              <string>ID</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Họ và tên</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Email</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Số điện thoại</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Ngày tham gia</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Đơn ứng tuyển</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Trạng thái</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Thao tác</string>
+             </property>
+            </column>
+           </widget>
+          </item>
+          <item>
+           <widget class="QFrame" name="paginationFrame">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>70</height>
+             </size>
+            </property>
+            <layout class="QHBoxLayout" name="horizontalLayout_3">
+             <property name="leftMargin">
+              <number>24</number>
+             </property>
+             <property name="rightMargin">
+              <number>24</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="pageInfo">
+               <property name="text">
+                <string>Hiển thị 10 trong 1,240 người dùng</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_2">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnPrev">
+               <property name="text">
+                <string>&lt;</string>
+               </property>
+               <property name="class" stdset="0">
+                <string>pageBtn</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnP1">
+               <property name="styleSheet">
+                <string notr="true">background-color: #6366F1; color: white; border-color: #6366F1;</string>
+               </property>
+               <property name="text">
+                <string>1</string>
+               </property>
+               <property name="class" stdset="0">
+                <string>pageBtn</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnP2">
+               <property name="text">
+                <string>2</string>
+               </property>
+               <property name="class" stdset="0">
+                <string>pageBtn</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnP3">
+               <property name="text">
+                <string>3</string>
+               </property>
+               <property name="class" stdset="0">
+                <string>pageBtn</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnNext">
+               <property name="text">
+                <string>&gt;</string>
+               </property>
+               <property name="class" stdset="0">
+                <string>pageBtn</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

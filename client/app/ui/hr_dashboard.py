@@ -5,7 +5,8 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
@@ -28,7 +29,7 @@ from PySide6.QtWidgets import (
 
 from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
-from ..paths import resource_ui
+from ..paths import resource_icon, resource_ui
 from ..session_store import clear_session
 from ..theme import HR_ACCENT
 from .charts import make_bar_chart
@@ -43,7 +44,6 @@ class HRDashboard:
         if not isinstance(win, QMainWindow):
             raise TypeError("hr_dashboard.ui phải là QMainWindow")
         self.win = win
-        apply_theme_qss(self.win, "hr_shell")
 
         self.stack = win.findChild(QStackedWidget, "stackedPages")
         self.nav_dash = self._find_button(["navDash"], "Dashboard")
@@ -186,19 +186,22 @@ class HRDashboard:
                 if w:
                     w.deleteLater()
             items = [
-                ("💼", "Tổng tin đăng", str(cards.get("jobs", 0)), "+3 tuần này"),
-                ("👥", "Tổng ứng viên", str(cards.get("candidates", 0)), "+12 tuần này"),
+                ("ic_jobs.svg", "Tổng tin đăng", str(cards.get("jobs", 0)), "+3 tuần này"),
+                ("ic_users.svg", "Tổng ứng viên", str(cards.get("candidates", 0)), "+12 tuần này"),
                 (
-                    "👁",
+                    "ic_view.svg",
                     "Lượt xem (ước lượng)",
                     f"{int(cards.get('views', 0) or 0):,}".replace(",", "."),
                     "+245 tuần này",
                 ),
-                ("📈", "Tỷ lệ phản hồi", f"{cards.get('response_rate', 0)}%", "+5% so với tháng trước"),
+                ("ic_trend.svg", "Tỷ lệ phản hồi", f"{cards.get('response_rate', 0)}%", "+5% so với tháng trước"),
             ]
-            for icon, title, val, hint in items:
+            for icon_name, title, val, hint in items:
                 sc = load_ui(resource_ui("stat_card.ui"))
                 ic = sc.findChild(QLabel, "labelStatIcon")
+                if ic:
+                    ic.setPixmap(QIcon(str(resource_icon(icon_name))).pixmap(QSize(24, 24)))
+                    ic.setText("")
                 t = sc.findChild(QLabel, "labelStatTitle")
                 v = sc.findChild(QLabel, "labelStatValue")
                 h = sc.findChild(QLabel, "labelStatHint")

@@ -10,7 +10,8 @@ from ..ui_theme import get_ui_theme
 
 def apply_qss(widget: QWidget, relative_path: str) -> None:
     path: Path = resource_ui(relative_path)
-    widget.setStyleSheet(path.read_text(encoding="utf-8"))
+    if path.is_file():
+        widget.setStyleSheet(path.read_text(encoding="utf-8"))
 
 
 def apply_theme_qss(widget: QWidget, base: str) -> None:
@@ -19,4 +20,6 @@ def apply_theme_qss(widget: QWidget, base: str) -> None:
     path = resource_ui(f"styles/{base}_{t}.qss")
     if not path.is_file():
         path = resource_ui(f"styles/{base}.qss")
-    widget.setStyleSheet(path.read_text(encoding="utf-8"))
+    
+    if path.is_file():
+        widget.setStyleSheet(path.read_text(encoding="utf-8"))

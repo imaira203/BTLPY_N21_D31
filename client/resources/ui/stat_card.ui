@@ -2,88 +2,78 @@
 <ui version="4.0">
  <class>StatCard</class>
  <widget class="QFrame" name="statCard">
-  <property name="objectName">
-   <string>statCard</string>
+  <property name="styleSheet">
+   <string notr="true">
+    QFrame#statCard {
+        background-color: #FFFFFF;
+        border-radius: 20px;
+    }
+    QLabel#labelStatTitle {
+        color: #A3AED0;
+        font-size: 12px;
+        font-weight: 700;
+        font-family: 'Segoe UI';
+    }
+    QLabel#labelStatValue {
+        font-size: 28px;
+        font-weight: 800;
+        color: #1B2559;
+        font-family: 'Segoe UI';
+    }
+    QLabel#labelStatHint {
+        font-size: 12px;
+        color: #05CD99;
+        font-family: 'Segoe UI';
+    }
+   </string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_root">
-   <property name="spacing">
-    <number>8</number>
-   </property>
-   <property name="leftMargin">
-    <number>16</number>
-   </property>
-   <property name="topMargin">
-    <number>16</number>
-   </property>
-   <property name="rightMargin">
-    <number>16</number>
-   </property>
-   <property name="bottomMargin">
-    <number>16</number>
-   </property>
+   <property name="spacing"><number>12</number></property>
+   <property name="leftMargin"><number>20</number></property>
+   <property name="topMargin"><number>20</number></property>
+   <property name="rightMargin"><number>20</number></property>
+   <property name="bottomMargin"><number>20</number></property>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_top">
      <item>
-      <widget class="QFrame" name="statIconFrame">
-       <property name="objectName">
-        <string>statIconFrame</string>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>40</width>
-         <height>40</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>40</width>
-         <height>40</height>
-        </size>
-       </property>
-       <layout class="QHBoxLayout" name="horizontalLayout_icon">
-        <item>
-         <widget class="QLabel" name="labelStatIcon">
-          <property name="text">
-           <string>📊</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-     </item>
-     <item>
       <layout class="QVBoxLayout" name="verticalLayout_texts">
-       <property name="spacing">
-        <number>4</number>
-       </property>
+       <property name="spacing"><number>4</number></property>
        <item>
-        <widget class="QLabel" name="labelStatTitle">
-         <property name="text">
-          <string/>
+        <widget class="QFrame" name="statIconFrame">
+         <property name="minimumSize"><size><width>48</width><height>48</height></size></property>
+         <property name="maximumSize"><size><width>48</width><height>48</height></size></property>
+         <property name="styleSheet">
+          <string notr="true">
+           QFrame#statIconFrame {
+               background-color: #F4F7FE;
+               border-radius: 12px;
+           }
+          </string>
          </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_icon">
+          <property name="margin"><number>0</number></property>
+          <item>
+           <widget class="QLabel" name="labelStatIcon">
+            <property name="alignment"><set>Qt::AlignCenter</set></property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item><spacer name="verticalSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>10</height></size></property></spacer></item>
+       <item>
+        <widget class="QLabel" name="labelStatValue">
+         <property name="text"><string>0</string></property>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="labelStatValue">
-         <property name="objectName">
-          <string>labelStatValue</string>
-         </property>
-         <property name="text">
-          <string/>
-         </property>
+        <widget class="QLabel" name="labelStatTitle">
+         <property name="text"><string>Title</string></property>
         </widget>
        </item>
        <item>
         <widget class="QLabel" name="labelStatHint">
-         <property name="objectName">
-          <string>labelStatHint</string>
-         </property>
-         <property name="text">
-          <string/>
-         </property>
+         <property name="text"><string>Hint</string></property>
         </widget>
        </item>
       </layout>

@@ -32,7 +32,6 @@ class AuthWindow:
         if not isinstance(win, QMainWindow):
             raise TypeError("auth_window.ui phải là QMainWindow")
         self.win = win
-        apply_theme_qss(self.win, "auth_shell")
 
         form_outer = win.findChild(QFrame, "formOuter")
         if form_outer is not None:

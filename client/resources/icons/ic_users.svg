@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">
+  <!-- Users: two person silhouettes -->
+  <!-- Primary person -->
+  <circle cx="7.5" cy="6" r="3" fill="#6B7280"/>
+  <path d="M1 18c0-3.6 2.9-6.5 6.5-6.5S14 14.4 14 18" fill="#6B7280"/>
+  <!-- Secondary person (offset right) -->
+  <circle cx="14.5" cy="5.5" r="2.3" fill="#9CA3AF"/>
+  <path d="M11.5 18c0-2.8 1.8-5.1 4.3-6" fill="none" stroke="#9CA3AF" stroke-width="2.2" stroke-linecap="round"/>
+</svg>
