@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
@@ -20,380 +23,295 @@ from PySide6.QtWidgets import (
 
 from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
-from ..paths import resource_ui
+from .. import mock_data
+from ..paths import resource_icon, resource_ui
 from ..session_store import clear_session
 from ..theme import ADMIN_ACCENT
 from .charts import make_line_chart_single
 from .qss_loader import apply_theme_qss
 from .ui_loader import load_ui
+from .quanly_enhanced import (
+    apply_nav_icons,
+    apply_search_icon,
+    make_status_badge,
+    make_action_buttons,
+    enhance_table,
+    inject_pagination,
+    apply_modern_qss,
+)
 
 
 class AdminDashboard:
+    """Admin panel that loads QuanLyUser/HR/Jobs .ui and fills tables from Python mock data."""
+
     def __init__(self, on_logout: Callable[[], None]) -> None:
         self._on_logout = on_logout
+
+        # Load the base admin_dashboard.ui for Dashboard page
         win = load_ui(resource_ui("admin_dashboard.ui"))
         if not isinstance(win, QMainWindow):
             raise TypeError("admin_dashboard.ui phải là QMainWindow")
         self.win = win
-        apply_theme_qss(self.win, "admin_shell")
 
-        self.stack = win.findChild(QStackedWidget, "stackedPages")
-        self.nav_dash = self._find_button(["navDash"], "Dashboard")
-        self.nav_users = self._find_button(["navUsers"], "Quản lý User")
-        self.nav_hr = self._find_button(["navHr"], "Quản lý HR")
-        self.nav_jobs = self._find_button(["navJobs"], "Quản lý Jobs")
-        self.btn_logout = self._find_button(["btnLogout", "logoutButton"], "Đăng xuất")
+        # Load sub-UIs for management pages (extract main content only)
+        self._user_widget = self._load_sub_ui("QuanLyUser.ui", "userTable")
+        self._hr_widget = self._load_sub_ui("QuanLyHR.ui", "hrTable")
+        self._jobs_widget = self._load_sub_ui("QuanLyJobs.ui", "jobTable")
 
-        self.chart_holder = win.findChild(QWidget, "chartHolder")
-        self.cards_row = win.findChild(QHBoxLayout, "horizontalLayout_cards")
-
-        self.table_users = win.findChild(QTableWidget, "tableUsers")
-        self.table_hr = win.findChild(QTableWidget, "tableHr")
-        self.table_jobs = win.findChild(QTableWidget, "tableJobs")
-        self.page_users = win.findChild(QWidget, "pageUsers")
-        self.page_hr = win.findChild(QWidget, "pageHr")
-
-        self._nav_group = QButtonGroup(self.win)
-        for b in (self.nav_dash, self.nav_users, self.nav_hr, self.nav_jobs):
-            if b:
-                b.setCheckable(True)
-                self._nav_group.addButton(b)
-        if self.nav_dash:
-            self.nav_dash.clicked.connect(lambda: self._go(0))
-        if self.nav_users:
-            self.nav_users.clicked.connect(lambda: (self._go(1), self._load_users()))
-        if self.nav_hr:
-            self.nav_hr.clicked.connect(lambda: (self._go(2), self._load_pending_hr()))
-        if self.nav_jobs:
-            self.nav_jobs.clicked.connect(lambda: (self._go(3), self._load_pending_jobs()))
-        if self.btn_logout:
-            self.btn_logout.clicked.connect(self._logout)
-
-        self._setup_page_layout(self.page_users)
-        self._setup_page_layout(self.page_hr)
-        self._setup_table(self.table_users, stretch_cols=[1, 2])
-        self._setup_table(self.table_hr, stretch_cols=[1])
-        self._setup_table(self.table_jobs, stretch_cols=[1])
-
+        self._bind_widgets()
+        self._inject_management_pages()
+        self._setup_navigation()
         self._load_dash()
-        self._load_users()
-        self._load_pending_hr()
-        self._load_pending_jobs()
+        self._go(0)
 
-    def _find_button(self, names: list[str], text_fallback: str) -> QPushButton | None:
-        for name in names:
-            b = self.win.findChild(QPushButton, name)
-            if b:
-                return b
-        for b in self.win.findChildren(QPushButton):
-            if b.text().strip() == text_fallback:
-                return b
-        return None
+    # ── Load sub-UI: extract mainArea widget ───────────────────────
+    def _load_sub_ui(self, ui_name: str, table_name: str) -> QWidget:
+        sub_win = load_ui(resource_ui(ui_name))
+        main_area = sub_win.findChild(QWidget, "mainArea")
+        if main_area:
+            main_area.setParent(None)
+            return main_area
+        return sub_win
+
+    # ── Inject management pages into stacked widget ────────────────
+    def _inject_management_pages(self) -> None:
+        if not self.stack:
+            return
+        # Add pages: index 1=User, 2=HR, 3=Jobs
+        for widget in (self._user_widget, self._hr_widget, self._jobs_widget):
+            self.stack.addWidget(widget)
+
+        # Get table references from injected pages
+        self.table_users = self._user_widget.findChild(QTableWidget, "userTable")
+        self.table_hr = self._hr_widget.findChild(QTableWidget, "hrTable")
+        self.table_jobs = self._jobs_widget.findChild(QTableWidget, "jobTable")
+
+        # Get search/filter references
+        self.search_user = self._user_widget.findChild(QLineEdit, "searchInput")
+        self.search_hr = self._hr_widget.findChild(QLineEdit, "searchInput")
+        self.search_jobs = self._jobs_widget.findChild(QLineEdit, "searchInput")
+        self.filter_user = self._user_widget.findChild(QComboBox, "statusFilter")
+        self.filter_hr = self._hr_widget.findChild(QComboBox, "statusFilter")
+        self.filter_jobs = self._jobs_widget.findChild(QComboBox, "statusFilter")
+
+        # Apply nav icons & search icons to sub-UIs
+        for w in (self._user_widget, self._hr_widget, self._jobs_widget):
+            search = w.findChild(QLineEdit, "searchInput")
+            if search:
+                apply_search_icon(search)
+
+    def _bind_widgets(self) -> None:
+        self.nav_dash = self.win.findChild(QPushButton, "navDashboard")
+        self.nav_users = self.win.findChild(QPushButton, "navUserMgmt")
+        self.nav_hr = self.win.findChild(QPushButton, "navHRMgmt")
+        self.nav_jobs = self.win.findChild(QPushButton, "navJobMgmt")
+        self.btn_logout = self.win.findChild(QPushButton, "logoutButton")
+        self.page_title = self.win.findChild(QLabel, "pageTitle")
+        self.page_subtitle = self.win.findChild(QLabel, "pageSubTitle")
+        self.stack = self.win.findChild(QStackedWidget, "stackedPages")
+        self.cards_row = self.win.findChild(QHBoxLayout, "horizontalLayout_cards")
+        self.chart_placeholder = self.win.findChild(QLabel, "chartPlaceholder")
+
+    def _setup_navigation(self) -> None:
+        self._nav_group = QButtonGroup(self.win)
+        nav_buttons = [
+            (self.nav_dash, "ic_dashboard.svg"),
+            (self.nav_users, "ic_users.svg"),
+            (self.nav_hr, "ic_hr.svg"),
+            (self.nav_jobs, "ic_jobs.svg"),
+        ]
+        for idx, (btn, icon_name) in enumerate(nav_buttons):
+            if btn:
+                btn.setCheckable(True)
+                btn.setIcon(QIcon(str(resource_icon(icon_name))))
+                btn.setIconSize(QSize(20, 20))
+                self._nav_group.addButton(btn)
+                btn.clicked.connect(lambda checked, i=idx: self._go(i))
+        if self.btn_logout:
+            self.btn_logout.setIcon(QIcon(str(resource_icon("ic_logout.svg"))))
+            self.btn_logout.setIconSize(QSize(20, 20))
+            self.btn_logout.clicked.connect(self._logout)
 
     def _go(self, index: int) -> None:
         if self.stack:
+            # page 0 = Dashboard, 1 = User, 2 = HR, 3 = Jobs
             self.stack.setCurrentIndex(index)
-        for i, b in enumerate([self.nav_dash, self.nav_users, self.nav_hr, self.nav_jobs]):
-            if b:
-                b.setChecked(i == index)
 
-    def _setup_page_layout(self, page: QWidget | None) -> None:
-        if not page or not page.layout():
-            return
-        page.layout().setContentsMargins(28, 24, 28, 20)
-        page.layout().setSpacing(12)
+        nav_buttons = [self.nav_dash, self.nav_users, self.nav_hr, self.nav_jobs]
+        for i, btn in enumerate(nav_buttons):
+            if btn:
+                btn.setChecked(i == index)
 
-    def _setup_table(self, table: QTableWidget | None, stretch_cols: list[int] | None = None) -> None:
-        if not table:
-            return
-        table.setAlternatingRowColors(True)
-        table.setSelectionBehavior(QTableWidget.SelectRows)
-        table.setSelectionMode(QTableWidget.SingleSelection)
-        table.verticalHeader().setVisible(False)
-        table.verticalHeader().setDefaultSectionSize(40)
-        hh = table.horizontalHeader()
-        hh.setStretchLastSection(False)
-        hh.setMinimumSectionSize(80)
-        if stretch_cols:
-            for c in stretch_cols:
-                hh.setSectionResizeMode(c, QHeaderView.ResizeMode.Stretch)
-        table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        titles = ["Admin Dashboard", "Quản lý User", "Quản lý HR", "Quản lý Jobs"]
+        subtitles = [
+            "Tổng quan hệ thống quản lý việc làm",
+            "Danh sách người tìm việc trên hệ thống",
+            "Danh sách nhà tuyển dụng trên hệ thống",
+            "Danh sách tất cả tin tuyển dụng trên hệ thống",
+        ]
+        if self.page_title and index < len(titles):
+            self.page_title.setText(titles[index])
+        if self.page_subtitle and index < len(subtitles):
+            self.page_subtitle.setText(subtitles[index])
 
-    def _set_empty_row(self, table: QTableWidget, message: str, columns: int) -> None:
-        table.setColumnCount(columns)
-        table.setRowCount(1)
-        table.clearContents()
-        cell = QTableWidgetItem(message)
-        cell.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        table.setItem(0, 0, cell)
-        table.setSpan(0, 0, 1, columns)
+        if index == 0:
+            self._load_dash()
+        elif index == 1:
+            self._fill_user_table()
+        elif index == 2:
+            self._fill_hr_table()
+        elif index == 3:
+            self._fill_jobs_table()
 
     def _logout(self) -> None:
         clear_session()
         self.win.close()
         self._on_logout()
 
+    # ── Dashboard page ─────────────────────────────────────────────
     def _load_dash(self) -> None:
         try:
             data = jobhub_api.admin_dashboard()
         except ApiError as e:
-            QMessageBox.warning(self.win, "Admin", str(e))
+            QMessageBox.warning(self.win, "Lỗi", str(e))
             return
-        cards = data.get("cards") or {}
-        labels = data.get("labels") or []
-        values = data.get("values") or []
+        cards_data = data.get("cards") or {}
         if self.cards_row:
             while self.cards_row.count():
-                it = self.cards_row.takeAt(0)
-                w = it.widget()
-                if w:
-                    w.deleteLater()
+                item = self.cards_row.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
             items = [
-                ("👤", "Tổng Users", f"{cards.get('users', 0):,}".replace(",", "."), "+52 tháng này"),
-                ("🏢", "Tổng HR", str(cards.get("hr", 0)), "+8 tháng này"),
-                ("💼", "Tổng Jobs", str(cards.get("jobs", 0)), "+23 tháng này"),
-                ("⚡", "Hoạt động hôm nay", str(cards.get("activity_today", 0)), "Đang hoạt động"),
+                ("ic_user.svg", "Tổng Users", f"{cards_data.get('users', 0):,}"),
+                ("ic_hr_stat.svg", "Tổng HR", str(cards_data.get("hr", 0))),
+                ("ic_jobs.svg", "Tổng Jobs", str(cards_data.get("jobs", 0))),
+                ("ic_activity.svg", "Hoạt động hôm nay", str(cards_data.get("activity_today", 0))),
             ]
-            for icon, title, val, hint in items:
+            for icon_name, title, val in items:
                 sc = load_ui(resource_ui("stat_card.ui"))
-                ic = sc.findChild(QLabel, "labelStatIcon")
-                t = sc.findChild(QLabel, "labelStatTitle")
-                v = sc.findChild(QLabel, "labelStatValue")
-                h = sc.findChild(QLabel, "labelStatHint")
-                if ic:
-                    ic.setText(icon)
-                if t:
-                    t.setText(title)
-                if v:
-                    v.setText(val)
-                if h:
-                    h.setText(hint)
+                lbl_icon = sc.findChild(QLabel, "labelStatIcon")
+                if lbl_icon:
+                    lbl_icon.setPixmap(QIcon(str(resource_icon(icon_name))).pixmap(QSize(24, 24)))
+                lbl_t = sc.findChild(QLabel, "labelStatTitle")
+                lbl_v = sc.findChild(QLabel, "labelStatValue")
+                lbl_h = sc.findChild(QLabel, "labelStatHint")
+                if lbl_t:
+                    lbl_t.setText(title)
+                if lbl_v:
+                    lbl_v.setText(val)
+                if lbl_h:
+                    lbl_h.setText("")
                 self.cards_row.addWidget(sc)
-        if self.chart_holder and labels and values:
-            lay = self.chart_holder.layout()
-            if lay is None:
-                lay = QVBoxLayout(self.chart_holder)
-                self.chart_holder.setLayout(lay)
-            while lay.count():
-                it = lay.takeAt(0)
-                w = it.widget()
-                if w:
-                    w.deleteLater()
-            canvas = make_line_chart_single([str(x) for x in labels], [int(x) for x in values], ADMIN_ACCENT)
-            lay.addWidget(canvas)
 
-    def _load_users(self) -> None:
-        if not self.table_users:
-            return
-        try:
-            users = jobhub_api.admin_list_users()
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Admin", str(e))
-            return
-        self.table_users.setColumnCount(5)
-        self.table_users.setHorizontalHeaderLabels(["ID", "Email", "Vai trò", "Trạng thái", "Hành động"])
-        if not users:
-            self._set_empty_row(self.table_users, "Chưa có người dùng để hiển thị.", 5)
-            return
-        self.table_users.setRowCount(len(users))
-        for i, u in enumerate(users):
-            uid = int(u.get("id", 0))
-            self.table_users.setItem(i, 0, QTableWidgetItem(str(uid)))
-            self.table_users.setItem(i, 1, QTableWidgetItem(u.get("email", "")))
-            role = str(u.get("role", ""))
-            role_vi = {"candidate": "Ứng viên", "hr": "Nhà tuyển dụng", "admin": "Quản trị viên"}.get(role, role)
-            self.table_users.setItem(i, 2, QTableWidgetItem(role_vi))
-            active = bool(u.get("is_active", True))
-            self.table_users.setItem(i, 3, QTableWidgetItem("Đang hoạt động" if active else "Đã khóa"))
-            actions = QWidget(self.win)
-            lay = QHBoxLayout(actions)
-            lay.setContentsMargins(0, 0, 0, 0)
-            lay.setSpacing(6)
-            btn_view = QPushButton("Xem")
-            btn_view.setMinimumWidth(64)
-            btn_toggle = QPushButton("Khóa" if active else "Mở khóa")
-            btn_toggle.setMinimumWidth(90)
-            btn_view.clicked.connect(lambda _=False, x=uid: self._view_user(x))
-            btn_toggle.clicked.connect(lambda _=False, x=uid, a=active: self._toggle_user_lock(x, a))
-            lay.addWidget(btn_view)
-            lay.addWidget(btn_toggle)
-            self.table_users.setCellWidget(i, 4, actions)
+        labels = data.get("labels") or []
+        values = data.get("values") or []
+        if self.chart_placeholder and labels and values:
+            parent = self.chart_placeholder.parentWidget()
+            layout = parent.layout()
+            if layout:
+                layout.removeWidget(self.chart_placeholder)
+                self.chart_placeholder.deleteLater()
+                self.chart_placeholder = None
+                canvas = make_line_chart_single(
+                    [str(x) for x in labels], [int(x) for x in values], "#7024C4"
+                )
+                layout.addWidget(canvas)
 
-    def _load_pending_hr(self) -> None:
-        if not self.table_hr:
+    # ── Fill User table from mock data ─────────────────────────────
+    def _fill_user_table(self) -> None:
+        table = self.table_users
+        if not table:
             return
-        try:
-            rows = jobhub_api.admin_pending_hr()
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Admin", str(e))
-            return
-        self.table_hr.setColumnCount(3)
-        self.table_hr.setHorizontalHeaderLabels(["ID", "Email", "Hành động"])
-        if not rows:
-            self._set_empty_row(self.table_hr, "Hiện không có HR chờ duyệt.", 3)
-            return
-        self.table_hr.setRowCount(len(rows))
-        for i, u in enumerate(rows):
-            uid = u["id"]
-            self.table_hr.setItem(i, 0, QTableWidgetItem(str(uid)))
-            self.table_hr.setItem(i, 1, QTableWidgetItem(u.get("email", "")))
-            cell = load_ui(resource_ui("action_buttons.ui"))
-            bp = cell.findChild(QPushButton, "btnPrimary")
-            bs = cell.findChild(QPushButton, "btnSecondary")
-            bv = QPushButton("Xem")
-            bv.setMinimumWidth(64)
-            lay = cell.layout()
-            if lay:
-                lay.addWidget(bv)
-            bv.clicked.connect(lambda _=False, x=uid: self._view_hr(x))
-            if bp:
-                bp.setText("Duyệt")
-                bp.setMinimumWidth(72)
-                bp.clicked.connect(lambda _=False, x=uid: self._approve_hr(x))
-            if bs:
-                bs.setText("Từ chối")
-                bs.setMinimumWidth(72)
-                bs.clicked.connect(lambda _=False, x=uid: self._reject_hr(x))
-            self.table_hr.setCellWidget(i, 2, cell)
-
-    def _approve_hr(self, user_id: int) -> None:
-        try:
-            jobhub_api.admin_approve_hr(user_id)
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Admin", str(e))
-            return
-        self._load_pending_hr()
-        self._load_dash()
-
-    def _reject_hr(self, user_id: int) -> None:
-        try:
-            jobhub_api.admin_reject_hr(user_id)
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Admin", str(e))
-            return
-        self._load_pending_hr()
-        self._load_dash()
-
-    def _load_pending_jobs(self) -> None:
-        if not self.table_jobs:
-            return
-        try:
-            jobs = jobhub_api.admin_pending_jobs()
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Admin", str(e))
-            return
-        self.table_jobs.setColumnCount(3)
-        self.table_jobs.setHorizontalHeaderLabels(["ID", "Tiêu đề", "Hành động"])
-        if not jobs:
-            self._set_empty_row(self.table_jobs, "Hiện không có công việc chờ duyệt.", 3)
-            return
-        self.table_jobs.setRowCount(len(jobs))
-        for i, j in enumerate(jobs):
-            jid = j["id"]
-            self.table_jobs.setItem(i, 0, QTableWidgetItem(str(jid)))
-            self.table_jobs.setItem(i, 1, QTableWidgetItem(j.get("title", "")))
-            cell = load_ui(resource_ui("action_buttons.ui"))
-            bp = cell.findChild(QPushButton, "btnPrimary")
-            bs = cell.findChild(QPushButton, "btnSecondary")
-            bv = QPushButton("Xem")
-            bv.setMinimumWidth(64)
-            lay = cell.layout()
-            if lay:
-                lay.addWidget(bv)
-            bv.clicked.connect(lambda _=False, x=jid: self._view_job(x))
-            if bp:
-                bp.setText("Duyệt đăng")
-                bp.setMinimumWidth(88)
-                bp.clicked.connect(lambda _=False, x=jid: self._approve_job(x))
-            if bs:
-                bs.setText("Từ chối")
-                bs.setMinimumWidth(72)
-                bs.clicked.connect(lambda _=False, x=jid: self._reject_job(x))
-            self.table_jobs.setCellWidget(i, 2, cell)
-
-    def _view_user(self, user_id: int) -> None:
-        try:
-            u = jobhub_api.admin_get_user(user_id)
-        except ApiError as e:
-            QMessageBox.warning(self.win, "User", str(e))
-            return
-        text = "\n".join(
-            [
-                f"ID: {u.get('id')}",
-                f"Email: {u.get('email')}",
-                f"Họ tên: {u.get('full_name') or ''}",
-                f"Vai trò: {u.get('role')}",
-                f"Trạng thái: {'Đang hoạt động' if u.get('is_active', True) else 'Đã khóa'}",
-            ]
+        users = list(mock_data.MOCK_USERS)
+        table.setRowCount(0)
+        table.setRowCount(len(users))
+        table.setColumnCount(8)
+        table.setHorizontalHeaderLabels(
+            ["ID", "Họ tên", "Email", "Số điện thoại", "Ngày tham gia", "Đơn ứng tuyển", "Trạng thái", "Thao tác"]
         )
-        QMessageBox.information(self.win, "Thông tin người dùng", text)
+        for row, u in enumerate(users):
+            table.setItem(row, 0, QTableWidgetItem(f"#{u['id']}"))
+            name_item = QTableWidgetItem(u.get("full_name", ""))
+            name_item.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            table.setItem(row, 1, name_item)
+            table.setItem(row, 2, QTableWidgetItem(f"✉ {u.get('email', '')}"))
+            table.setItem(row, 3, QTableWidgetItem(u.get("phone", "")))
+            table.setItem(row, 4, QTableWidgetItem(f"📅 {u.get('created_at', '')}"))
+            table.setItem(row, 5, QTableWidgetItem(str(u.get("applications_count", 0))))
+            status = "Hoạt động" if u.get("is_active", True) else "Bị khóa"
+            table.setItem(row, 6, QTableWidgetItem(status))
+            table.setItem(row, 7, QTableWidgetItem(""))
 
-    def _toggle_user_lock(self, user_id: int, active: bool) -> None:
-        try:
-            if active:
-                jobhub_api.admin_lock_user(user_id)
-            else:
-                jobhub_api.admin_unlock_user(user_id)
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Quản lý tài khoản", str(e))
-            return
-        self._load_users()
+        enhance_table(table, status_col=6, action_col=7, stretch_cols=[1, 2], show_lock_btn=True)
 
-    def _view_hr(self, user_id: int) -> None:
-        try:
-            p = jobhub_api.admin_hr_detail(user_id)
-        except ApiError as e:
-            QMessageBox.warning(self.win, "HR", str(e))
+    # ── Fill HR table from mock data ───────────────────────────────
+    def _fill_hr_table(self) -> None:
+        table = self.table_hr
+        if not table:
             return
-        text = "\n".join(
-            [
-                f"Email: {p.get('email')}",
-                f"Họ tên: {p.get('full_name') or ''}",
-                f"Công ty: {p.get('company_name') or ''}",
-                f"Điện thoại: {p.get('contact_phone') or ''}",
-                f"Trạng thái duyệt: {p.get('approval_status')}",
-                "",
-                f"Mô tả:\n{p.get('company_description') or ''}",
-            ]
+        hrs = list(mock_data.MOCK_HR_LIST)
+        table.setRowCount(0)
+        table.setRowCount(len(hrs))
+        table.setColumnCount(8)
+        table.setHorizontalHeaderLabels(
+            ["ID", "Tên công ty", "Email", "Số điện thoại", "Ngày tham gia", "Tin đã đăng", "Trạng thái", "Thao tác"]
         )
-        QMessageBox.information(self.win, "Thông tin HR", text)
+        for row, h in enumerate(hrs):
+            table.setItem(row, 0, QTableWidgetItem(f"#{h['id']}"))
+            name_item = QTableWidgetItem(h.get("company_name", ""))
+            name_item.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            table.setItem(row, 1, name_item)
+            table.setItem(row, 2, QTableWidgetItem(f"✉ {h.get('email', '')}"))
+            table.setItem(row, 3, QTableWidgetItem(h.get("phone", "")))
+            table.setItem(row, 4, QTableWidgetItem(f"📅 {h.get('created_at', '')}"))
+            table.setItem(row, 5, QTableWidgetItem(f"📋 {h.get('jobs_count', 0)}"))
+            status = "Hoạt động" if h.get("is_active", True) else "Bị khóa"
+            table.setItem(row, 6, QTableWidgetItem(status))
+            table.setItem(row, 7, QTableWidgetItem(""))
 
-    def _view_job(self, job_id: int) -> None:
-        try:
-            j = jobhub_api.admin_job_detail(job_id)
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Job", str(e))
+        enhance_table(table, status_col=6, action_col=7, stretch_cols=[1, 2], show_lock_btn=True)
+
+    # ── Fill Jobs table from mock data ─────────────────────────────
+    def _fill_jobs_table(self) -> None:
+        table = self.table_jobs
+        if not table:
             return
-        text = "\n".join(
-            [
-                f"Tiêu đề: {j.get('title')}",
-                f"Địa điểm: {j.get('location') or ''}",
-                f"Lương: {j.get('salary_text') or ''}",
-                f"Loại hình: {j.get('job_type') or ''}",
-                f"Trạng thái: {j.get('status')}",
-                "",
-                f"Mô tả:\n{j.get('description') or ''}",
-            ]
+        jobs = list(mock_data.MOCK_ADMIN_JOBS)
+        status_map = {
+            "published": "Đang tuyển",
+            "draft": "Đã đóng",
+            "rejected": "Vi phạm",
+            "pending_approval": "Chờ duyệt",
+        }
+        table.setRowCount(0)
+        table.setRowCount(len(jobs))
+        table.setColumnCount(10)
+        table.setHorizontalHeaderLabels(
+            ["ID", "Vị trí", "Công ty", "Địa điểm", "Lương", "Loại hình",
+             "Ứng viên", "Ngày đăng", "Trạng thái", "Thao tác"]
         )
-        QMessageBox.information(self.win, "Thông tin Job", text)
+        for row, j in enumerate(jobs):
+            table.setItem(row, 0, QTableWidgetItem(f"#{j['id']}"))
+            title_item = QTableWidgetItem(j.get("title", ""))
+            title_item.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            table.setItem(row, 1, title_item)
+            table.setItem(row, 2, QTableWidgetItem(j.get("company_name", "")))
+            table.setItem(row, 3, QTableWidgetItem(j.get("location", "")))
+            table.setItem(row, 4, QTableWidgetItem(j.get("salary_text", "")))
+            table.setItem(row, 5, QTableWidgetItem(j.get("job_type", "")))
+            table.setItem(row, 6, QTableWidgetItem(f"👥 {j.get('applicants_count', 0)}"))
+            table.setItem(row, 7, QTableWidgetItem(f"📅 {j.get('created_at', '')}"))
+            status = status_map.get(j.get("status", ""), j.get("status", ""))
+            table.setItem(row, 8, QTableWidgetItem(status))
+            table.setItem(row, 9, QTableWidgetItem(""))
 
-    def _approve_job(self, job_id: int) -> None:
-        try:
-            jobhub_api.admin_approve_job(job_id)
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Admin", str(e))
-            return
-        self._load_pending_jobs()
-        self._load_dash()
-
-    def _reject_job(self, job_id: int) -> None:
-        try:
-            jobhub_api.admin_reject_job(job_id)
-        except ApiError as e:
-            QMessageBox.warning(self.win, "Admin", str(e))
-            return
-        self._load_pending_jobs()
-        self._load_dash()
+        enhance_table(table, status_col=8, action_col=9, stretch_cols=[1, 2], show_lock_btn=False)
 
     def show(self) -> None:
-        self.win.show()
+        if self.win:
+            self.win.show()
+
+    def raise_(self) -> None:
+        if self.win:
+            self.win.raise_()
+            self.win.activateWindow()

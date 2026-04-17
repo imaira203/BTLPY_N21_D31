@@ -16,17 +16,27 @@ def make_bar_chart(labels: list[str], values: list[int], color: str) -> FigureCa
     return FigureCanvasQTAgg(fig)
 
 
-def make_line_chart_single(labels: list[str], values: list[int], color: str = ADMIN_ACCENT) -> FigureCanvasQTAgg:
-    bg = chart_facecolor()
-    fig = Figure(figsize=(5, 3), layout="constrained")
+def make_line_chart_single(labels: list[str], values: list[int], color: str = "#7024C4") -> FigureCanvasQTAgg:
+    bg = "#FFFFFF"
+    fig = Figure(figsize=(8, 4), layout="constrained")
     ax = fig.add_subplot(111)
     x = range(len(labels))
-    ax.plot(list(x), values, color=color, linewidth=2)
+    # Draw line with markers
+    ax.plot(list(x), values, color=color, linewidth=2, marker='o', markerfacecolor='white', markeredgecolor=color, markersize=6)
+    
     ax.set_xticks(list(x))
-    ax.set_xticklabels(labels, rotation=0)
+    ax.set_xticklabels(labels, color="#A3AED0", fontsize=9)
     ax.set_facecolor(bg)
     fig.patch.set_facecolor(bg)
-    ax.grid(linestyle="--", alpha=0.3)
+    
+    # Hide spines
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    
+    # Grid lines
+    ax.grid(axis='y', linestyle='--', alpha=0.2, color="#A3AED0")
+    ax.tick_params(axis='both', which='both', length=0)
+    
     return FigureCanvasQTAgg(fig)
 
 

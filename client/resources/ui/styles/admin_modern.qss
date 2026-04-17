@@ -1,0 +1,487 @@
+/* ═══════════════════════════════════════════════════════════════════
+   admin_modern.qss  –  JobHub Admin Panel – Modern Web Dashboard Theme
+   ═══════════════════════════════════════════════════════════════════
+   Phong cách: dark sidebar + light content  (như Notion / Linear / Vercel)
+   Màu brand:  #7B2FBE  (purple)
+   Sidebar:    #1E1B4B  (deep navy-purple)
+   Content bg: #F4F7FE  (ice blue-gray)
+   ═══════════════════════════════════════════════════════════════════ */
+
+
+/* ─────────────────────────────────────────────────────────────────
+   1. GLOBAL
+   ───────────────────────────────────────────────────────────────── */
+QMainWindow,
+QWidget {
+    font-family: 'Segoe UI', 'Inter', 'Noto Sans', 'Arial', sans-serif;
+    font-size: 13px;
+    color: #1E293B;
+    background-color: transparent;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   2. SIDEBAR  –  dark navy-purple background
+   ───────────────────────────────────────────────────────────────── */
+QFrame#sidebar {
+    background-color: #1E1B4B;
+    border: none;
+}
+
+/* Brand logo area */
+QFrame#sidebar QLabel#brandLabel {
+    color: #FFFFFF;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+}
+
+QFrame#sidebar QLabel#brandSub {
+    color: #6D6B9A;
+    font-size: 11px;
+    font-weight: 400;
+}
+
+/* Sidebar divider lines */
+QFrame#sidebar QFrame#divider1,
+QFrame#sidebar QFrame#divider2 {
+    background-color: #2D2A5E;
+}
+
+/* ── Nav Buttons – default state ── */
+QFrame#sidebar QPushButton {
+    background-color: transparent;
+    color: #94A3B8;
+    border: none;
+    border-radius: 10px;
+    padding: 11px 16px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 500;
+    margin: 2px 12px;
+}
+
+/* ── Nav Buttons – hover ── */
+QFrame#sidebar QPushButton:hover {
+    background-color: rgba(255, 255, 255, 10);
+    color: #E2E8F0;
+}
+
+/* ── Nav Buttons – active/checked ── */
+QFrame#sidebar QPushButton:checked {
+    background-color: #7B2FBE;
+    color: #FFFFFF;
+    font-weight: 700;
+    border-radius: 10px;
+    border: none;
+    /* Remove any inline border-left from .ui */
+    padding: 11px 16px;
+}
+
+/* ── Logout button – special hover (red tint) ── */
+QFrame#sidebar QPushButton#dangXuatButton,
+QFrame#sidebar QPushButton#btnDangXuat {
+    color: #94A3B8;
+}
+
+QFrame#sidebar QPushButton#dangXuatButton:hover,
+QFrame#sidebar QPushButton#btnDangXuat:hover {
+    background-color: rgba(220, 38, 38, 12);
+    color: #FCA5A5;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   3. MAIN CONTENT AREA
+   ───────────────────────────────────────────────────────────────── */
+QWidget#mainArea {
+    background-color: #F4F7FE;
+}
+
+/* Page title / subtitle */
+QLabel#pageTitle {
+    font-size: 24px;
+    font-weight: 800;
+    color: #0F172A;
+    letter-spacing: -0.4px;
+}
+
+QLabel#pageSubtitle {
+    font-size: 13px;
+    color: #94A3B8;
+    font-weight: 400;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   4. SEARCH BAR  (QLineEdit#searchInput)
+   ───────────────────────────────────────────────────────────────── */
+QLineEdit#searchInput {
+    background-color: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    /* icon chiếm 36px bên trái, inject bởi Python */
+    padding: 0px 14px;
+    font-size: 13px;
+    color: #1E293B;
+    selection-background-color: #EDE9FE;
+    selection-color: #6D28D9;
+}
+
+QLineEdit#searchInput:focus {
+    border-color: #7B2FBE;
+    background-color: #FFFEFF;
+    /* subtle glow effect */
+    border-width: 2px;
+}
+
+QLineEdit#searchInput::placeholder {
+    color: #CBD5E1;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   5. COMBO BOX  (filter dropdown)
+   ───────────────────────────────────────────────────────────────── */
+QComboBox#statusFilter {
+    background-color: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 0px 14px;
+    font-size: 13px;
+    color: #1E293B;
+    font-weight: 500;
+}
+
+QComboBox#statusFilter:focus,
+QComboBox#statusFilter:on {
+    border-color: #7B2FBE;
+}
+
+QComboBox#statusFilter::drop-down {
+    border: none;
+    width: 30px;
+    subcontrol-position: right center;
+}
+
+QComboBox#statusFilter::down-arrow {
+    width: 10px;
+    height: 10px;
+}
+
+QComboBox#statusFilter QAbstractItemView {
+    background-color: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 6px;
+    selection-background-color: #EDE9FE;
+    selection-color: #6D28D9;
+    outline: none;
+    font-size: 13px;
+}
+
+QComboBox#statusFilter QAbstractItemView::item {
+    padding: 8px 12px;
+    border-radius: 6px;
+    min-height: 32px;
+}
+
+QComboBox#statusFilter QAbstractItemView::item:hover {
+    background-color: #F5F3FF;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   6. TABLE CARD  (white rounded container)
+   ───────────────────────────────────────────────────────────────── */
+QFrame#tableCard {
+    background-color: #FFFFFF;
+    border-radius: 16px;
+    border: none;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   7. TABLE WIDGET  –  core styles + striped rows + hover
+   ───────────────────────────────────────────────────────────────── */
+QTableWidget {
+    background-color: #FFFFFF;
+    border-radius: 16px 16px 0px 0px;    /* bottom rounded bởi paginationFrame */
+    border: none;
+    gridline-color: transparent;
+    font-size: 13px;
+    color: #1E293B;
+    outline: none;
+    /* Striped rows: alternate-background-color kích hoạt khi setAlternatingRowColors=True */
+    alternate-background-color: #FAFBFF;
+}
+
+/* Cell */
+QTableWidget::item {
+    padding: 0px 16px;
+    border-bottom: 1px solid #F1F5F9;
+    color: #334155;
+}
+
+/* Selected row */
+QTableWidget::item:selected {
+    background-color: #EDE9FE;
+    color: #5B21B6;
+    border-bottom: 1px solid #DDD6FE;
+}
+
+/* Hover row  */
+QTableWidget::item:hover {
+    background-color: #F5F3FF;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   8. TABLE HEADER  –  sticky, uppercase, subtle background
+   ───────────────────────────────────────────────────────────────── */
+QHeaderView {
+    background-color: transparent;
+    border: none;
+}
+
+QHeaderView::section {
+    background-color: #F8FAFF;
+    color: #64748B;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    padding: 13px 16px;
+    border: none;
+    border-bottom: 2px solid #EEF2FF;
+    text-transform: uppercase;
+}
+
+QHeaderView::section:first {
+    border-top-left-radius: 16px;
+}
+
+QHeaderView::section:last {
+    border-top-right-radius: 16px;
+}
+
+QHeaderView::section:hover {
+    background-color: #EEF2FF;
+    color: #4F46E5;
+    cursor: pointer;
+}
+
+QHeaderView::section:pressed {
+    background-color: #E0E7FF;
+}
+
+/* Sort indicator arrows */
+QHeaderView::down-arrow {
+    width: 10px;
+    height: 10px;
+    subcontrol-position: right center;
+    subcontrol-origin: margin;
+    right: 6px;
+}
+
+QHeaderView::up-arrow {
+    width: 10px;
+    height: 10px;
+    subcontrol-position: right center;
+    subcontrol-origin: margin;
+    right: 6px;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   9. SCROLLBARS  –  thin, modern, barely visible
+   ───────────────────────────────────────────────────────────────── */
+QScrollBar:vertical {
+    background: transparent;
+    width: 7px;
+    border-radius: 4px;
+    margin: 4px 1px;
+}
+
+QScrollBar::handle:vertical {
+    background: #CBD5E1;
+    border-radius: 4px;
+    min-height: 32px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #94A3B8;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 7px;
+    border-radius: 4px;
+    margin: 1px 4px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #CBD5E1;
+    border-radius: 4px;
+    min-width: 32px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #94A3B8;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   10. PAGINATION FRAME  (bottom of tableCard)
+   ───────────────────────────────────────────────────────────────── */
+QFrame#paginationFrame {
+    background-color: #FFFFFF;
+    border-top: 1px solid #F1F5F9;
+    border-bottom-left-radius: 16px;
+    border-bottom-right-radius: 16px;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+}
+
+/* Info label inside pagination */
+QFrame#paginationFrame QLabel {
+    color: #64748B;
+    font-size: 13px;
+    background: transparent;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   11. PAGINATION BUTTONS
+   ───────────────────────────────────────────────────────────────── */
+
+/* Regular page number button */
+QPushButton[class="pageBtn"] {
+    background-color: #FFFFFF;
+    color: #475569;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    padding: 0px;
+}
+
+QPushButton[class="pageBtn"]:hover {
+    background-color: #F5F3FF;
+    border-color: #7B2FBE;
+    color: #7B2FBE;
+}
+
+/* Active page number button */
+QPushButton[class="pageBtnActive"] {
+    background-color: #7B2FBE;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    padding: 0px;
+}
+
+/* Prev / Next nav buttons */
+QPushButton[class="pageNavBtn"] {
+    background-color: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 8px;
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    padding: 0px;
+}
+
+QPushButton[class="pageNavBtn"]:hover {
+    background-color: #EDE9FE;
+    border-color: #7B2FBE;
+}
+
+QPushButton[class="pageNavBtn"]:disabled {
+    background-color: #F8FAFF;
+    border-color: #E2E8F0;
+    opacity: 0.4;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   12. TOOLTIP  –  dark, minimal
+   ───────────────────────────────────────────────────────────────── */
+QToolTip {
+    background-color: #1E293B;
+    color: #F1F5F9;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 230;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   13. GENERAL PUSH BUTTONS  (non-nav, non-action)
+   ───────────────────────────────────────────────────────────────── */
+QPushButton {
+    background-color: #7B2FBE;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QPushButton:hover {
+    background-color: #6D28D9;
+}
+
+QPushButton:pressed {
+    background-color: #5B21B6;
+}
+
+QPushButton:disabled {
+    background-color: #E2E8F0;
+    color: #94A3B8;
+}
+
+
+/* ─────────────────────────────────────────────────────────────────
+   14. MESSAGE BOX / DIALOGS
+   ───────────────────────────────────────────────────────────────── */
+QMessageBox {
+    background-color: #FFFFFF;
+    border-radius: 12px;
+}
+
+QMessageBox QLabel {
+    font-size: 13px;
+    color: #1E293B;
+    line-height: 1.5;
+}
+
+QMessageBox QPushButton {
+    min-width: 80px;
+    min-height: 34px;
+    border-radius: 8px;
+}

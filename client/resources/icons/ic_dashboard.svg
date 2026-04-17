@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">
+  <!-- Dashboard: 4 rounded squares grid -->
+  <rect x="1.5" y="1.5" width="7" height="7" rx="2" fill="#6B7280"/>
+  <rect x="11.5" y="1.5" width="7" height="7" rx="2" fill="#6B7280"/>
+  <rect x="1.5" y="11.5" width="7" height="7" rx="2" fill="#6B7280"/>
+  <rect x="11.5" y="11.5" width="7" height="7" rx="2" fill="#6B7280"/>
+</svg>

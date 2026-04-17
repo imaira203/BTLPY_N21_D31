@@ -1,6 +1,169 @@
 
 from __future__ import annotations
 
+# ─── MOCK USERS (Candidate) ─────────────────────────────────────────────
+MOCK_USERS: list[dict] = [
+    {
+        "id": 1,
+        "full_name": "Nguyễn Văn An",
+        "email": "an.nguyen@email.com",
+        "phone": "0901234567",
+        "created_at": "15/03/2026",
+        "applications_count": 5,
+        "is_active": True,
+        "role": "candidate",
+    },
+    {
+        "id": 2,
+        "full_name": "Trần Thị Bình",
+        "email": "binh.tran@email.com",
+        "phone": "0902345678",
+        "created_at": "20/03/2026",
+        "applications_count": 3,
+        "is_active": True,
+        "role": "candidate",
+    },
+    {
+        "id": 3,
+        "full_name": "Lê Hoàng Cường",
+        "email": "cuong.le@email.com",
+        "phone": "0903456789",
+        "created_at": "22/03/2026",
+        "applications_count": 8,
+        "is_active": True,
+        "role": "candidate",
+    },
+    {
+        "id": 4,
+        "full_name": "Phạm Minh Đức",
+        "email": "duc.pham@email.com",
+        "phone": "0904567890",
+        "created_at": "25/03/2026",
+        "applications_count": 2,
+        "is_active": False,
+        "role": "candidate",
+    },
+    {
+        "id": 5,
+        "full_name": "Võ Thị Em",
+        "email": "em.vo@email.com",
+        "phone": "0905678901",
+        "created_at": "01/04/2026",
+        "applications_count": 4,
+        "is_active": True,
+        "role": "candidate",
+    },
+]
+
+# ─── MOCK HR ─────────────────────────────────────────────────────────────
+MOCK_HR_LIST: list[dict] = [
+    {
+        "id": 1,
+        "company_name": "TechCorp Vietnam",
+        "email": "hr@techcorp.vn",
+        "phone": "0241234567",
+        "created_at": "10/02/2026",
+        "jobs_count": 12,
+        "is_active": True,
+    },
+    {
+        "id": 2,
+        "company_name": "StartUp Innovation",
+        "email": "recruit@startup.vn",
+        "phone": "0282345678",
+        "created_at": "15/02/2026",
+        "jobs_count": 8,
+        "is_active": True,
+    },
+    {
+        "id": 3,
+        "company_name": "Design Studio",
+        "email": "jobs@designstudio.vn",
+        "phone": "0236789012",
+        "created_at": "20/02/2026",
+        "jobs_count": 5,
+        "is_active": True,
+    },
+    {
+        "id": 4,
+        "company_name": "Digital Agency",
+        "email": "hr@digital.vn",
+        "phone": "0243456789",
+        "created_at": "25/02/2026",
+        "jobs_count": 3,
+        "is_active": False,
+    },
+    {
+        "id": 5,
+        "company_name": "Cloud Solutions",
+        "email": "recruit@cloud.vn",
+        "phone": "0285678901",
+        "created_at": "01/03/2026",
+        "jobs_count": 9,
+        "is_active": True,
+    },
+]
+
+# ─── MOCK JOBS (Admin view) ─────────────────────────────────────────────
+MOCK_ADMIN_JOBS: list[dict] = [
+    {
+        "id": 1,
+        "title": "Senior Frontend Developer",
+        "company_name": "TechCorp Vietnam",
+        "location": "Hà Nội",
+        "salary_text": "2000 - 3000 USD",
+        "job_type": "Full-time",
+        "applicants_count": 23,
+        "created_at": "10/04/2026",
+        "status": "published",
+    },
+    {
+        "id": 2,
+        "title": "Backend Developer (Node.js)",
+        "company_name": "StartUp Innovation",
+        "location": "Hồ Chí Minh",
+        "salary_text": "1500 - 2500 USD",
+        "job_type": "Full-time",
+        "applicants_count": 18,
+        "created_at": "08/04/2026",
+        "status": "published",
+    },
+    {
+        "id": 3,
+        "title": "UI/UX Designer",
+        "company_name": "Design Studio",
+        "location": "Đà Nẵng",
+        "salary_text": "1000 - 1800 USD",
+        "job_type": "Remote",
+        "applicants_count": 31,
+        "created_at": "05/04/2026",
+        "status": "published",
+    },
+    {
+        "id": 4,
+        "title": "Full Stack Developer",
+        "company_name": "Digital Agency",
+        "location": "Hà Nội",
+        "salary_text": "2500 - 3500 USD",
+        "job_type": "Full-time",
+        "applicants_count": 15,
+        "created_at": "03/04/2026",
+        "status": "rejected",
+    },
+    {
+        "id": 5,
+        "title": "DevOps Engineer",
+        "company_name": "Cloud Solutions",
+        "location": "Hồ Chí Minh",
+        "salary_text": "2200 - 3200 USD",
+        "job_type": "Full-time",
+        "applicants_count": 9,
+        "created_at": "01/04/2026",
+        "status": "draft",
+    },
+]
+
+# ─── MOCK: Danh sách job công khai (cho Candidate Dashboard) ─────────────
 MOCK_JOBS: list[dict] = [
     {
         "id": 101,
