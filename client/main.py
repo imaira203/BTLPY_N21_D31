@@ -5,7 +5,11 @@ from __future__ import annotations
 import logging
 import sys
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
+
+# Enable High DPI scaling
+QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
 
 from app.config import log_client_startup
 from app.ui.admin_dashboard import AdminDashboard
