@@ -7,6 +7,7 @@ from typing import Callable
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon, QFont
+from PySide6.QtGui import QIcon, QFont
 from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
+from .. import mock_data
 from .. import mock_data
 from ..paths import resource_icon, resource_ui
 from ..session_store import clear_session
