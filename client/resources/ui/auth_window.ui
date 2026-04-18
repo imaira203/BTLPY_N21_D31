@@ -80,14 +80,17 @@
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="brandTagline">
-         <property name="text">
-          <string>Nền tảng kết nối nhà tuyển dụng và ứng viên hiện đại.</string>
-         </property>
-         <property name="wordWrap">
-          <bool>true</bool>
-         </property>
-        </widget>
+         <widget class="QLabel" name="brandTagline">
+          <property name="styleSheet">
+           <string notr="true">color: #475569; font-size: 15px; line-height: 1.5;</string>
+          </property>
+          <property name="text">
+           <string>Nền tảng kết nối nhà tuyển dụng và ứng viên hiện đại.</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
        </item>
        <item>
         <spacer name="verticalSpacer_brand">
@@ -186,49 +189,50 @@
                 </property>
                </widget>
               </item>
-              <item>
-               <widget class="QLabel" name="formHeaderSub">
-                <property name="text">
-                 <string>Đăng nhập hoặc tạo tài khoản để tiếp tục.</string>
-                </property>
-               </widget>
-              </item>
+               <item>
+                <widget class="QLabel" name="formHeaderSub">
+                 <property name="styleSheet">
+                  <string notr="true">color: #6b7280; font-size: 14px;</string>
+                 </property>
+                 <property name="text">
+                  <string>Đăng nhập hoặc tạo tài khoản để tiếp tục.</string>
+                 </property>
+                </widget>
+               </item>
               <item>
                <widget class="QTabWidget" name="tabWidget">
                 <property name="styleSheet">
-                 <string notr="true">/* Nút Đăng nhập chính (Màu xanh) */
-#btnLogin {
+                 <string notr="true">/* Nút Đăng nhập & Đăng ký (Màu xanh chuẩn) */
+#btnLogin, #btnRegister {
     background-color: #2563eb;
-    color: white;
-    border-radius: 8px;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
     padding: 12px;
-    font-size: 16px;
-    font-weight: bold;
+    font-size: 15px;
+    font-weight: 700;
+    min-height: 20px;
 }
 
-#btnLogin:hover {
+#btnLogin:hover, #btnRegister:hover {
     background-color: #1d4ed8;
 }
 
-#btnLogin:pressed {
-    background-color: #1e40af;
-}
-
-/* Nút chuyển đổi (Tab Buttons) */
-#tabLogin, #tabRegister {
-    border: none;
-    padding: 8px 20px;
-    background-color: #f3f4f6;
-    border-radius: 6px;
+/* Tab buttons */
+#tabWidget QTabBar::tab {
+    background: #f3f4f6;
     color: #6b7280;
+    padding: 10px 25px;
+    border-radius: 8px;
+    margin-right: 8px;
+    font-weight: 600;
 }
-
-#tabLogin:checked {
-    background-color: #ffffff;
+#tabWidget QTabBar::tab:selected {
+    background: #ffffff;
     color: #2563eb;
-    font-weight: bold;
-    /* Có thể thêm đổ bóng nhẹ */
-}</string>
+    border: 1px solid #e5e7eb;
+}
+</string>
                 </property>
                 <property name="currentIndex">
                  <number>1</number>
@@ -250,31 +254,14 @@
                      <enum>QLayout::SetFixedSize</enum>
                     </property>
                     <item>
-                     <widget class="QLabel" name="label_lemail">
-                      <property name="styleSheet">
-                       <string notr="true">QLineEdit {
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    padding: 10px 15px;
-    background-color: #f9fafb;
-    font-size: 14px;
-    color: #1f2937;
-}
-
-QLineEdit:focus {
-    border: 2px solid #2563eb;
-    background-color: #ffffff;
-}
-
-/* Placeholder text */
-QLineEdit::placeholder {
-    color: #9ca3af;
-}</string>
-                      </property>
-                      <property name="text">
-                       <string>Email</string>
-                      </property>
-                     </widget>
+                      <widget class="QLabel" name="label_lemail">
+                       <property name="styleSheet">
+                        <string notr="true">color: #4b5563; font-weight: 600; font-size: 14px;</string>
+                       </property>
+                       <property name="text">
+                        <string>Email</string>
+                       </property>
+                      </widget>
                     </item>
                     <item>
                      <widget class="QLineEdit" name="lineLoginEmail">
@@ -314,11 +301,14 @@ QLineEdit::placeholder {
                      <enum>QLayout::SetFixedSize</enum>
                     </property>
                     <item>
-                     <widget class="QLabel" name="label_lpass">
-                      <property name="text">
-                       <string>Mật khẩu</string>
-                      </property>
-                     </widget>
+                      <widget class="QLabel" name="label_lpass">
+                       <property name="styleSheet">
+                        <string notr="true">color: #4b5563; font-weight: 600; font-size: 14px;</string>
+                       </property>
+                       <property name="text">
+                        <string>Mật khẩu</string>
+                       </property>
+                      </widget>
                     </item>
                     <item>
                      <widget class="QLineEdit" name="lineLoginPassword">
@@ -572,23 +562,11 @@ QLineEdit::placeholder {
                    </widget>
                   </item>
                   <item>
-                   <widget class="QPushButton" name="btnRegister">
-                    <property name="styleSheet">
-                     <string notr="true">QPushButton#btnRegister {
-  background: #1d4ed8;
-  color: #ffffff;
-  border: none;
-  border-radius: 12px;
-  padding: 14px 20px;
-  font-size: 15px;
-  font-weight: 600;
-  min-height: 22px;
-}</string>
-                    </property>
-                    <property name="text">
-                     <string>Tạo tài khoản</string>
-                    </property>
-                   </widget>
+                    <widget class="QPushButton" name="btnRegister">
+                     <property name="text">
+                      <string>Tạo tài khoản</string>
+                     </property>
+                    </widget>
                   </item>
                  </layout>
                 </widget>
