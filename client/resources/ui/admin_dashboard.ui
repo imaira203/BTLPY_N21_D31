@@ -413,14 +413,149 @@ QPushButton.navBtn:checked {
                <number>24</number>
               </property>
               <item>
-               <widget class="QLabel" name="chartTitle">
-                <property name="styleSheet">
-                 <string notr="true">font-size: 18px; font-weight: 700; color: #0F172A;</string>
+               <layout class="QHBoxLayout" name="chartHeaderLayout">
+                <property name="spacing">
+                 <number>16</number>
                 </property>
-                <property name="text">
-                 <string>Thống kê sự phát triển hệ thống</string>
-                </property>
-               </widget>
+                <item>
+                 <widget class="QLabel" name="chartTitle">
+                  <property name="styleSheet">
+                   <string notr="true">font-size: 18px; font-weight: 700; color: #0F172A;</string>
+                  </property>
+                  <property name="text">
+                   <string>Báo cáo tổng thu nhập</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_chart">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="monthFilter">
+                  <property name="minimumSize">
+                   <size>
+                    <width>150</width>
+                    <height>36</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>200</width>
+                    <height>36</height>
+                   </size>
+                  </property>
+                  <property name="styleSheet">
+                   <string notr="true">
+                    QComboBox {
+                        background-color: #FFFFFF;
+                        border: 1.5px solid #E2E8F0;
+                        border-radius: 8px;
+                        padding: 4px 12px;
+                        font-size: 13px;
+                        font-weight: 500;
+                        color: #1E293B;
+                    }
+                    QComboBox:hover {
+                        border: 1.5px solid #CBD5E1;
+                    }
+                    QComboBox:focus {
+                        border: 2px solid #6366F1;
+                    }
+                    QComboBox::drop-down {
+                        border: none;
+                        width: 28px;
+                    }
+                    QComboBox QAbstractItemView {
+                        background-color: #FFFFFF;
+                        border: 1.5px solid #E2E8F0;
+                        border-radius: 8px;
+                        selection-background-color: #EEF2FF;
+                        selection-color: #6366F1;
+                    }
+                    QComboBox QAbstractItemView::item {
+                        padding: 8px 12px;
+                        min-height: 32px;
+                    }
+                   </string>
+                  </property>
+                  <item>
+                   <property name="text">
+                    <string>Tất cả tháng</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 1</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 2</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 3</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 4</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 5</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 6</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 7</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 8</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 9</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 10</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 11</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tháng 12</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
+               </layout>
               </item>
               <item>
                <widget class="QLabel" name="chartPlaceholder">

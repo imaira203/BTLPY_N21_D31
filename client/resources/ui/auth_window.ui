@@ -3,206 +3,90 @@
  <class>AuthWindow</class>
  <widget class="QMainWindow" name="AuthWindow">
   <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>1130</width>
-    <height>640</height>
-   </rect>
+   <rect><x>0</x><y>0</y><width>1130</width><height>640</height></rect>
   </property>
   <property name="minimumSize">
-   <size>
-    <width>760</width>
-    <height>500</height>
-   </size>
+   <size><width>760</width><height>500</height></size>
   </property>
   <property name="windowTitle">
    <string>JobHub — Đăng nhập</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">background-color: #ffffff;</string>
+   <string notr="true">QMainWindow { background-color: #ffffff; color: #1f2937; }</string>
   </property>
   <widget class="QWidget" name="authRoot">
    <layout class="QHBoxLayout" name="horizontalLayout_root">
-    <property name="spacing">
-     <number>0</number>
-    </property>
-    <property name="leftMargin">
-     <number>0</number>
-    </property>
-    <property name="topMargin">
-     <number>0</number>
-    </property>
-    <property name="rightMargin">
-     <number>0</number>
-    </property>
-    <property name="bottomMargin">
-     <number>0</number>
-    </property>
+    <property name="spacing"><number>0</number></property>
+    <property name="leftMargin"><number>0</number></property>
+    <property name="topMargin"><number>0</number></property>
+    <property name="rightMargin"><number>0</number></property>
+    <property name="bottomMargin"><number>0</number></property>
     <item>
      <widget class="QFrame" name="brandPanel">
-      <property name="minimumSize">
-       <size>
-        <width>380</width>
-        <height>0</height>
-       </size>
-      </property>
+      <property name="minimumSize"><size><width>380</width><height>0</height></size></property>
       <property name="styleSheet">
-       <string notr="true">background-color: #eef4ff;
-    border-right: 2px solid #2563eb; /* Đường kẻ xanh ở giữa */</string>
+       <string notr="true">background-color: #eef4ff; border-right: 2px solid #2563eb;</string>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_brand">
-       <property name="leftMargin">
-        <number>40</number>
-       </property>
-       <property name="topMargin">
-        <number>48</number>
-       </property>
-       <property name="rightMargin">
-        <number>40</number>
-       </property>
-       <property name="bottomMargin">
-        <number>48</number>
-       </property>
+       <property name="leftMargin"><number>40</number></property>
+       <property name="topMargin"><number>48</number></property>
+       <property name="rightMargin"><number>40</number></property>
+       <property name="bottomMargin"><number>48</number></property>
        <item>
         <widget class="QLabel" name="brandLogo">
          <property name="styleSheet">
-          <string notr="true">
-    color: #2563eb;
-    font-size: 32px;
-    font-weight: bold;
-    font-family: &quot;Segoe UI&quot;, sans-serif;
-</string>
+          <string notr="true">color: #2563eb; font-size: 32px; font-weight: bold; font-family: "Segoe UI", sans-serif;</string>
          </property>
-         <property name="text">
-          <string>JobHub</string>
-         </property>
+         <property name="text"><string>JobHub</string></property>
         </widget>
        </item>
        <item>
-         <widget class="QLabel" name="brandTagline">
-          <property name="styleSheet">
-           <string notr="true">color: #475569; font-size: 15px; line-height: 1.5;</string>
-          </property>
-          <property name="text">
-           <string>Nền tảng kết nối nhà tuyển dụng và ứng viên hiện đại.</string>
-          </property>
-          <property name="wordWrap">
-           <bool>true</bool>
-          </property>
-         </widget>
-       </item>
-       <item>
-        <spacer name="verticalSpacer_brand">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
+        <widget class="QLabel" name="brandTagline">
+         <property name="styleSheet">
+          <string notr="true">color: #475569; font-size: 15px; line-height: 1.5;</string>
          </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>0</width>
-           <height>0</height>
-          </size>
-         </property>
-        </spacer>
+         <property name="text"><string>Nền tảng kết nối nhà tuyển dụng và ứng viên hiện đại.</string></property>
+         <property name="wordWrap"><bool>true</bool></property>
+        </widget>
        </item>
+       <item><spacer name="verticalSpacer_brand"><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
       </layout>
      </widget>
     </item>
     <item>
      <widget class="QFrame" name="formOuter">
-      <property name="styleSheet">
-       <string notr="true">background-color: #ffffff;</string>
-      </property>
+      <property name="styleSheet"><string notr="true">background-color: #ffffff;</string></property>
       <layout class="QVBoxLayout" name="verticalLayout_form_outer">
-       <property name="spacing">
-        <number>12</number>
-       </property>
-       <property name="leftMargin">
-        <number>32</number>
-       </property>
-       <property name="topMargin">
-        <number>24</number>
-       </property>
-       <property name="rightMargin">
-        <number>32</number>
-       </property>
-       <property name="bottomMargin">
-        <number>24</number>
-       </property>
+       <property name="spacing"><number>12</number></property>
+       <property name="leftMargin"><number>32</number></property>
+       <property name="topMargin"><number>24</number></property>
+       <property name="rightMargin"><number>32</number></property>
+       <property name="bottomMargin"><number>24</number></property>
        <item>
         <widget class="QScrollArea" name="authScroll">
-         <property name="widgetResizable">
-          <bool>true</bool>
-         </property>
+         <property name="widgetResizable"><bool>true</bool></property>
          <widget class="QWidget" name="authScrollContents">
-          <property name="geometry">
-           <rect>
-            <x>0</x>
-            <y>0</y>
-            <width>684</width>
-            <height>590</height>
-           </rect>
-          </property>
           <layout class="QVBoxLayout" name="verticalLayout_scroll">
-           <property name="spacing">
-            <number>0</number>
-           </property>
-           <property name="leftMargin">
-            <number>0</number>
-           </property>
-           <property name="topMargin">
-            <number>0</number>
-           </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
            <item>
             <widget class="QFrame" name="authCard">
              <layout class="QVBoxLayout" name="verticalLayout_card">
-              <property name="spacing">
-               <number>20</number>
-              </property>
-              <property name="leftMargin">
-               <number>32</number>
-              </property>
-              <property name="topMargin">
-               <number>28</number>
-              </property>
-              <property name="rightMargin">
-               <number>32</number>
-              </property>
-              <property name="bottomMargin">
-               <number>28</number>
-              </property>
+              <property name="spacing"><number>20</number></property>
               <item>
                <widget class="QLabel" name="formHeaderTitle">
-                <property name="styleSheet">
-                 <string notr="true">color: #1f2937;
-    font-size: 24px;
-    font-weight: bold;</string>
-                </property>
-                <property name="text">
-                 <string>Chào mừng trở lại</string>
-                </property>
+                <property name="styleSheet"><string notr="true">color: #1f2937; font-size: 24px; font-weight: bold;</string></property>
+                <property name="text"><string>Chào mừng trở lại</string></property>
                </widget>
               </item>
-               <item>
-                <widget class="QLabel" name="formHeaderSub">
-                 <property name="styleSheet">
-                  <string notr="true">color: #6b7280; font-size: 14px;</string>
-                 </property>
-                 <property name="text">
-                  <string>Đăng nhập hoặc tạo tài khoản để tiếp tục.</string>
-                 </property>
-                </widget>
-               </item>
+              <item>
+               <widget class="QLabel" name="formHeaderSub">
+                <property name="styleSheet"><string notr="true">color: #6b7280; font-size: 14px;</string></property>
+                <property name="text"><string>Đăng nhập hoặc tạo tài khoản để tiếp tục.</string></property>
+               </widget>
+              </item>
               <item>
                <widget class="QTabWidget" name="tabWidget">
                 <property name="styleSheet">
-                 <string notr="true">/* Nút Đăng nhập & Đăng ký (Màu xanh chuẩn) */
+                 <string notr="true">
 #btnLogin, #btnRegister {
     background-color: #2563eb;
     color: #ffffff;
@@ -211,14 +95,8 @@
     padding: 12px;
     font-size: 15px;
     font-weight: 700;
-    min-height: 20px;
 }
-
-#btnLogin:hover, #btnRegister:hover {
-    background-color: #1d4ed8;
-}
-
-/* Tab buttons */
+#btnLogin:hover, #btnRegister:hover { background-color: #1d4ed8; }
 #tabWidget QTabBar::tab {
     background: #f3f4f6;
     color: #6b7280;
@@ -232,342 +110,66 @@
     color: #2563eb;
     border: 1px solid #e5e7eb;
 }
-</string>
-                </property>
-                <property name="currentIndex">
-                 <number>1</number>
+                 </string>
                 </property>
                 <widget class="QWidget" name="tab_login">
-                 <attribute name="title">
-                  <string>Đăng nhập</string>
-                 </attribute>
+                 <attribute name="title"><string>Đăng nhập</string></attribute>
                  <layout class="QVBoxLayout" name="verticalLayout_login">
-                  <property name="spacing">
-                   <number>16</number>
-                  </property>
+                  <property name="spacing"><number>16</number></property>
                   <item>
-                   <layout class="QVBoxLayout" name="verticalFieldEmail">
-                    <property name="spacing">
-                     <number>4</number>
-                    </property>
-                    <property name="sizeConstraint">
-                     <enum>QLayout::SetFixedSize</enum>
-                    </property>
-                    <item>
-                      <widget class="QLabel" name="label_lemail">
-                       <property name="styleSheet">
-                        <string notr="true">color: #4b5563; font-weight: 600; font-size: 14px;</string>
-                       </property>
-                       <property name="text">
-                        <string>Email</string>
-                       </property>
-                      </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="lineLoginEmail">
-                      <property name="styleSheet">
-                       <string notr="true">QLineEdit {
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    padding: 10px 15px;
-    background-color: #f9fafb;
-    font-size: 14px;
-    color: #1f2937;
-}
-
-QLineEdit:focus {
-    border: 2px solid #2563eb;
-    background-color: #ffffff;
-}
-
-/* Placeholder text */
-QLineEdit::placeholder {
-    color: #9ca3af;
-}</string>
-                      </property>
-                      <property name="placeholderText">
-                       <string>you@email.com</string>
-                      </property>
-                     </widget>
-                    </item>
+                   <layout class="QVBoxLayout">
+                    <item><widget class="QLabel"><property name="styleSheet"><string notr="true">color: #4b5563; font-weight: 600;</string></property><property name="text"><string>Email</string></property></widget></item>
+                    <item><widget class="QLineEdit" name="lineLoginEmail"><property name="placeholderText"><string>you@email.com</string></property></widget></item>
                    </layout>
                   </item>
                   <item>
-                   <layout class="QVBoxLayout" name="verticalFieldPass">
-                    <property name="spacing">
-                     <number>4</number>
-                    </property>
-                    <property name="sizeConstraint">
-                     <enum>QLayout::SetFixedSize</enum>
-                    </property>
-                    <item>
-                      <widget class="QLabel" name="label_lpass">
-                       <property name="styleSheet">
-                        <string notr="true">color: #4b5563; font-weight: 600; font-size: 14px;</string>
-                       </property>
-                       <property name="text">
-                        <string>Mật khẩu</string>
-                       </property>
-                      </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="lineLoginPassword">
-                      <property name="styleSheet">
-                       <string notr="true">QLineEdit {
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    padding: 10px 15px;
-    background-color: #f9fafb;
-    font-size: 14px;
-    color: #1f2937;
-}
-
-QLineEdit:focus {
-    border: 2px solid #2563eb;
-    background-color: #ffffff;
-}
-
-/* Placeholder text */
-QLineEdit::placeholder {
-    color: #9ca3af;
-}</string>
-                      </property>
-                      <property name="echoMode">
-                       <enum>QLineEdit::Password</enum>
-                      </property>
-                      <property name="placeholderText">
-                       <string>••••••••</string>
-                      </property>
-                     </widget>
-                    </item>
+                   <layout class="QVBoxLayout">
+                    <item><widget class="QLabel"><property name="styleSheet"><string notr="true">color: #4b5563; font-weight: 600;</string></property><property name="text"><string>Mật khẩu</string></property></widget></item>
+                    <item><widget class="QLineEdit" name="lineLoginPassword"><property name="echoMode"><enum>QLineEdit::Password</enum></property><property name="placeholderText"><string>••••••••</string></property></widget></item>
                    </layout>
                   </item>
-                  <item>
-                   <widget class="QPushButton" name="btnLogin">
-                    <property name="text">
-                     <string>Đăng nhập</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <spacer name="verticalSpacerLoginBottom">
-                    <property name="orientation">
-                     <enum>Qt::Vertical</enum>
-                    </property>
-                    <property name="sizeHint" stdset="0">
-                     <size>
-                      <width>20</width>
-                      <height>40</height>
-                     </size>
-                    </property>
-                   </spacer>
-                  </item>
+                  <item><widget class="QPushButton" name="btnLogin"><property name="text"><string>Đăng nhập</string></property></widget></item>
+                  <item><spacer><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
                  </layout>
                 </widget>
                 <widget class="QWidget" name="tab_register">
-                 <attribute name="title">
-                  <string>Đăng ký</string>
-                 </attribute>
+                 <attribute name="title"><string>Đăng ký</string></attribute>
                  <layout class="QVBoxLayout" name="verticalLayout_reg">
-                  <property name="spacing">
-                   <number>14</number>
-                  </property>
+                  <property name="spacing"><number>14</number></property>
                   <item>
-                   <layout class="QVBoxLayout" name="verticalFieldFn">
-                    <item>
-                     <widget class="QLabel" name="label_fn">
-                      <property name="styleSheet">
-                       <string notr="true">color: #4b5563;
-    font-size: 14px;
-    font-weight: 500;</string>
-                      </property>
-                      <property name="text">
-                       <string>Họ tên</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="lineRegFullName">
-                      <property name="styleSheet">
-                       <string notr="true">QLineEdit {
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    padding: 10px 15px;
-    background-color: #f9fafb;
-    font-size: 14px;
-    color: #1f2937;
-}
-
-QLineEdit:focus {
-    border: 2px solid #2563eb;
-    background-color: #ffffff;
-}
-
-/* Placeholder text */
-QLineEdit::placeholder {
-    color: #9ca3af;
-}</string>
-                      </property>
-                     </widget>
-                    </item>
+                   <layout class="QVBoxLayout">
+                    <item><widget class="QLabel"><property name="styleSheet"><string notr="true">color: #4b5563; font-weight: 600;</string></property><property name="text"><string>Họ tên</string></property></widget></item>
+                    <item><widget class="QLineEdit" name="lineRegFullName"/></item>
                    </layout>
                   </item>
                   <item>
-                   <layout class="QVBoxLayout" name="verticalFieldRemail">
-                    <item>
-                     <widget class="QLabel" name="label_remail">
-                      <property name="styleSheet">
-                       <string notr="true">color: #4b5563;
-    font-size: 14px;
-    font-weight: 500;</string>
-                      </property>
-                      <property name="text">
-                       <string>Email</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="lineRegEmail">
-                      <property name="styleSheet">
-                       <string notr="true">QLineEdit {
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    padding: 10px 15px;
-    background-color: #f9fafb;
-    font-size: 14px;
-    color: #1f2937;
-}
-
-QLineEdit:focus {
-    border: 2px solid #2563eb;
-    background-color: #ffffff;
-}
-
-/* Placeholder text */
-QLineEdit::placeholder {
-    color: #9ca3af;
-}</string>
-                      </property>
-                     </widget>
-                    </item>
+                   <layout class="QVBoxLayout">
+                    <item><widget class="QLabel"><property name="styleSheet"><string notr="true">color: #4b5563; font-weight: 600;</string></property><property name="text"><string>Email</string></property></widget></item>
+                    <item><widget class="QLineEdit" name="lineRegEmail"/></item>
                    </layout>
                   </item>
                   <item>
-                   <layout class="QVBoxLayout" name="verticalFieldRpass">
-                    <item>
-                     <widget class="QLabel" name="label_rpass">
-                      <property name="styleSheet">
-                       <string notr="true">color: #4b5563;
-    font-size: 14px;
-    font-weight: 500;</string>
-                      </property>
-                      <property name="text">
-                       <string>Mật khẩu</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="lineRegPassword">
-                      <property name="styleSheet">
-                       <string notr="true">QLineEdit {
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    padding: 10px 15px;
-    background-color: #f9fafb;
-    font-size: 14px;
-    color: #1f2937;
-}
-
-QLineEdit:focus {
-    border: 2px solid #2563eb;
-    background-color: #ffffff;
-}
-
-/* Placeholder text */
-QLineEdit::placeholder {
-    color: #9ca3af;
-}</string>
-                      </property>
-                      <property name="echoMode">
-                       <enum>QLineEdit::Password</enum>
-                      </property>
-                     </widget>
-                    </item>
+                   <layout class="QVBoxLayout">
+                    <item><widget class="QLabel"><property name="styleSheet"><string notr="true">color: #4b5563; font-weight: 600;</string></property><property name="text"><string>Mật khẩu</string></property></widget></item>
+                    <item><widget class="QLineEdit" name="lineRegPassword"><property name="echoMode"><enum>QLineEdit::Password</enum></property></widget></item>
                    </layout>
                   </item>
-                  <item>
-                   <widget class="QCheckBox" name="checkHr">
-                    <property name="styleSheet">
-                     <string notr="true">QCheckBox#checkHr {
-  font-size: 14px;
-  color: #334155;
-  spacing: 8px;
-}</string>
-                    </property>
-                    <property name="text">
-                     <string>Bạn là nhà tuyển dụng?</string>
-                    </property>
-                   </widget>
-                  </item>
+                  <item><widget class="QCheckBox" name="checkHr"><property name="text"><string>Bạn là nhà tuyển dụng?</string></property></widget></item>
                   <item>
                    <widget class="QGroupBox" name="groupHr">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="visible">
-                     <bool>false</bool>
-                    </property>
-                    <property name="title">
-                     <string>Thông tin doanh nghiệp</string>
-                    </property>
-                    <layout class="QFormLayout" name="form_hr">
-                     <item row="0" column="0">
-                      <widget class="QLabel" name="label_co">
-                       <property name="text">
-                        <string>Tên công ty</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item row="0" column="1">
-                      <widget class="QLineEdit" name="lineCompany"/>
-                     </item>
-                     <item row="1" column="0">
-                      <widget class="QLabel" name="label_phone">
-                       <property name="text">
-                        <string>Điện thoại</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item row="1" column="1">
-                      <widget class="QLineEdit" name="linePhone"/>
-                     </item>
-                     <item row="2" column="0">
-                      <widget class="QLabel" name="label_desc">
-                       <property name="text">
-                        <string>Mô tả</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item row="2" column="1">
-                      <widget class="QPlainTextEdit" name="plainCompanyDesc">
-                       <property name="maximumSize">
-                        <size>
-                         <width>16777215</width>
-                         <height>88</height>
-                        </size>
-                       </property>
-                      </widget>
-                     </item>
+                    <property name="visible"><bool>false</bool></property>
+                    <property name="title"><string>Thông tin doanh nghiệp</string></property>
+                    <layout class="QFormLayout">
+                     <item row="0" column="0"><widget class="QLabel"><property name="text"><string>Tên công ty</string></property></widget></item>
+                     <item row="0" column="1"><widget class="QLineEdit" name="lineCompany"/></item>
+                     <item row="1" column="0"><widget class="QLabel"><property name="text"><string>Điện thoại</string></property></widget></item>
+                     <item row="1" column="1"><widget class="QLineEdit" name="linePhone"/></item>
+                     <item row="2" column="0"><widget class="QLabel"><property name="text"><string>Mô tả</string></property></widget></item>
+                     <item row="2" column="1"><widget class="QPlainTextEdit" name="plainCompanyDesc"><property name="maximumHeight"><number>80</number></property></widget></item>
                     </layout>
                    </widget>
                   </item>
-                  <item>
-                    <widget class="QPushButton" name="btnRegister">
-                     <property name="text">
-                      <string>Tạo tài khoản</string>
-                     </property>
-                    </widget>
-                  </item>
+                  <item><widget class="QPushButton" name="btnRegister"><property name="text"><string>Tạo tài khoản</string></property></widget></item>
                  </layout>
                 </widget>
                </widget>
