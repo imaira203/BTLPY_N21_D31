@@ -6,11 +6,8 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QSize, Qt
-<<<<<<< HEAD
 from PySide6.QtGui import QIcon, QFont
-=======
-from PySide6.QtGui import QIcon
->>>>>>> bae1316834b693c78f435307b0ccca0f2b8732b9
+from PySide6.QtGui import QIcon, QFont
 from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
@@ -33,10 +30,8 @@ from PySide6.QtWidgets import (
 
 from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
-<<<<<<< HEAD
 from .. import mock_data
-=======
->>>>>>> bae1316834b693c78f435307b0ccca0f2b8732b9
+from .. import mock_data
 from ..paths import resource_icon, resource_ui
 from ..session_store import clear_session
 from ..theme import HR_ACCENT
@@ -132,11 +127,6 @@ class HRDashboard:
             lbl_brand.setText(" JobHub")
             lbl_brand.setPixmap(QIcon(str(resource_icon("ic_hr.svg"))).pixmap(QSize(28, 28)))
             lbl_brand.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            # Use a layout to keep text next to icon if needed, 
-            # but QLabel.setPixmap replaces text. 
-            # Better: use a layout for brandTitle or just use text with emoji-replacement SVG.
-            # Actually, I'll just set the icon on the nav buttons which I already did.
-            # For brandTitle, I'll keep it as text or use a separate label for icon.
 
     def _go(self, index: int) -> None:
         if self.stack:
@@ -189,7 +179,6 @@ class HRDashboard:
                     it.widget().deleteLater()
             
             items = [
-<<<<<<< HEAD
                 ("ic_jobs.svg", "Tin đang đăng", str(cards.get("jobs", 0)), "+2 tuần này"),
                 ("ic_users.svg", "Tổng ứng viên", str(cards.get("candidates", 0)), "+15 mới"),
                 ("ic_view.svg", "Lượt xem tin", f"{cards.get('views', 0):,}", "+12% xu hướng"),
@@ -207,35 +196,6 @@ class HRDashboard:
                 if lbl_t: lbl_t.setText(title)
                 if lbl_v: lbl_v.setText(val)
                 if lbl_h: lbl_h.setText(hint)
-=======
-                ("ic_jobs.svg", "Tổng tin đăng", str(cards.get("jobs", 0)), "+3 tuần này"),
-                ("ic_users.svg", "Tổng ứng viên", str(cards.get("candidates", 0)), "+12 tuần này"),
-                (
-                    "ic_view.svg",
-                    "Lượt xem (ước lượng)",
-                    f"{int(cards.get('views', 0) or 0):,}".replace(",", "."),
-                    "+245 tuần này",
-                ),
-                ("ic_trend.svg", "Tỷ lệ phản hồi", f"{cards.get('response_rate', 0)}%", "+5% so với tháng trước"),
-            ]
-            for icon_name, title, val, hint in items:
-                sc = load_ui(resource_ui("stat_card.ui"))
-                ic = sc.findChild(QLabel, "labelStatIcon")
-                if ic:
-                    ic.setPixmap(QIcon(str(resource_icon(icon_name))).pixmap(QSize(24, 24)))
-                    ic.setText("")
-                t = sc.findChild(QLabel, "labelStatTitle")
-                v = sc.findChild(QLabel, "labelStatValue")
-                h = sc.findChild(QLabel, "labelStatHint")
-                if ic:
-                    ic.setText(icon)
-                if t:
-                    t.setText(title)
-                if v:
-                    v.setText(val)
-                if h:
-                    h.setText(hint)
->>>>>>> bae1316834b693c78f435307b0ccca0f2b8732b9
                 self.cards_row.addWidget(sc)
 
         if self.chart_holder:
@@ -330,8 +290,6 @@ class HRDashboard:
             self.table_cands.setItem(row, 5, QTableWidgetItem(""))
 
         enhance_table(self.table_cands, status_col=3, action_col=5, stretch_cols=[0, 2])
-
-
 
     def show(self) -> None:
         self.win.show()
