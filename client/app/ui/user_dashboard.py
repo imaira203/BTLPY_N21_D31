@@ -29,7 +29,7 @@ from .quanly_enhanced import enhance_table, make_status_badge
 
 
 class UserDashboard:
-    """Optimized Dashboard for Candidates with Admin-like premium style."""
+    """Optimized Dashboard for Candidates with Modernized Profile and Saved Jobs."""
 
     def __init__(self, on_logout: Callable[[], None]) -> None:
         self._on_logout = on_logout
@@ -40,7 +40,8 @@ class UserDashboard:
 
         self._bind_widgets()
         self._setup_navigation()
-        self._load_jobs_grid()
+        self._load_jobs_grid(self.jobs_grid)
+        self._load_jobs_grid(self.saved_jobs_grid, is_saved=True)
         self._load_history_table()
         self._go(0)
 
@@ -55,17 +56,24 @@ class UserDashboard:
         # Content
         self.stack = self.win.findChild(QStackedWidget, "stackedPages")
         self.jobs_grid = self.win.findChild(QGridLayout, "jobsGrid")
+        self.saved_jobs_grid = self.win.findChild(QGridLayout, "savedJobsGrid")
         self.table_apps = self.win.findChild(QTableWidget, "tableApps")
         self.page_title = self.win.findChild(QLabel, "pageTitle")
         self.page_subtitle = self.win.findChild(QLabel, "pageSubTitle")
+
+        # Profile Page Buttons
+        self.btn_edit_profile = self.win.findChild(QPushButton, "btnEditProfile")
+        self.btn_view_cv = self.win.findChild(QPushButton, "btnViewCV")
+        self.btn_download_cv = self.win.findChild(QPushButton, "btnDownloadCV")
+        self.btn_replace_cv = self.win.findChild(QPushButton, "btnReplaceCV")
 
     def _setup_navigation(self) -> None:
         self._nav_group = QButtonGroup(self.win)
         nav_buttons = [
             (self.nav_home, 0, "ic_dashboard.svg"),
             (self.nav_history, 1, "ic_folder.svg"),
-            (self.nav_saved, 0, "bookmark_filled.svg"),
-            (self.nav_profile, 0, "ic_user.svg"),
+            (self.nav_saved, 2, "bookmark_filled.svg"),
+            (self.nav_profile, 3, "ic_user.svg"),
         ]
         for idx, (btn, target_idx, icon_name) in enumerate(nav_buttons):
             if btn:
@@ -84,10 +92,12 @@ class UserDashboard:
         if self.stack:
             self.stack.setCurrentIndex(index)
         
-        titles = ["Tìm kiếm công việc", "Lịch sử ứng tuyển"]
+        titles = ["Khám phá việc làm", "Lịch sử ứng tuyển", "Việc làm đã lưu", "Hồ sơ cá nhân"]
         subtitles = [
             "Hàng ngàn cơ hội đang chờ đợi bạn",
-            "Theo dõi trạng thái các đơn ứng tuyển của bạn"
+            "Theo dõi trạng thái các đơn ứng tuyển của bạn",
+            "Danh sách các vị trí bạn quan tâm",
+            "Quản lý thông tin cá nhân và CV của bạn"
         ]
         
         if self.page_title and index < len(titles):
@@ -95,20 +105,23 @@ class UserDashboard:
         if self.page_subtitle and index < len(subtitles):
             self.page_subtitle.setText(subtitles[index])
 
-    def _load_jobs_grid(self) -> None:
-        if not self.jobs_grid: return
+    def _load_jobs_grid(self, grid: QGridLayout, is_saved=False) -> None:
+        if not grid: return
         
         jobs = [
             ("Senior Frontend Developer", "TechCorp Vietnam", "Toàn thời gian", "$2000 - $3000", "Hà Nội"),
             ("Backend Developer (Node.js)", "StartUp Innovation", "Toàn thời gian", "$1500 - $2500", "TP. Hồ Chí Minh"),
             ("UI/UX Designer", "Design Studio", "Từ xa", "$1200 - $1800", "Hà Nội / Remote"),
-            ("Full Stack Developer", "Digital Agency", "Toàn thời gian", "$2500 - $4000", "Đà Nẵng"),
-            ("Mobile Engineer (Flutter)", "Global IT Solutions", "Bán thời gian", "$1000 - $1500", "Remote"),
-            ("DevOps Architect", "Cloud Systems", "Toàn thời gian", "$3500 - $5000", "Hà Nội"),
         ]
+        if not is_saved:
+            jobs += [
+                ("Full Stack Developer", "Digital Agency", "Toàn thời gian", "$2500 - $4000", "Đà Nẵng"),
+                ("Mobile Engineer (Flutter)", "Global IT Solutions", "Bán thời gian", "$1000 - $1500", "Remote"),
+                ("DevOps Architect", "Cloud Systems", "Toàn thời gian", "$3500 - $5000", "Hà Nội"),
+            ]
         
-        while self.jobs_grid.count():
-            item = self.jobs_grid.takeAt(0)
+        while grid.count():
+            item = grid.takeAt(0)
             if item.widget(): item.widget().deleteLater()
             
         for i, (title, comp, ttype, sal, loc) in enumerate(jobs):
@@ -134,7 +147,8 @@ class UserDashboard:
             lbl_title.setStyleSheet("font-size: 18px; font-weight: 700; color: #1E293B;")
             lbl_title.setWordWrap(True)
             btn_save = QPushButton()
-            btn_save.setIcon(QIcon(str(resource_icon("bookmark_outline.svg"))))
+            icon_name = "bookmark_filled.svg" if is_saved else "bookmark_outline.svg"
+            btn_save.setIcon(QIcon(str(resource_icon(icon_name))))
             btn_save.setFixedSize(28, 28)
             btn_save.setStyleSheet("border: none; background: transparent;")
             h_header.addWidget(lbl_title)
@@ -182,7 +196,7 @@ class UserDashboard:
             """)
             lay.addWidget(btn_apply)
             
-            self.jobs_grid.addWidget(card, i // 2, i % 2)
+            grid.addWidget(card, i // 2, i % 2)
 
     def _load_history_table(self) -> None:
         if not self.table_apps: return
@@ -191,8 +205,6 @@ class UserDashboard:
             ("APP-101", "TechCorp Vietnam", "Senior Frontend Developer", "15/03/2024", "Hoạt động"),
             ("APP-102", "StartUp Innovation", "Backend Developer (Node.js)", "14/03/2024", "Hoạt động"),
             ("APP-103", "Creative Studio", "UI/UX Designer", "10/03/2024", "Bị khóa"),
-            ("APP-104", "Data Soft Systems", "Data Analyst", "08/03/2024", "Hoạt động"),
-            ("APP-105", "Future Lab", "AI Engineer", "01/03/2024", "Hoạt động"),
         ]
         
         self.table_apps.setRowCount(0)

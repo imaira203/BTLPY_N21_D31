@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>JobHub Admin - Dashboard</string>
+   <string>Bảng điều khiển Admin - JobHub</string>
   </property>
   <property name="styleSheet">
    <string notr="true">
@@ -151,14 +151,14 @@ QPushButton.navBtn:checked {
        <item>
         <widget class="QLabel" name="adminPanelLabel">
          <property name="text">
-          <string>Admin Panel v2.0</string>
+          <string>Bảng quản trị v2.0</string>
          </property>
         </widget>
        </item>
        <item>
         <widget class="QPushButton" name="navDashboard">
          <property name="text">
-          <string>   Dashboard</string>
+          <string>   Bảng điều khiển</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -174,7 +174,7 @@ QPushButton.navBtn:checked {
        <item>
         <widget class="QPushButton" name="navUserMgmt">
          <property name="text">
-          <string>   Users</string>
+          <string>   Người dùng</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -187,7 +187,7 @@ QPushButton.navBtn:checked {
        <item>
         <widget class="QPushButton" name="navHRMgmt">
          <property name="text">
-          <string>   Employers</string>
+          <string>   Nhà tuyển dụng</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -200,7 +200,7 @@ QPushButton.navBtn:checked {
        <item>
         <widget class="QPushButton" name="navJobMgmt">
          <property name="text">
-          <string>   Jobs</string>
+          <string>   Công việc</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -226,7 +226,7 @@ QPushButton.navBtn:checked {
        <item>
         <widget class="QPushButton" name="logoutButton">
          <property name="text">
-          <string>   Sign Out</string>
+          <string>   Đăng xuất</string>
          </property>
          <property name="class" stdset="0">
           <string>navBtn</string>
@@ -271,14 +271,14 @@ QPushButton.navBtn:checked {
             <item>
              <widget class="QLabel" name="pageTitle">
               <property name="text">
-               <string>Admin Dashboard</string>
+               <string>Bảng điều khiển Admin</string>
               </property>
              </widget>
             </item>
             <item>
              <widget class="QLabel" name="pageSubTitle">
               <property name="text">
-               <string>Overview of system performance and activity</string>
+               <string>Tổng quan về hiệu suất và hoạt động của hệ thống</string>
               </property>
              </widget>
             </item>
@@ -334,7 +334,7 @@ QPushButton.navBtn:checked {
                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
               </property>
               <property name="text">
-               <string>Super Admin</string>
+               <string>Quản trị viên cao cấp</string>
               </property>
              </widget>
             </item>
@@ -418,7 +418,7 @@ QPushButton.navBtn:checked {
                  <string notr="true">font-size: 18px; font-weight: 700; color: #0F172A;</string>
                 </property>
                 <property name="text">
-                 <string>System Growth Statistics</string>
+                 <string>Thống kê sự phát triển hệ thống</string>
                 </property>
                </widget>
               </item>
@@ -428,7 +428,7 @@ QPushButton.navBtn:checked {
                  <set>Qt::AlignCenter</set>
                 </property>
                 <property name="text">
-                 <string>Interactive Chart Visualization Area</string>
+                 <string>Khu vực hiển thị biểu đồ tương tác</string>
                 </property>
                </widget>
               </item>
