@@ -3,38 +3,16 @@
  <class>UserDashboard</class>
  <widget class="QMainWindow" name="UserDashboard">
   <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>1280</width>
-    <height>850</height>
-   </rect>
+   <rect><x>0</x><y>0</y><width>1280</width><height>850</height></rect>
   </property>
-  <property name="windowTitle">
-   <string>JobHub - Người tìm việc</string>
-  </property>
+  <property name="windowTitle"><string>JobHub - Người tìm việc</string></property>
   <property name="styleSheet">
    <string notr="true">
-/* EXACT SYNC WITH ADMIN DASHBOARD STYLE */
-QMainWindow { background-color: #F8FAFC; font-family: 'Segoe UI'; }
-
+/* MODERN PREMIUM STYLE */
+QMainWindow { background-color: #F8FAFC; font-family: 'Inter', 'Segoe UI', sans-serif; }
 #sidebar { background-color: #0F172A; border: none; }
-
-#brandLabel { 
-    color: #FFFFFF; 
-    font-size: 24px; 
-    font-weight: 800; 
-    padding: 28px 24px 5px 24px; 
-}
-
-#adminPanelLabel { 
-    color: #64748B; 
-    font-size: 11px; 
-    font-weight: 700; 
-    text-transform: uppercase; 
-    letter-spacing: 1px; 
-    padding: 0px 24px 30px 24px; 
-}
+#brandLabel { color: #FFFFFF; font-size: 24px; font-weight: 800; padding: 28px 24px 5px 24px; }
+#adminPanelLabel { color: #64748B; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding: 0px 24px 30px 24px; }
 
 QPushButton.navBtn {
     background-color: transparent;
@@ -51,305 +29,240 @@ QPushButton.navBtn:hover { background-color: #1E293B; color: #F1F5F9; }
 QPushButton.navBtn:checked { background-color: #6366F1; color: #FFFFFF; font-weight: 700; }
 
 #btnLogout { color: #FB7185; margin-bottom: 25px; }
-#btnLogout:hover { background-color: #451a1a; }
 
 #topBar { background-color: #FFFFFF; border-bottom: 1px solid #E2E8F0; min-height: 70px; max-height: 70px; }
 #pageTitle { font-size: 22px; font-weight: 700; color: #0F172A; }
 #pageSubTitle { font-size: 13px; color: #64748B; }
 
+/* Profile Page Specific Styles */
+#profileCard { background-color: white; border-radius: 24px; border: 1px solid #E2E8F0; }
+
+#avatarCircle { 
+    background-color: #6366F1; 
+    color: white; 
+    font-size: 26px; 
+    font-weight: 800; 
+    border-radius: 40px; 
+}
+
+.sectionHeader { 
+    color: #0F172A; 
+    font-size: 12px; 
+    font-weight: 800; 
+    text-transform: uppercase; 
+    letter-spacing: 1.2px; 
+    margin-bottom: 15px; 
+}
+
+.infoItem { color: #1E293B; font-size: 14px; font-weight: 500; padding: 5px 0; }
+
+.skillPill { 
+    background-color: #EEF2FF; 
+    color: #6366F1; 
+    border-radius: 12px; 
+    padding: 8px 16px; 
+    font-weight: 700; 
+    font-size: 12px; 
+}
+
+#aboutMeText { color: #475569; font-size: 14px; line-height: 1.6; }
+
+/* CV Management Zone */
+#cvZone { 
+    background-color: #F8FAFC; 
+    border: 1px dashed #CBD5E1; 
+    border-radius: 16px; 
+    padding: 24px; 
+}
+
+QPushButton.cvActionBtn {
+    background-color: white;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+}
+QPushButton.cvActionBtn:hover { background-color: #F1F5F9; border-color: #CBD5E1; }
+
+QPushButton#btnReplaceCV {
+    background-color: #6366F1;
+    color: white;
+    border: none;
+}
+QPushButton#btnReplaceCV:hover { background-color: #4F46E5; }
+
+/* Shared Utilities */
 QLineEdit#searchBar {
     background-color: #F8FAFC;
     border: 1px solid #E2E8F0;
     border-radius: 10px;
     padding: 8px 15px;
 }
-QLineEdit#searchBar:focus { border: 1px solid #6366F1; background-color: #FFFFFF; }
-
-QFrame.cardFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 20px; }
-QTableWidget { border: none; background-color: transparent; gridline-color: #F1F5F9; }
-QHeaderView::section { background-color: transparent; border: none; color: #64748B; font-weight: 700; padding: 12px; }
    </string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="mainLayout">
-    <property name="spacing">
-     <number>0</number>
-    </property>
-    <property name="leftMargin">
-     <number>0</number>
-    </property>
-    <property name="topMargin">
-     <number>0</number>
-    </property>
-    <property name="rightMargin">
-     <number>0</number>
-    </property>
-    <property name="bottomMargin">
-     <number>0</number>
-    </property>
+    <property name="spacing"><number>0</number></property>
+    <property name="leftMargin"><number>0</number></property>
+    <property name="topMargin"><number>0</number></property>
+    <property name="rightMargin"><number>0</number></property>
+    <property name="bottomMargin"><number>0</number></property>
     <item>
      <widget class="QFrame" name="sidebar">
-      <property name="minimumSize">
-       <size>
-        <width>260</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>260</width>
-        <height>16777215</height>
-       </size>
-      </property>
+      <property name="minimumSize"><size><width>260</width><height>0</height></size></property>
       <layout class="QVBoxLayout" name="sidebarLayout">
-       <property name="spacing">
-        <number>4</number>
-       </property>
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QLabel" name="brandLabel">
-         <property name="text">
-          <string>⚡ JobHub</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="adminPanelLabel">
-         <property name="text">
-          <string>Ứng viên Portal</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="navHome">
-         <property name="text">
-          <string>   Khám phá việc làm</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="checked">
-          <bool>true</bool>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="navHistory">
-         <property name="text">
-          <string>   Lịch sử ứng tuyển</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="navSaved">
-         <property name="text">
-          <string>   Việc đã lưu</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="navProfile">
-         <property name="text">
-          <string>   Hồ sơ cá nhân</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="sidebarSpacer">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>40</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item>
-        <widget class="QPushButton" name="btnLogout">
-         <property name="text">
-          <string>   Đăng xuất</string>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
-        </widget>
-       </item>
+       <property name="spacing"><number>4</number></property>
+       <item><widget class="QLabel" name="brandLabel"><property name="text"><string>⚡ JobHub</string></property></widget></item>
+       <item><widget class="QPushButton" name="navHome"><property name="text"><string>   Khám phá việc làm</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>true</bool></property><property name="class" stdset="0"><string>navBtn</string></property></widget></item>
+       <item><widget class="QPushButton" name="navHistory"><property name="text"><string>   Lịch sử ứng tuyển</string></property><property name="checkable"><bool>true</bool></property><property name="class" stdset="0"><string>navBtn</string></property></widget></item>
+       <item><widget class="QPushButton" name="navSaved"><property name="text"><string>   Việc đã lưu</string></property><property name="checkable"><bool>true</bool></property><property name="class" stdset="0"><string>navBtn</string></property></widget></item>
+       <item><widget class="QPushButton" name="navProfile"><property name="text"><string>   Hồ sơ cá nhân</string></property><property name="checkable"><bool>true</bool></property><property name="class" stdset="0"><string>navBtn</string></property></widget></item>
+       <item><spacer><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+       <item><widget class="QPushButton" name="btnLogout"><property name="text"><string>   Đăng xuất</string></property><property name="class" stdset="0"><string>navBtn</string></property></widget></item>
       </layout>
      </widget>
     </item>
     <item>
      <widget class="QWidget" name="mainContentArea" native="true">
       <layout class="QVBoxLayout" name="verticalLayout">
-       <property name="spacing">
-        <number>0</number>
-       </property>
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
+       <property name="spacing"><number>0</number></property>
        <item>
         <widget class="QFrame" name="topBar">
          <layout class="QHBoxLayout" name="headerLayout">
-          <property name="leftMargin">
-           <number>32</number>
-          </property>
-          <property name="rightMargin">
-           <number>32</number>
-          </property>
+          <property name="leftMargin"><number>32</number></property>
+          <property name="rightMargin"><number>32</number></property>
           <item>
            <layout class="QVBoxLayout" name="titleBlock">
-            <property name="spacing">
-             <number>2</number>
-            </property>
-            <item>
-             <widget class="QLabel" name="pageTitle">
-              <property name="text">
-               <string>Tìm kiếm công việc</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="pageSubTitle">
-              <property name="text">
-               <string>Hàng ngàn cơ hội đang chờ đợi bạn</string>
-              </property>
-             </widget>
-            </item>
+            <property name="spacing"><number>2</number></property>
+            <item><widget class="QLabel" name="pageTitle"><property name="text"><string>Hồ sơ cá nhân</string></property></widget></item>
+            <item><widget class="QLabel" name="pageSubTitle"><property name="text"><string>Quản lý thông tin cá nhân và CV của bạn</string></property></widget></item>
            </layout>
           </item>
-          <item>
-           <spacer name="headerSpacer">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-          <item>
-           <widget class="QLineEdit" name="searchBar">
-            <property name="minimumSize">
-             <size>
-              <width>350</width>
-              <height>0</height>
-             </size>
-            </property>
-            <property name="placeholderText">
-             <string>Tìm vị trí, kỹ năng, công ty...</string>
-            </property>
-           </widget>
-          </item>
+          <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer></item>
+          <item><widget class="QLineEdit" name="searchBar"><property name="placeholderText"><string>Tìm vị trí, kỹ năng, công ty...</string></property><property name="minimumSize"><size><width>350</width><height>0</height></size></property></widget></item>
          </layout>
         </widget>
        </item>
        <item>
         <widget class="QStackedWidget" name="stackedPages">
          <widget class="QWidget" name="pageHome">
-          <layout class="QVBoxLayout" name="homeLayout">
-           <property name="leftMargin">
-            <number>32</number>
-           </property>
-           <property name="topMargin">
-            <number>32</number>
-           </property>
-           <property name="rightMargin">
-            <number>32</number>
-           </property>
-           <property name="bottomMargin">
-            <number>32</number>
-           </property>
-           <item>
-            <widget class="QScrollArea" name="scrollArea">
-             <property name="widgetResizable">
-              <bool>true</bool>
-             </property>
-             <property name="frameShape">
-              <enum>QFrame::NoFrame</enum>
-             </property>
-             <widget class="QWidget" name="scrollContent">
-              <layout class="QGridLayout" name="jobsGrid">
-               <property name="spacing">
-                <number>24</number>
-               </property>
-              </layout>
-             </widget>
-            </widget>
-           </item>
+          <layout class="QVBoxLayout"><property name="margin"><number>32</number></property>
+           <item><widget class="QScrollArea" name="scrollArea">
+            <property name="widgetResizable"><bool>true</bool></property>
+            <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+            <widget class="QWidget" name="scrollContent"><layout class="QGridLayout" name="jobsGrid"><property name="spacing"><number>24</number></property></layout></widget>
+           </widget></item>
           </layout>
          </widget>
          <widget class="QWidget" name="pageHistory">
-          <layout class="QVBoxLayout" name="historyLayout">
-           <property name="leftMargin">
-            <number>32</number>
-           </property>
-           <property name="topMargin">
-            <number>32</number>
-           </property>
-           <property name="rightMargin">
-            <number>32</number>
-           </property>
-           <property name="bottomMargin">
-            <number>32</number>
-           </property>
+          <layout class="QVBoxLayout"><property name="margin"><number>32</number></property>
+           <item><widget class="QLabel" name="tableLabel"><property name="styleSheet"><string notr="true">font-size: 18px; font-weight: 700; color: #1E293B; margin-bottom: 20px;</string></property><property name="text"><string>Công việc đã ứng tuyển</string></property></widget></item>
+           <item><widget class="QTableWidget" name="tableApps"/></item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="pageSaved">
+          <layout class="QVBoxLayout"><property name="margin"><number>32</number></property>
+           <item><widget class="QScrollArea" name="scrollAreaSaved">
+            <property name="widgetResizable"><bool>true</bool></property>
+            <property name="frameShape"><enum>QFrame::NoFrame</enum></property>
+            <widget class="QWidget" name="scrollContentSaved"><layout class="QGridLayout" name="savedJobsGrid"><property name="spacing"><number>24</number></property></layout></widget>
+           </widget></item>
+          </layout>
+         </widget>
+         <!-- UPDATED PROFILE PAGE -->
+         <widget class="QWidget" name="pageProfile">
+          <layout class="QVBoxLayout"><property name="margin"><number>32</number></property>
            <item>
-            <widget class="QLabel" name="tableLabel">
-             <property name="styleSheet">
-              <string notr="true">font-size: 18px; font-weight: 700; color: #1E293B; margin-bottom: 20px;</string>
-             </property>
-             <property name="text">
-              <string>Công việc đã ứng tuyển</string>
-             </property>
+            <widget class="QFrame" name="profileCard">
+             <layout class="QVBoxLayout"><property name="margin"><number>40</number></property>
+              <!-- Profile Header -->
+              <item>
+               <layout class="QHBoxLayout">
+                <item><widget class="QLabel" name="avatarCircle"><property name="text"><string>JD</string></property><property name="fixedSize"><size><width>80</width><height>80</height></size></property><property name="alignment"><set>Qt::AlignCenter</set></property></widget></item>
+                <item>
+                 <layout class="QVBoxLayout"><property name="leftMargin"><number>24</number></property><property name="spacing"><number>4</number></property>
+                  <item><widget class="QLabel" name="userName"><property name="text"><string>John Doe</string></property><property name="styleSheet"><string notr="true">font-size: 28px; font-weight: 800; color: #0F172A;</string></property></widget></item>
+                  <item><widget class="QLabel" name="userTitle"><property name="text"><string>Software Engineer • Hà Nội, Việt Nam</string></property><property name="styleSheet"><string notr="true">color: #64748B; font-size: 15px; font-weight: 500;</string></property></widget></item>
+                 </layout>
+                </item>
+                <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer></item>
+                <item><widget class="QPushButton" name="btnEditProfile"><property name="text"><string>Chỉnh sửa hồ sơ</string></property><property name="minimumSize"><size><width>160</width><height>46</height></size></property><property name="styleSheet"><string notr="true">QPushButton { background-color: #6366F1; color: white; border-radius: 12px; font-weight: 700; font-size: 14px; } QPushButton:hover { background-color: #4F46E5; }</string></property></widget></item>
+               </layout>
+              </item>
+              
+              <item><widget class="QFrame" name="divider"><property name="styleSheet"><string notr="true">background-color: #F1F5F9; min-height: 1px; margin: 35px 0;</string></property></widget></item>
+              
+              <!-- Profile Body: Two Columns -->
+              <item>
+               <layout class="QHBoxLayout"><property name="spacing"><number>60</number></property>
+                <!-- Column 1: Contact Info -->
+                <item>
+                 <widget class="QWidget" name="col1" native="true">
+                  <property name="minimumSize"><size><width>320</width><height>0</height></size></property>
+                  <layout class="QVBoxLayout"><property name="spacing"><number>24</number></property>
+                   <item><widget class="QLabel"><property name="text"><string>THÔNG TIN LIÊN HỆ</string></property><property name="class" stdset="0"><string>sectionHeader</string></property></widget></item>
+                   <item><widget class="QLabel"><property name="text"><string>✉  john.doe@example.com</string></property><property name="class" stdset="0"><string>infoItem</string></property></widget></item>
+                   <item><widget class="QLabel"><property name="text"><string>📞  +84 987 654 321</string></property><property name="class" stdset="0"><string>infoItem</string></property></widget></item>
+                   <item><widget class="QLabel"><property name="text"><string>📍  Hà Nội, Việt Nam</string></property><property name="class" stdset="0"><string>infoItem</string></property></widget></item>
+                  </layout>
+                 </widget>
+                </item>
+                <!-- Column 2: Skills & Bio -->
+                <item>
+                 <widget class="QWidget" name="col2" native="true">
+                  <layout class="QVBoxLayout"><property name="spacing"><number>32</number></property>
+                   <item>
+                    <layout class="QVBoxLayout"><property name="spacing"><number>16</number></property>
+                     <item><widget class="QLabel"><property name="text"><string>KỸ NĂNG</string></property><property name="class" stdset="0"><string>sectionHeader</string></property></widget></item>
+                     <item>
+                      <layout class="QHBoxLayout"><property name="spacing"><number>10</number></property>
+                       <item><widget class="QLabel"><property name="text"><string>Python</string></property><property name="class" stdset="0"><string>skillPill</string></property></widget></item>
+                       <item><widget class="QLabel"><property name="text"><string>React</string></property><property name="class" stdset="0"><string>skillPill</string></property></widget></item>
+                       <item><widget class="QLabel"><property name="text"><string>SQL</string></property><property name="class" stdset="0"><string>skillPill</string></property></widget></item>
+                       <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer></item>
+                      </layout>
+                     </item>
+                    </layout>
+                   </item>
+                   <item>
+                    <layout class="QVBoxLayout"><property name="spacing"><number>12</number></property>
+                     <item><widget class="QLabel"><property name="text"><string>GIỚI THIỆU BẢN THÂN</string></property><property name="class" stdset="0"><string>sectionHeader</string></property></widget></item>
+                     <item><widget class="QLabel" name="aboutMeText"><property name="wordWrap"><bool>true</bool></property><property name="text"><string>Software Engineer with 2+ years of experience in backend development and cloud architecture. Passionate about building scalable applications and solving complex technical problems.</string></property></widget></item>
+                    </layout>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              
+              <item><spacer><property name="orientation"><enum>Qt::Vertical</enum></property></spacer></item>
+              
+              <!-- Profile Footer: CV Management Zone -->
+              <item>
+               <layout class="QVBoxLayout"><property name="spacing"><number>16</number></property>
+                <item><widget class="QLabel"><property name="text"><string>CV CỦA BẠN</string></property><property name="class" stdset="0"><string>sectionHeader</string></property></widget></item>
+                <item>
+                 <widget class="QFrame" name="cvZone">
+                  <layout class="QHBoxLayout">
+                   <item><widget class="QLabel" name="cvFileLabel"><property name="text"><string>📄  CV_John_Doe_2026.pdf (Cập nhật 2 ngày trước)</string></property><property name="styleSheet"><string notr="true">color: #2B3674; font-weight: 700; font-size: 14px;</string></property></widget></item>
+                   <item><spacer><property name="orientation"><enum>Qt::Horizontal</enum></property></spacer></item>
+                   <item>
+                    <layout class="QHBoxLayout"><property name="spacing"><number>8</number></property>
+                     <item><widget class="QPushButton" name="btnViewCV"><property name="text"><string>Xem trực tiếp</string></property><property name="class" stdset="0"><string>cvActionBtn</string></property></widget></item>
+                     <item><widget class="QPushButton" name="btnDownloadCV"><property name="text"><string>Tải xuống</string></property><property name="class" stdset="0"><string>cvActionBtn</string></property></widget></item>
+                     <item><widget class="QPushButton" name="btnReplaceCV"><property name="text"><string>Thay thế CV mới</string></property><property name="class" stdset="0"><string>cvActionBtn</string></property></widget></item>
+                    </layout>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+             </layout>
             </widget>
-           </item>
-           <item>
-            <widget class="QTableWidget" name="tableApps"/>
            </item>
           </layout>
          </widget>
@@ -361,6 +274,4 @@ QHeaderView::section { background-color: transparent; border: none; color: #6474
    </layout>
   </widget>
  </widget>
- <resources/>
- <connections/>
 </ui>

@@ -142,7 +142,7 @@ class AdminDashboard:
             if btn:
                 btn.setChecked(i == index)
 
-        titles = ["Admin Dashboard", "Quản lý User", "Quản lý HR", "Quản lý Jobs"]
+        titles = ["Bảng điều khiển Admin", "Quản lý Người dùng", "Quản lý Nhà tuyển dụng", "Quản lý Công việc"]
         subtitles = [
             "Tổng quan hệ thống quản lý việc làm",
             "Danh sách người tìm việc trên hệ thống",
@@ -182,9 +182,9 @@ class AdminDashboard:
                 if item.widget():
                     item.widget().deleteLater()
             items = [
-                ("ic_user.svg", "Tổng Users", f"{cards_data.get('users', 0):,}"),
-                ("ic_hr_stat.svg", "Tổng HR", str(cards_data.get("hr", 0))),
-                ("ic_jobs.svg", "Tổng Jobs", str(cards_data.get("jobs", 0))),
+                ("ic_user.svg", "Tổng Người dùng", f"{cards_data.get('users', 0):,}"),
+                ("ic_hr_stat.svg", "Tổng Nhà tuyển dụng", str(cards_data.get("hr", 0))),
+                ("ic_jobs.svg", "Tổng Công việc", str(cards_data.get("jobs", 0))),
                 ("ic_activity.svg", "Hoạt động hôm nay", str(cards_data.get("activity_today", 0))),
             ]
             for icon_name, title, val in items:
