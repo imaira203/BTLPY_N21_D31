@@ -151,7 +151,7 @@ QPushButton.navBtn:checked {
        <item>
         <widget class="QLabel" name="adminPanelLabel">
          <property name="text">
-          <string>Bảng quản trị v2.0</string>
+          <string/>
          </property>
         </widget>
        </item>
@@ -320,21 +320,21 @@ QPushButton.navBtn:checked {
             </property>
             <item>
              <widget class="QLabel" name="adminName">
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
               <property name="text">
                <string>Admin Sarah</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
               </property>
              </widget>
             </item>
             <item>
              <widget class="QLabel" name="adminRole">
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
               <property name="text">
                <string>Quản trị viên cao cấp</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
               </property>
              </widget>
             </item>
@@ -424,11 +424,11 @@ QPushButton.navBtn:checked {
               </item>
               <item>
                <widget class="QLabel" name="chartPlaceholder">
-                <property name="alignment">
-                 <set>Qt::AlignCenter</set>
-                </property>
                 <property name="text">
                  <string>Khu vực hiển thị biểu đồ tương tác</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
                 </property>
                </widget>
               </item>
