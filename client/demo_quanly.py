@@ -26,6 +26,7 @@ if _CLIENT_DIR not in sys.path:
 
 from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette, QColor
 
 # ── Import enhancement module ────────────────────────────────────────────────
 from app.ui.quanly_enhanced import (
@@ -64,6 +65,35 @@ def _resource_ui(name: str) -> str:
         return os.path.join(_CLIENT_DIR, "resources", "ui", name)
 
 
+def _setup_light_palette(app: QApplication) -> None:
+    """Set light palette to override system dark theme."""
+    palette = QPalette()
+    
+    # Background colors
+    palette.setColor(QPalette.Window, QColor("#F5F5F5"))
+    palette.setColor(QPalette.Base, QColor("#FFFFFF"))
+    palette.setColor(QPalette.AlternateBase, QColor("#F0F0F0"))
+    
+    # Text colors
+    palette.setColor(QPalette.WindowText, QColor("#000000"))
+    palette.setColor(QPalette.Text, QColor("#000000"))
+    palette.setColor(QPalette.ButtonText, QColor("#000000"))
+    
+    # Button colors
+    palette.setColor(QPalette.Button, QColor("#F0F0F0"))
+    palette.setColor(QPalette.BrightText, QColor("#FFFFFF"))
+    
+    # Highlight/selection colors
+    palette.setColor(QPalette.Highlight, QColor("#0078D4"))
+    palette.setColor(QPalette.HighlightedText, QColor("#FFFFFF"))
+    
+    # Link colors
+    palette.setColor(QPalette.Link, QColor("#0078D4"))
+    palette.setColor(QPalette.LinkVisited, QColor("#004B8F"))
+    
+    app.setPalette(palette)
+
+
 # ── Panel runners ────────────────────────────────────────────────────────────
 
 def run_user_panel() -> None:
@@ -100,6 +130,9 @@ def main() -> None:
 
     app = QApplication.instance() or QApplication(sys.argv)
     app.setStyle("Fusion")  # Base style – QSS sẽ override
+    
+    # Force light theme globally
+    _setup_light_palette(app)
 
     panel = sys.argv[1].lower() if len(sys.argv) > 1 else "user"
 

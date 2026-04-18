@@ -7,6 +7,7 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -61,6 +62,7 @@ class AdminDashboard:
         self._bind_widgets()
         self._inject_management_pages()
         self._setup_navigation()
+        self._setup_revenue_chart()
         self._load_dash()
         self._go(0)
 
@@ -111,6 +113,78 @@ class AdminDashboard:
         self.stack = self.win.findChild(QStackedWidget, "stackedPages")
         self.cards_row = self.win.findChild(QHBoxLayout, "horizontalLayout_cards")
         self.chart_placeholder = self.win.findChild(QLabel, "chartPlaceholder")
+        self.month_filter = self.win.findChild(QComboBox, "monthFilter")
+
+    def _setup_revenue_chart(self) -> None:
+        """Setup revenue chart with month filter callback."""
+        if self.month_filter:
+            self.month_filter.currentIndexChanged.connect(self._update_revenue_chart)
+    
+    def _get_revenue_by_month(self, month: int = 0) -> tuple[list[str], list[float]]:
+        """
+        Generate revenue data by month.
+        month=0: all months, month=1-12: specific month (daily breakdown)
+        Returns: (labels, values) - values in millions (as float)
+        """
+        if month == 0:  # All months - show monthly totals
+            labels = [f"T{i}" for i in range(1, 13)]
+            values = [12.5, 18.3, 15.7, 20.2, 22.5, 18.9, 14.2, 16.5, 19.8, 22.1, 25.5, 21.3]
+            return labels, values
+        elif 1 <= month <= 12:  # Specific month - show daily breakdown
+            # Generate daily revenue for the selected month
+            days = 30
+            base_value = 15 + month  # Different base for each month
+            labels = [f"N{i}" for i in range(1, days + 1)]  # N = Ngày (Day)
+            
+            # Generate daily values with some variance (in millions)
+            values = []
+            for day in range(1, days + 1):
+                # Create wave pattern with random-like variance
+                daily_value = base_value + 5 * ((day % 7) - 3) / 7
+                daily_value += (day % 3) - 1  # Add some variance
+                values.append(daily_value)  # Keep as float in millions
+            
+            return labels, values
+        
+        return [], []
+    
+    def _update_revenue_chart(self) -> None:
+        """Update chart based on selected month."""
+        if not self.month_filter:
+            return
+        
+        month_index = self.month_filter.currentIndex()
+        labels, values = self._get_revenue_by_month(month_index)
+        
+        if not labels or not values:
+            return
+        
+        # Find the chart frame and its layout
+        chart_frame = self.win.findChild(QFrame, "chartFrame")
+        if not chart_frame:
+            return
+        
+        layout = chart_frame.layout()
+        if not layout or not isinstance(layout, QVBoxLayout):
+            return
+        
+        # Remove old chart widget if exists (keep title/header, remove canvas)
+        for i in range(layout.count() - 1, -1, -1):
+            item = layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                # Keep header layout/title, remove chart canvas
+                if widget.objectName() not in ["chartTitle"]:
+                    layout.removeWidget(widget)
+                    widget.deleteLater()
+        
+        # Create and add new chart
+        canvas = make_line_chart_single(
+            [str(x) for x in labels], 
+            [int(x * 1000000) if isinstance(x, (int, float)) else int(x) for x in values],
+            "#6366F1"
+        )
+        layout.addWidget(canvas)
 
     def _setup_navigation(self) -> None:
         self._nav_group = QButtonGroup(self.win)
@@ -203,19 +277,8 @@ class AdminDashboard:
                     lbl_h.setText("")
                 self.cards_row.addWidget(sc)
 
-        labels = data.get("labels") or []
-        values = data.get("values") or []
-        if self.chart_placeholder and labels and values:
-            parent = self.chart_placeholder.parentWidget()
-            layout = parent.layout()
-            if layout:
-                layout.removeWidget(self.chart_placeholder)
-                self.chart_placeholder.deleteLater()
-                self.chart_placeholder = None
-                canvas = make_line_chart_single(
-                    [str(x) for x in labels], [int(x) for x in values], "#7024C4"
-                )
-                layout.addWidget(canvas)
+        # Load revenue chart
+        self._update_revenue_chart()
 
     # ── Fill User table from mock data ─────────────────────────────
     def _fill_user_table(self) -> None:
