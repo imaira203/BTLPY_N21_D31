@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   title VARCHAR(255) NOT NULL,
   description TEXT NULL,
   salary_text VARCHAR(128) NULL,
+  avg_salary INT NULL,
   location VARCHAR(128) NULL,
   job_type VARCHAR(64) NULL,
   status ENUM('draft','pending_approval','published','rejected') NOT NULL DEFAULT 'pending_approval',
@@ -56,11 +57,56 @@ CREATE TABLE IF NOT EXISTS job_applications (
   job_id INT NOT NULL,
   candidate_id INT NOT NULL,
   cv_id INT NULL,
-  status ENUM('submitted','reviewed','rejected') NOT NULL DEFAULT 'submitted',
+  status ENUM('submitted','reviewed','accepted','rejected') NOT NULL DEFAULT 'submitted',
+  accepted_at DATETIME NULL,
+  contact_unlocked_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
   FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (cv_id) REFERENCES cv_documents(id) ON DELETE SET NULL,
   INDEX idx_app_job (job_id),
   INDEX idx_app_cand (candidate_id)
+);
+
+CREATE TABLE IF NOT EXISTS candidate_subscriptions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  candidate_id INT NOT NULL UNIQUE,
+  status ENUM('inactive','active','expired') NOT NULL DEFAULT 'inactive',
+  pro_expires_at DATETIME NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_sub_cand (candidate_id)
+);
+
+CREATE TABLE IF NOT EXISTS candidate_profiles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL UNIQUE,
+  headline VARCHAR(255) NULL,
+  introduction TEXT NULL,
+  skills TEXT NULL,
+  experience TEXT NULL,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_candidate_profile_user (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  owner_user_id INT NOT NULL,
+  invoice_type ENUM('pro_upgrade','candidate_contact_unlock') NOT NULL,
+  status ENUM('pending','paid','overdue','cancelled') NOT NULL DEFAULT 'pending',
+  amount DECIMAL(12,2) NOT NULL,
+  currency VARCHAR(8) NOT NULL DEFAULT 'VND',
+  due_at DATETIME NOT NULL,
+  sepay_order_code VARCHAR(64) NOT NULL UNIQUE,
+  sepay_payment_url VARCHAR(1024) NULL,
+  note TEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  paid_at DATETIME NULL,
+  application_id INT NULL,
+  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE SET NULL,
+  INDEX idx_invoice_owner (owner_user_id),
+  INDEX idx_invoice_application (application_id),
+  INDEX idx_invoice_status (status)
 );

@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import User
-from ..schemas import HRProfileOut, UpdateEmailIn, UpdatePasswordIn, UserOut
+from ..models import CandidateProfile, User, UserRole
+from ..runtime_cache import runtime_cache
+from ..schemas import CandidateProfileOut, CandidateProfileUpdateIn, HRProfileOut, UpdateEmailIn, UpdatePasswordIn, UserOut
 from ..security import hash_password, verify_password
 from ..storage_paths import absolute_path, relative_key, resolve_existing_file
 
@@ -29,6 +30,45 @@ def my_hr_profile(user: Annotated[User, Depends(get_current_user)]) -> HRProfile
     if user.role.value != "hr" or user.hr_profile is None:
         return None
     return user.hr_profile
+
+
+@router.get("/me/candidate-profile", response_model=CandidateProfileOut | None)
+def my_candidate_profile(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CandidateProfileOut | None:
+    if user.role != UserRole.candidate:
+        return None
+    cached = runtime_cache.candidate_profile_by_user_id.get(user.id)
+    if cached:
+        return cached
+    row = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == user.id))
+    if row:
+        runtime_cache.upsert_candidate_profile(row)
+    return row
+
+
+@router.put("/me/candidate-profile", response_model=CandidateProfileOut)
+def upsert_my_candidate_profile(
+    body: CandidateProfileUpdateIn,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CandidateProfile:
+    if user.role != UserRole.candidate:
+        raise HTTPException(status_code=403, detail="Candidate only")
+    profile = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == user.id))
+    if not profile:
+        profile = CandidateProfile(user_id=user.id)
+        db.add(profile)
+        db.flush()
+    profile.headline = body.headline
+    profile.introduction = body.introduction
+    profile.skills = body.skills
+    profile.experience = body.experience
+    db.commit()
+    db.refresh(profile)
+    runtime_cache.upsert_candidate_profile(profile)
+    return profile
 
 
 @router.put("/me/email", response_model=UserOut)

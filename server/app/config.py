@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     upload_subdir_cvs: str = Field(default="cvs", description="Thư mục chứa CV")
     upload_subdir_avatars: str = Field(default="avatars", description="Thư mục chứa avatar")
     upload_subdir_hr_assets: str = Field(default="hr_assets", description="Logo/tài liệu HR (mở rộng)")
+    pro_monthly_price_vnd: int = Field(default=199000, description="Giá Pro cho ứng viên / tháng")
+    invoice_due_days: int = Field(default=7, description="Số ngày đến hạn invoice")
+    sepay_checkout_base_url: str = Field(
+        default="https://my.sepay.vn/checkout",
+        description="URL checkout Sepay (dựng pay link theo order code)",
+    )
 
     def subdir_for(self, kind: str) -> str:
         """Map logical kind -> tên thư mục đã cấu hình."""

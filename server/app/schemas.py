@@ -3,7 +3,15 @@ from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field
 
-from .models import ApplicationStatus, HRApprovalStatus, JobStatus, UserRole
+from .models import (
+    ApplicationStatus,
+    HRApprovalStatus,
+    InvoiceStatus,
+    InvoiceType,
+    JobStatus,
+    SubscriptionStatus,
+    UserRole,
+)
 
 
 class TokenResponse(BaseModel):
@@ -63,10 +71,30 @@ class HRProfileOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CandidateProfileUpdateIn(BaseModel):
+    headline: str | None = Field(default=None, max_length=255)
+    introduction: str | None = None
+    skills: str | None = None
+    experience: str | None = None
+
+
+class CandidateProfileOut(BaseModel):
+    id: int
+    user_id: int
+    headline: str | None
+    introduction: str | None
+    skills: str | None
+    experience: str | None
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class JobCreate(BaseModel):
     title: str = Field(min_length=1)
     description: str | None = None
     salary_text: str | None = None
+    avg_salary: int | None = Field(default=None, ge=0)
     location: str | None = None
     job_type: str | None = None
     as_draft: bool = False
@@ -78,6 +106,7 @@ class JobOut(BaseModel):
     title: str
     description: str | None
     salary_text: str | None
+    avg_salary: int | None
     location: str | None
     job_type: str | None
     status: JobStatus
@@ -116,6 +145,35 @@ class JobApplicationOut(BaseModel):
     candidate_id: int
     cv_id: int | None
     status: ApplicationStatus
+    accepted_at: datetime | None
+    contact_unlocked_at: datetime | None
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CandidateSubscriptionOut(BaseModel):
+    status: SubscriptionStatus
+    pro_expires_at: datetime | None
+
+
+class ProUpgradeIn(BaseModel):
+    months: int = Field(default=1, ge=1, le=12)
+
+
+class InvoiceOut(BaseModel):
+    id: int
+    owner_user_id: int
+    invoice_type: InvoiceType
+    status: InvoiceStatus
+    amount: float
+    currency: str
+    due_at: datetime
+    sepay_order_code: str
+    sepay_payment_url: str | None
+    note: str | None
+    created_at: datetime
+    paid_at: datetime | None
+    application_id: int | None
 
     model_config = {"from_attributes": True}
