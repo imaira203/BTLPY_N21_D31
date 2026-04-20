@@ -7,8 +7,9 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .db import Base, apply_mysql_schema_patches, engine
+from .db import Base, SessionLocal, apply_mysql_schema_patches, engine
 from .routers import admin, auth, candidate, hr, users
+from .runtime_cache import runtime_cache
 from .storage_paths import upload_dir_for_kind
 
 log = logging.getLogger("jobhub.api")
@@ -33,6 +34,8 @@ async def lifespan(_app: FastAPI):
     apply_mysql_schema_patches()
     for kind in ("cvs", "avatars", "hr_assets"):
         upload_dir_for_kind(settings, kind)
+    with SessionLocal() as db:
+        runtime_cache.load_all(db)
     _log_registered_paths(_app)
     yield
 
