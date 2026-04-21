@@ -137,6 +137,17 @@ _STATUS_TOAST: dict[str, tuple[str, str, str]] = {
 # Polling interval (ms) — user dashboard kiểm tra cập nhật từ HR
 _POLL_INTERVAL_MS = 5_000
 
+# Bảng màu cho từng danh mục kỹ năng  (bg, fg)
+_SKILL_CAT_COLORS: list[tuple[str, str]] = [
+    ("#dbeafe", _BLUE),        # blue   – Frontend
+    ("#dcfce7", "#16a34a"),    # green  – Backend
+    ("#fce7f3", "#db2777"),    # pink   – Cloud/DevOps
+    ("#fef3c7", "#d97706"),    # amber  – Mobile
+    ("#ede9fe", "#7c3aed"),    # purple – Database
+    ("#ccfbf1", "#0d9488"),    # teal   – Tools
+    ("#fee2e2", "#dc2626"),    # red    – Other
+]
+
 
 # ══════════════════════════════════════════════════════════════
 #  SVG HELPERS
@@ -738,6 +749,527 @@ class _ApplyDialog(QDialog):
 
 
 # ══════════════════════════════════════════════════════════════
+#  PROFILE EDIT DIALOG
+# ══════════════════════════════════════════════════════════════
+class _ProfileEditDialog(QDialog):
+    """Full-screen modal form for editing personal + professional info."""
+
+    def __init__(self, data: dict, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Chỉnh sửa hồ sơ")
+        self.setModal(True)
+        self.setFixedWidth(640)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        self.setStyleSheet("QDialog{background:white;}")
+        self._data   = dict(data)   # working copy
+        self._inputs: dict[str, QLineEdit] = {}
+        self._build()
+
+    # ── result ────────────────────────────────────────────────
+    def get_data(self) -> dict:
+        return self._data
+
+    # ── build ─────────────────────────────────────────────────
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── header ─────────────────────────────────────────────
+        hdr = QWidget()
+        hdr.setFixedHeight(64)
+        hdr.setStyleSheet(
+            "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            "stop:0 #0f172a,stop:1 #1e3a8a); border:none;"
+        )
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(28, 0, 20, 0)
+        htitle = QLabel("✏️  Chỉnh sửa hồ sơ")
+        htitle.setStyleSheet(
+            "color:white; font-size:16px; font-weight:800; border:none; background:transparent;"
+        )
+        hl.addWidget(htitle)
+        hl.addStretch()
+        root.addWidget(hdr)
+
+        # ── scroll body ────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet(
+            "QScrollArea{background:white; border:none;}"
+            "QScrollBar:vertical{width:6px; background:transparent;}"
+            "QScrollBar::handle:vertical{background:#c1c9d6; border-radius:3px;}"
+        )
+        body = QWidget()
+        body.setStyleSheet("background:white;")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(28, 24, 28, 24)
+        bl.setSpacing(0)
+        scroll.setWidget(body)
+        root.addWidget(scroll, 1)
+
+        def _section(icon: str, title: str, accent: str):
+            row = QHBoxLayout()
+            row.setSpacing(10)
+            badge = QLabel(icon)
+            badge.setFixedSize(32, 32)
+            badge.setAlignment(Qt.AlignCenter)
+            badge.setStyleSheet(
+                f"background:{accent}20; border-radius:10px; font-size:16px;"
+                "border:none;"
+            )
+            lbl = QLabel(title)
+            lbl.setStyleSheet(
+                f"color:#111827; font-size:14px; font-weight:800; border:none; background:transparent;"
+            )
+            row.addWidget(badge)
+            row.addWidget(lbl)
+            row.addStretch()
+            bl.addLayout(row)
+            bl.addSpacing(16)
+
+        def _field(label: str, key: str, placeholder: str = ""):
+            lbl = QLabel(label)
+            lbl.setStyleSheet(
+                "color:#6b7280; font-size:10px; font-weight:700; letter-spacing:0.8px;"
+                "border:none; background:transparent;"
+            )
+            inp = QLineEdit(self._data.get(key, ""))
+            inp.setPlaceholderText(placeholder)
+            inp.setFixedHeight(42)
+            inp.setStyleSheet(
+                "QLineEdit{background:#f8fafc; border:1.5px solid #e2e8f0;"
+                "border-radius:10px; padding:0 14px; font-size:13px; color:#111827;}"
+                "QLineEdit:focus{border:1.5px solid #6366f1; background:white;}"
+            )
+            self._inputs[key] = inp
+            bl.addWidget(lbl)
+            bl.addSpacing(4)
+            bl.addWidget(inp)
+            bl.addSpacing(14)
+
+        def _field_row(pairs: list):
+            """Two fields side by side."""
+            row = QHBoxLayout()
+            row.setSpacing(16)
+            for label, key, ph in pairs:
+                col = QVBoxLayout()
+                col.setSpacing(4)
+                lbl = QLabel(label)
+                lbl.setStyleSheet(
+                    "color:#6b7280; font-size:10px; font-weight:700; letter-spacing:0.8px;"
+                    "border:none; background:transparent;"
+                )
+                inp = QLineEdit(self._data.get(key, ""))
+                inp.setPlaceholderText(ph)
+                inp.setFixedHeight(42)
+                inp.setStyleSheet(
+                    "QLineEdit{background:#f8fafc; border:1.5px solid #e2e8f0;"
+                    "border-radius:10px; padding:0 14px; font-size:13px; color:#111827;}"
+                    "QLineEdit:focus{border:1.5px solid #6366f1; background:white;}"
+                )
+                self._inputs[key] = inp
+                col.addWidget(lbl)
+                col.addWidget(inp)
+                row.addLayout(col, 1)
+            bl.addLayout(row)
+            bl.addSpacing(14)
+
+        # Personal section
+        _section("👤", "Thông tin cá nhân", "#6366f1")
+        _field("HỌ VÀ TÊN", "name", "Nhập họ và tên đầy đủ...")
+        _field_row([
+            ("EMAIL",          "email",   "example@email.com"),
+            ("SỐ ĐIỆN THOẠI",  "phone",   "0912 345 678"),
+        ])
+        _field("ĐỊA CHỈ HIỆN TẠI", "address", "Thành phố, Tỉnh, Quốc gia...")
+        _field("GIỚI THIỆU BẢN THÂN", "tagline", "Tiêu đề hiển thị dưới tên...")
+
+        bl.addSpacing(8)
+        div = QFrame()
+        div.setFixedHeight(1)
+        div.setStyleSheet("background:#f1f5f9; border:none;")
+        bl.addWidget(div)
+        bl.addSpacing(20)
+
+        # Professional section
+        _section("💼", "Thông tin chuyên môn", "#10b981")
+        _field_row([
+            ("NGÀNH NGHỀ",  "field",  "Vd: Phát triển Phần mềm"),
+            ("BẰNG CẤP",    "degree", "Vd: Cử nhân CNTT"),
+        ])
+        _field_row([
+            ("SỐ NĂM KINH NGHIỆM", "exp",  "Vd: 3 năm"),
+            ("NGÔN NGỮ",           "lang", "Vd: Tiếng Anh B2"),
+        ])
+
+        bl.addSpacing(8)
+        div2 = QFrame()
+        div2.setFixedHeight(1)
+        div2.setStyleSheet("background:#f1f5f9; border:none;")
+        bl.addWidget(div2)
+        bl.addSpacing(20)
+
+        # ── Skills section ─────────────────────────────────────
+        _section("🛠️", "Kỹ năng & Vai trò", "#f59e0b")
+
+        # Hint
+        hint = QLabel("Nhập các kỹ năng, cách nhau bằng dấu phẩy. Nhấn Enter hoặc nút + để thêm danh mục mới.")
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            "color:#9ca3af; font-size:11px; border:none; background:transparent;"
+        )
+        bl.addWidget(hint)
+        bl.addSpacing(14)
+
+        # Container for skill category rows (dynamic)
+        self._skill_rows_widget = QWidget()
+        self._skill_rows_widget.setStyleSheet("background:transparent;")
+        self._skill_rows_lo = QVBoxLayout(self._skill_rows_widget)
+        self._skill_rows_lo.setContentsMargins(0, 0, 0, 0)
+        self._skill_rows_lo.setSpacing(10)
+        bl.addWidget(self._skill_rows_widget)
+
+        # Render existing categories
+        init_skills: dict = self._data.get("skills", {})
+        self._skill_cat_inputs: dict[str, QLineEdit] = {}  # cat_name → QLineEdit
+        for ci, (cat, tags) in enumerate(init_skills.items()):
+            self._add_skill_cat_row(cat, ", ".join(tags), ci)
+
+        bl.addSpacing(10)
+
+        # "Thêm danh mục" row
+        add_row = QHBoxLayout()
+        add_row.setSpacing(8)
+        self._new_cat_inp = QLineEdit()
+        self._new_cat_inp.setPlaceholderText("Tên danh mục mới (vd: Mobile, Database...)")
+        self._new_cat_inp.setFixedHeight(38)
+        self._new_cat_inp.setStyleSheet(
+            "QLineEdit{background:#f8fafc; border:1.5px solid #e2e8f0;"
+            "border-radius:10px; padding:0 12px; font-size:12px; color:#111827;}"
+            "QLineEdit:focus{border:1.5px solid #f59e0b; background:white;}"
+        )
+        btn_add_cat = QPushButton("＋ Thêm danh mục")
+        btn_add_cat.setFixedHeight(38)
+        btn_add_cat.setCursor(Qt.PointingHandCursor)
+        btn_add_cat.setStyleSheet(
+            "QPushButton{background:#fef3c7; color:#d97706; border:none;"
+            "border-radius:10px; font-size:12px; font-weight:700; padding:0 14px;}"
+            "QPushButton:hover{background:#fde68a;}"
+        )
+        btn_add_cat.clicked.connect(self._on_add_skill_category)
+        self._new_cat_inp.returnPressed.connect(self._on_add_skill_category)
+        add_row.addWidget(self._new_cat_inp, 1)
+        add_row.addWidget(btn_add_cat)
+        bl.addLayout(add_row)
+        bl.addSpacing(8)
+
+        # ── footer ─────────────────────────────────────────────
+        foot = QWidget()
+        foot.setFixedHeight(68)
+        foot.setStyleSheet(
+            "background:#f8fafc; border-top:1px solid #f1f5f9; border:none;"
+        )
+        fl = QHBoxLayout(foot)
+        fl.setContentsMargins(28, 0, 28, 0)
+        fl.setSpacing(12)
+        fl.addStretch()
+
+        btn_cancel = QPushButton("Hủy")
+        btn_cancel.setFixedSize(100, 42)
+        btn_cancel.setCursor(Qt.PointingHandCursor)
+        btn_cancel.setStyleSheet(
+            "QPushButton{background:white; color:#374151;"
+            "border:1.5px solid #d1d5db; border-radius:21px;"
+            "font-size:13px; font-weight:600;}"
+            "QPushButton:hover{background:#f9fafb;}"
+        )
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_save = QPushButton("💾  Lưu thay đổi")
+        btn_save.setFixedSize(160, 42)
+        btn_save.setCursor(Qt.PointingHandCursor)
+        btn_save.setStyleSheet(
+            "QPushButton{background:#6366f1; color:white;"
+            "border:none; border-radius:21px;"
+            "font-size:13px; font-weight:700;}"
+            "QPushButton:hover{background:#4f46e5;}"
+        )
+        btn_save.clicked.connect(self._save)
+
+        fl.addWidget(btn_cancel)
+        fl.addWidget(btn_save)
+        root.addWidget(foot)
+
+    # ── Skill category helpers ────────────────────────────────
+    def _add_skill_cat_row(self, cat_name: str, tags_csv: str, index: int = -1):
+        """Thêm một hàng category vào skill_rows_lo."""
+        bg, fg = _SKILL_CAT_COLORS[index % len(_SKILL_CAT_COLORS)]
+
+        row_w = QWidget()
+        row_w.setStyleSheet("background:transparent;")
+        row_lo = QVBoxLayout(row_w)
+        row_lo.setContentsMargins(0, 0, 0, 0)
+        row_lo.setSpacing(5)
+
+        # Header: category badge + label + remove button
+        hdr = QHBoxLayout()
+        hdr.setSpacing(8)
+        badge = QLabel(cat_name)
+        badge.setFixedHeight(24)
+        badge.setStyleSheet(
+            f"background:{bg}; color:{fg}; border-radius:12px;"
+            "padding:0 10px; font-size:11px; font-weight:700; border:none;"
+        )
+        hdr.addWidget(badge)
+        hdr.addStretch()
+        # Remove category button
+        btn_del = QPushButton("✕")
+        btn_del.setFixedSize(22, 22)
+        btn_del.setCursor(Qt.PointingHandCursor)
+        btn_del.setStyleSheet(
+            "QPushButton{background:#fee2e2; color:#dc2626; border:none;"
+            "border-radius:11px; font-size:10px; font-weight:800;}"
+            "QPushButton:hover{background:#fca5a5;}"
+        )
+        btn_del.clicked.connect(lambda _, w=row_w, k=cat_name: self._remove_skill_cat(w, k))
+        hdr.addWidget(btn_del)
+        row_lo.addLayout(hdr)
+
+        # Input line
+        inp = QLineEdit(tags_csv)
+        inp.setPlaceholderText("Nhập kỹ năng, cách nhau bằng dấu phẩy...")
+        inp.setFixedHeight(40)
+        inp.setStyleSheet(
+            f"QLineEdit{{background:#f8fafc; border:1.5px solid {bg};"
+            "border-radius:10px; padding:0 12px; font-size:13px; color:#111827;}"
+            f"QLineEdit:focus{{border:1.5px solid {fg}; background:white;}}"
+        )
+        self._skill_cat_inputs[cat_name] = inp
+        row_lo.addWidget(inp)
+        self._skill_rows_lo.addWidget(row_w)
+
+    def _remove_skill_cat(self, row_widget: QWidget, cat_name: str):
+        self._skill_cat_inputs.pop(cat_name, None)
+        row_widget.setParent(None)
+        row_widget.deleteLater()
+
+    def _on_add_skill_category(self):
+        cat = self._new_cat_inp.text().strip()
+        if not cat or cat in self._skill_cat_inputs:
+            self._new_cat_inp.clear()
+            return
+        idx = len(self._skill_cat_inputs)
+        self._add_skill_cat_row(cat, "", idx)
+        self._new_cat_inp.clear()
+
+    def _save(self):
+        # Text fields
+        for key, inp in self._inputs.items():
+            self._data[key] = inp.text().strip()
+        # Skill categories
+        skills: dict[str, list[str]] = {}
+        for cat_name, inp in self._skill_cat_inputs.items():
+            tags = [t.strip() for t in inp.text().split(",") if t.strip()]
+            if tags:
+                skills[cat_name] = tags
+        self._data["skills"] = skills
+        self.accept()
+
+
+# ══════════════════════════════════════════════════════════════
+#  CV PREVIEW DIALOG
+# ══════════════════════════════════════════════════════════════
+class _CVPreviewDialog(QDialog):
+    """Lightweight CV preview / upload modal."""
+
+    def __init__(self, cv_path: str | None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Xem CV")
+        self.setModal(True)
+        self.setFixedSize(580, 480)
+        self.setStyleSheet("QDialog{background:white;}")
+        self._cv_path  = cv_path
+        self._new_path: str | None = None
+        self._build()
+
+    def get_cv_path(self) -> str | None:
+        return self._new_path or self._cv_path
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # header
+        hdr = QWidget()
+        hdr.setFixedHeight(56)
+        hdr.setStyleSheet(
+            "background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            "stop:0 #1e3a8a,stop:1 #2563eb); border:none;"
+        )
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(24, 0, 16, 0)
+        ht = QLabel("📄  Xem CV")
+        ht.setStyleSheet(
+            "color:white; font-size:15px; font-weight:800; border:none; background:transparent;"
+        )
+        hl.addWidget(ht)
+        hl.addStretch()
+        root.addWidget(hdr)
+
+        # body
+        body = QVBoxLayout()
+        body.setContentsMargins(32, 28, 32, 20)
+        body.setSpacing(16)
+
+        if self._cv_path:
+            from pathlib import Path as _Path
+            fname = _Path(self._cv_path).name
+            # File info chip
+            fchip = QFrame()
+            fchip.setStyleSheet(
+                "QFrame{background:#eff6ff; border-radius:12px; border:none;}"
+            )
+            flo = QHBoxLayout(fchip)
+            flo.setContentsMargins(16, 12, 16, 12)
+            flo.setSpacing(12)
+            ficon = QLabel("📄")
+            ficon.setStyleSheet("font-size:28px; background:transparent; border:none;")
+            ftxt = QVBoxLayout()
+            ftxt.setSpacing(2)
+            fn_lbl = QLabel(fname)
+            fn_lbl.setStyleSheet(
+                "color:#1e3a8a; font-size:14px; font-weight:700; border:none; background:transparent;"
+            )
+            fs_lbl = QLabel("Nhấn 'Mở file' để xem bằng ứng dụng mặc định")
+            fs_lbl.setStyleSheet(
+                "color:#6b7280; font-size:12px; border:none; background:transparent;"
+            )
+            ftxt.addWidget(fn_lbl)
+            ftxt.addWidget(fs_lbl)
+            flo.addWidget(ficon)
+            flo.addLayout(ftxt, 1)
+            body.addWidget(fchip)
+
+            # Preview placeholder
+            prev = QFrame()
+            prev.setMinimumHeight(240)
+            prev.setStyleSheet(
+                "QFrame{background:#f8fafc; border:2px dashed #cbd5e1; border-radius:14px;}"
+            )
+            prev_lo = QVBoxLayout(prev)
+            ph = QLabel("🔍  Xem trực tiếp\n\nNhấn 'Mở file' để xem PDF/Word\nbằng ứng dụng mặc định trên máy bạn")
+            ph.setAlignment(Qt.AlignCenter)
+            ph.setStyleSheet(
+                "color:#94a3b8; font-size:13px; line-height:1.6; border:none; background:transparent;"
+            )
+            prev_lo.addWidget(ph)
+            body.addWidget(prev, 1)
+        else:
+            # No CV uploaded yet
+            empty = QFrame()
+            empty.setMinimumHeight(280)
+            empty.setStyleSheet(
+                "QFrame{background:#f8fafc; border:2px dashed #cbd5e1; border-radius:18px;}"
+            )
+            el = QVBoxLayout(empty)
+            et = QLabel("📋")
+            et.setAlignment(Qt.AlignCenter)
+            et.setStyleSheet("font-size:48px; background:transparent; border:none;")
+            et2 = QLabel("Chưa có CV nào được tải lên")
+            et2.setAlignment(Qt.AlignCenter)
+            et2.setStyleSheet(
+                "color:#374151; font-size:14px; font-weight:700; border:none; background:transparent;"
+            )
+            et3 = QLabel("Tải lên CV của bạn để bắt đầu ứng tuyển")
+            et3.setAlignment(Qt.AlignCenter)
+            et3.setStyleSheet(
+                "color:#9ca3af; font-size:12px; border:none; background:transparent;"
+            )
+            el.addStretch()
+            el.addWidget(et)
+            el.addSpacing(8)
+            el.addWidget(et2)
+            el.addSpacing(4)
+            el.addWidget(et3)
+            el.addStretch()
+            body.addWidget(empty, 1)
+
+        root.addLayout(body)
+
+        # footer
+        foot = QWidget()
+        foot.setFixedHeight(62)
+        foot.setStyleSheet("background:#f8fafc; border:none;")
+        fl = QHBoxLayout(foot)
+        fl.setContentsMargins(32, 0, 32, 0)
+        fl.setSpacing(10)
+
+        btn_upload = QPushButton("⬆️  Tải CV mới lên")
+        btn_upload.setFixedHeight(40)
+        btn_upload.setCursor(Qt.PointingHandCursor)
+        btn_upload.setStyleSheet(
+            "QPushButton{background:white; color:#374151;"
+            "border:1.5px solid #d1d5db; border-radius:20px;"
+            "font-size:12px; font-weight:600; padding:0 16px;}"
+            "QPushButton:hover{background:#f9fafb;}"
+        )
+        btn_upload.clicked.connect(self._upload_cv)
+        fl.addWidget(btn_upload)
+        fl.addStretch()
+
+        if self._cv_path:
+            btn_open = QPushButton("🔗  Mở file")
+            btn_open.setFixedHeight(40)
+            btn_open.setCursor(Qt.PointingHandCursor)
+            btn_open.setStyleSheet(
+                "QPushButton{background:#2563eb; color:white;"
+                "border:none; border-radius:20px;"
+                "font-size:12px; font-weight:700; padding:0 20px;}"
+                "QPushButton:hover{background:#1d4ed8;}"
+            )
+            btn_open.clicked.connect(self._open_file)
+            fl.addWidget(btn_open)
+
+        btn_close = QPushButton("Đóng")
+        btn_close.setFixedHeight(40)
+        btn_close.setCursor(Qt.PointingHandCursor)
+        btn_close.setStyleSheet(
+            "QPushButton{background:#6366f1; color:white;"
+            "border:none; border-radius:20px;"
+            "font-size:12px; font-weight:700; padding:0 20px;}"
+            "QPushButton:hover{background:#4f46e5;}"
+        )
+        btn_close.clicked.connect(self.accept)
+        fl.addWidget(btn_close)
+
+        root.addWidget(foot)
+
+    def _upload_cv(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Chọn file CV",
+            "",
+            "CV Files (*.pdf *.doc *.docx);;All Files (*)"
+        )
+        if path:
+            self._new_path = path
+            self.accept()
+
+    def _open_file(self):
+        if self._cv_path:
+            import os as _os, subprocess as _sub, sys as _sys
+            path = self._cv_path
+            if _sys.platform.startswith("win"):
+                _os.startfile(path)
+            elif _sys.platform == "darwin":
+                _sub.Popen(["open", path])
+            else:
+                _sub.Popen(["xdg-open", path])
+
+
+# ══════════════════════════════════════════════════════════════
 #  INLINE-EDITABLE FIELD
 # ══════════════════════════════════════════════════════════════
 _RE_EMAIL = re.compile(r"^[\w.+\-]+@[\w\-]+\.[\w.\-]+$")
@@ -790,9 +1322,8 @@ class _EditableField(QWidget):
         # ── View mode ──────────────────────────────────────────
         self._view = QFrame()
         self._view.setStyleSheet(
-            "QFrame{background:transparent; border:none;"
-            f"border-bottom:1.5px solid #e5e7eb;}}"
-            "QFrame:hover{border-bottom:1.5px solid " + _BLUE + ";}"
+            "QFrame{background:transparent; border:none;}"
+            "QFrame:hover{background:#f8fafc; border-radius:6px;}"
         )
         self._view.setCursor(Qt.PointingHandCursor)
         self._view.setToolTip("Nhấp để chỉnh sửa")
@@ -816,8 +1347,7 @@ class _EditableField(QWidget):
         # ── Edit mode ──────────────────────────────────────────
         self._edit_frame = QFrame()
         self._edit_frame.setStyleSheet(
-            "QFrame{background:transparent; border:none;"
-            f"border-bottom:2px solid {_BLUE};}}"
+            f"QFrame{{background:#f0f4ff; border:none; border-radius:8px;}}"
         )
         e_lo = QHBoxLayout(self._edit_frame)
         e_lo.setContentsMargins(2, 0, 2, 2)
@@ -910,6 +1440,17 @@ class _EditableField(QWidget):
     def get_value(self) -> str:
         return self._value
 
+    def _set_value(self, new_val: str) -> None:
+        """Programmatically update the displayed value (from profile edit dialog)."""
+        self._value = new_val
+        self._val_lbl.setText(new_val if new_val else "—")
+        self._val_lbl.setStyleSheet(
+            f"color:{'#9ca3af' if not new_val else _TXT_H};"
+            "font-size:14px; font-weight:500; border:none; background:transparent;"
+        )
+        self._line.setText(new_val)
+        self._stack.setCurrentIndex(0)
+
 
 # ══════════════════════════════════════════════════════════════
 #  USER DASHBOARD
@@ -924,6 +1465,25 @@ class UserDashboard:
         self._saved_job_keys: set[str] = set()   # "title||comp" keys of saved jobs
         self._applied_hist:   list     = []      # newly applied entries (prepended)
         self._search_query:   str      = ""      # current topbar search text
+
+        # ── Profile data (persisted in session) ──────────────
+        self._profile_data: dict = {
+            "name":    "Nguyễn Văn A",
+            "tagline": "Mid Developer · 3 năm kinh nghiệm",
+            "email":   "nguyenvana@email.com",
+            "phone":   "0912 345 678",
+            "address": "Hà Nội, Việt Nam",
+            "field":   "Phát triển Phần mềm",
+            "degree":  "Cử nhân CNTT",
+            "exp":     "5 năm kinh nghiệm",
+            "lang":    "Tiếng Anh (IELTS 7.5)",
+            "cv_path": None,     # path to uploaded CV file
+            "skills": {          # danh mục → danh sách kỹ năng
+                "Frontend":       ["React", "TypeScript", "HTML/CSS"],
+                "Backend":        ["Python", "Node.js", "FastAPI"],
+                "Cloud / DevOps": ["Docker", "AWS", "CI/CD"],
+            },
+        }
 
         self.win = QMainWindow()
         self.win.setWindowTitle("JobHub — Ứng viên")
@@ -2246,27 +2806,27 @@ class UserDashboard:
         id_card = QFrame()
         id_card.setFixedWidth(268)
         id_card.setStyleSheet(
-            "QFrame{background:white; border-radius:18px;"
-            "border:1px solid #e5e7eb;}"
+            "QFrame{background:white; border-radius:18px; border:none;}"
         )
         _shadow(id_card, 12, 4, 14)
         id_lo = QVBoxLayout(id_card)
         id_lo.setContentsMargins(24, 28, 24, 24)
         id_lo.setSpacing(0)
 
-        # avatar (centered)
+        # ── Avatar with camera overlay ─────────────────────────
         av_wrap = QWidget()
         av_wrap.setFixedSize(96, 96)
         av_wrap.setStyleSheet("background:transparent;")
+
         glow = QLabel(av_wrap)
         glow.setGeometry(0, 0, 96, 96)
         glow.setStyleSheet(
             "border-radius:48px; border:3px solid #10b981; background:transparent;"
         )
-        av = QLabel("UV", av_wrap)
-        av.setGeometry(6, 6, 84, 84)
-        av.setAlignment(Qt.AlignCenter)
-        av.setStyleSheet(
+        self._av_lbl = QLabel("UV", av_wrap)
+        self._av_lbl.setGeometry(6, 6, 84, 84)
+        self._av_lbl.setAlignment(Qt.AlignCenter)
+        self._av_lbl.setStyleSheet(
             "background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
             "stop:0 #0f172a,stop:0.5 #1e3a8a,stop:1 #2563eb);"
             "border-radius:42px; color:white; font-size:22px;"
@@ -2280,27 +2840,130 @@ class UserDashboard:
             "background:#10b981; color:white; border-radius:11px;"
             "font-size:10px; font-weight:800; border:2px solid white;"
         )
-        id_lo.addWidget(av_wrap, 0, Qt.AlignHCenter)
-        id_lo.addSpacing(16)
+        # Camera button — bottom-left of avatar
+        cam_btn = QPushButton("📷", av_wrap)
+        cam_btn.setFixedSize(26, 26)
+        cam_btn.move(0, 68)
+        cam_btn.setCursor(Qt.PointingHandCursor)
+        cam_btn.setToolTip("Đổi ảnh đại diện")
+        cam_btn.setStyleSheet(
+            "QPushButton{background:#6366f1; color:white; border-radius:13px;"
+            "font-size:13px; border:2px solid white; padding:0;}"
+            "QPushButton:hover{background:#4f46e5;}"
+        )
+        cam_btn.clicked.connect(self._change_avatar)
 
-        # H1 — name
-        name_lbl = QLabel("Nguyễn Văn A")
-        name_lbl.setAlignment(Qt.AlignCenter)
-        name_lbl.setStyleSheet(
-            f"color:{_TXT_H}; font-size:20px; font-weight:800;"
+        id_lo.addWidget(av_wrap, 0, Qt.AlignHCenter)
+        id_lo.addSpacing(14)
+
+        # ── Name — inline edit with double-click ───────────────
+        name_stack = QStackedWidget()
+        name_stack.setFixedHeight(34)
+        name_stack.setStyleSheet("background:transparent;")
+
+        # View mode
+        name_view = QWidget()
+        name_view.setStyleSheet("background:transparent;")
+        nv_lo = QHBoxLayout(name_view)
+        nv_lo.setContentsMargins(0, 0, 0, 0)
+        nv_lo.setSpacing(6)
+        self._prof_name_lbl = QLabel(self._profile_data["name"])
+        self._prof_name_lbl.setAlignment(Qt.AlignCenter)
+        self._prof_name_lbl.setStyleSheet(
+            f"color:{_TXT_H}; font-size:18px; font-weight:800;"
             "border:none; background:transparent;"
         )
-        id_lo.addWidget(name_lbl)
+        self._prof_name_lbl.setToolTip("Double-click để đổi tên")
+        edit_name_btn = QPushButton("✏")
+        edit_name_btn.setFixedSize(20, 20)
+        edit_name_btn.setCursor(Qt.PointingHandCursor)
+        edit_name_btn.setStyleSheet(
+            "QPushButton{background:transparent; color:#94a3b8; border:none;"
+            "font-size:11px; padding:0;}"
+            "QPushButton:hover{color:#6366f1;}"
+        )
+        nv_lo.addStretch()
+        nv_lo.addWidget(self._prof_name_lbl)
+        nv_lo.addWidget(edit_name_btn)
+        nv_lo.addStretch()
+
+        # Edit mode
+        name_edit_w = QWidget()
+        name_edit_w.setStyleSheet("background:transparent;")
+        ne_lo = QHBoxLayout(name_edit_w)
+        ne_lo.setContentsMargins(0, 0, 0, 0)
+        ne_lo.setSpacing(4)
+        self._name_inp = QLineEdit(self._profile_data["name"])
+        self._name_inp.setFixedHeight(30)
+        self._name_inp.setAlignment(Qt.AlignCenter)
+        self._name_inp.setStyleSheet(
+            "QLineEdit{background:#f1f5f9; border:1.5px solid #6366f1;"
+            "border-radius:8px; font-size:13px; font-weight:700;"
+            "color:#111827; padding:0 8px;}"
+        )
+        save_n = QPushButton("✓")
+        save_n.setFixedSize(28, 28)
+        save_n.setCursor(Qt.PointingHandCursor)
+        save_n.setStyleSheet(
+            "QPushButton{background:#10b981; color:white; border:none;"
+            "border-radius:8px; font-size:14px; font-weight:800;}"
+            "QPushButton:hover{background:#059669;}"
+        )
+        cancel_n = QPushButton("✕")
+        cancel_n.setFixedSize(28, 28)
+        cancel_n.setCursor(Qt.PointingHandCursor)
+        cancel_n.setStyleSheet(
+            "QPushButton{background:#f1f5f9; color:#6b7280; border:none;"
+            "border-radius:8px; font-size:13px;}"
+            "QPushButton:hover{background:#e5e7eb;}"
+        )
+        ne_lo.addWidget(self._name_inp, 1)
+        ne_lo.addWidget(save_n)
+        ne_lo.addWidget(cancel_n)
+
+        name_stack.addWidget(name_view)   # index 0
+        name_stack.addWidget(name_edit_w) # index 1
+
+        def _enter_name_edit():
+            self._name_inp.setText(self._profile_data["name"])
+            self._name_inp.selectAll()
+            name_stack.setCurrentIndex(1)
+            self._name_inp.setFocus()
+
+        def _save_name():
+            v = self._name_inp.text().strip()
+            if v:
+                self._profile_data["name"] = v
+                self._prof_name_lbl.setText(v)
+                # Update topbar avatar text
+                initials = "".join(p[0].upper() for p in v.split()[:2]) or "UV"
+                self._av_lbl.setText(initials)
+                _Toast(self.win.centralWidget(),
+                       f"Tên đã cập nhật: {v}",
+                       accent=_INDIGO, duration_ms=2500,
+                       title_text="Đã lưu tên mới ✓", icon_char="✓")
+            name_stack.setCurrentIndex(0)
+
+        def _cancel_name():
+            name_stack.setCurrentIndex(0)
+
+        edit_name_btn.clicked.connect(_enter_name_edit)
+        self._prof_name_lbl.mouseDoubleClickEvent = lambda _e: _enter_name_edit()
+        save_n.clicked.connect(_save_name)
+        cancel_n.clicked.connect(_cancel_name)
+        self._name_inp.returnPressed.connect(_save_name)
+
+        id_lo.addWidget(name_stack)
         id_lo.addSpacing(4)
 
         # tagline
-        tag_lbl = QLabel("Mid Developer · 3 năm kinh nghiệm")
-        tag_lbl.setAlignment(Qt.AlignCenter)
-        tag_lbl.setWordWrap(True)
-        tag_lbl.setStyleSheet(
+        self._prof_tag_lbl = QLabel(self._profile_data["tagline"])
+        self._prof_tag_lbl.setAlignment(Qt.AlignCenter)
+        self._prof_tag_lbl.setWordWrap(True)
+        self._prof_tag_lbl.setStyleSheet(
             f"color:{_TXT_M}; font-size:12px; border:none; background:transparent;"
         )
-        id_lo.addWidget(tag_lbl)
+        id_lo.addWidget(self._prof_tag_lbl)
         id_lo.addSpacing(20)
 
         # divider
@@ -2310,11 +2973,12 @@ class UserDashboard:
         id_lo.addWidget(div1)
         id_lo.addSpacing(16)
 
-        # contact items (vertical)
-        for icon_svg, ctxt in [
-            ("ic_email.svg", "nguyenvana@email.com"),
-            ("ic_phone.svg", "0912 345 678"),
-            ("ic_pin.svg",   "Hà Nội, Việt Nam"),
+        # contact items (vertical) — stored for live update
+        self._prof_contact_lbls: dict[str, QLabel] = {}
+        for icon_svg, key, ctxt in [
+            ("ic_email.svg", "email",   self._profile_data["email"]),
+            ("ic_phone.svg", "phone",   self._profile_data["phone"]),
+            ("ic_pin.svg",   "address", self._profile_data["address"]),
         ]:
             cr = QHBoxLayout()
             cr.setSpacing(10)
@@ -2325,15 +2989,16 @@ class UserDashboard:
             ic_lbl.setStyleSheet("background:transparent; border:none;")
             tx_lbl = QLabel(ctxt)
             tx_lbl.setStyleSheet(
-                f"color:{_TXT_S}; font-size:13px;"
+                f"color:{_TXT_S}; font-size:12px;"
                 "border:none; background:transparent;"
             )
+            self._prof_contact_lbls[key] = tx_lbl
             cr.addWidget(ic_lbl)
             cr.addWidget(tx_lbl, 1)
             id_lo.addLayout(cr)
-            id_lo.addSpacing(10)
+            id_lo.addSpacing(8)
 
-        id_lo.addSpacing(6)
+        id_lo.addSpacing(4)
 
         # divider
         div2 = QFrame()
@@ -2397,50 +3062,47 @@ class UserDashboard:
         id_lo.addSpacing(20)
 
         # ── CTAs ───────────────────────────────────────────────
-        btn_edit = QPushButton()
-        btn_edit.setFixedHeight(44)
-        btn_edit.setCursor(Qt.PointingHandCursor)
-        btn_edit.setIcon(QIcon(_svg_pm("ic_edit.svg", 15, "white")))
-        btn_edit.setIconSize(QSize(15, 15))
-        btn_edit.setText("  Chỉnh sửa hồ sơ")
-        btn_edit.setToolTip("Cập nhật thông tin cá nhân")
-        btn_edit.setStyleSheet(
+        btn_edit_prof = QPushButton("  ✏️  Chỉnh sửa hồ sơ")
+        btn_edit_prof.setFixedHeight(44)
+        btn_edit_prof.setCursor(Qt.PointingHandCursor)
+        btn_edit_prof.setStyleSheet(
             "QPushButton{background:#065f46; color:white; border:none;"
-            "border-radius:22px; font-size:14px; font-weight:700;}"
+            "border-radius:22px; font-size:13px; font-weight:700;}"
             "QPushButton:hover{background:#047857;}"
         )
-        _btn_shadow(btn_edit, "#065f46", 60)
-        id_lo.addWidget(btn_edit)
+        _btn_shadow(btn_edit_prof, "#065f46", 60)
+        btn_edit_prof.clicked.connect(self._open_profile_edit)
+        id_lo.addWidget(btn_edit_prof)
         id_lo.addSpacing(10)
 
         sec_btns = QHBoxLayout()
-        sec_btns.setSpacing(10)
+        sec_btns.setSpacing(8)
         sec_btns.setContentsMargins(0, 0, 0, 0)
-        for stxt, sfg, sicon in [
-            ("Xem CV",      _BLUE,  "ic_eye2.svg"),
-            ("Tải xuống",   _TXT_S, "ic_doc.svg"),
-        ]:
-            sb = QPushButton()
-            sb.setFixedHeight(38)
-            sb.setCursor(Qt.PointingHandCursor)
-            sb.setIcon(QIcon(_svg_pm(sicon, 13, sfg)))
-            sb.setIconSize(QSize(13, 13))
-            sb.setText(f"  {stxt}")
-            if sfg == _BLUE:
-                sb.setStyleSheet(
-                    f"QPushButton{{background:white; color:{_BLUE};"
-                    f"border:1.5px solid {_BLUE}; border-radius:19px;"
-                    "font-size:12px; font-weight:600;}}"
-                    f"QPushButton:hover{{background:{_BLUE_BG};}}"
-                )
-            else:
-                sb.setStyleSheet(
-                    f"QPushButton{{background:white; color:{_TXT_S};"
-                    "border:1.5px solid #d1d5db; border-radius:19px;"
-                    "font-size:12px; font-weight:600;}}"
-                    "QPushButton:hover{background:#f9fafb;}"
-                )
-            sec_btns.addWidget(sb, 1)
+
+        btn_view_cv = QPushButton("  📄 Xem CV")
+        btn_view_cv.setFixedHeight(38)
+        btn_view_cv.setCursor(Qt.PointingHandCursor)
+        btn_view_cv.setStyleSheet(
+            f"QPushButton{{background:white; color:{_BLUE};"
+            f"border:1.5px solid {_BLUE}; border-radius:19px;"
+            "font-size:12px; font-weight:600;}}"
+            f"QPushButton:hover{{background:{_BLUE_BG};}}"
+        )
+        btn_view_cv.clicked.connect(self._open_cv_preview)
+
+        btn_dl = QPushButton("  ⬇ Tải xuống")
+        btn_dl.setFixedHeight(38)
+        btn_dl.setCursor(Qt.PointingHandCursor)
+        btn_dl.setStyleSheet(
+            f"QPushButton{{background:white; color:{_TXT_S};"
+            "border:1.5px solid #d1d5db; border-radius:19px;"
+            "font-size:12px; font-weight:600;}}"
+            "QPushButton:hover{background:#f9fafb;}"
+        )
+        btn_dl.clicked.connect(self._download_cv)
+
+        sec_btns.addWidget(btn_view_cv, 1)
+        sec_btns.addWidget(btn_dl, 1)
         id_lo.addLayout(sec_btns)
 
         sidebar.addWidget(id_card)
@@ -2456,8 +3118,7 @@ class UserDashboard:
         # ── Card 1: Thông tin cá nhân ──────────────────────────
         p_card = QFrame()
         p_card.setStyleSheet(
-            "QFrame{background:white; border:1px solid #e5e7eb;"
-            "border-radius:16px;}"
+            "QFrame{background:white; border:none; border-radius:16px;}"
         )
         _shadow(p_card, 8, 3, 10)
         pc_lo = QVBoxLayout(p_card)
@@ -2471,10 +3132,10 @@ class UserDashboard:
         p_grid.setHorizontalSpacing(24)
         p_grid.setVerticalSpacing(6)
         for i, (lbl, val, vtype) in enumerate([
-            ("HỌ VÀ TÊN",        "Nguyễn Văn A",        ""),
-            ("EMAIL",             "nguyenvana@email.com", "email"),
-            ("SỐ ĐIỆN THOẠI",     "0912 345 678",         "phone"),
-            ("ĐỊA CHỈ HIỆN TẠI",  "Hà Nội, Việt Nam",    ""),
+            ("HỌ VÀ TÊN",        self._profile_data["name"],    ""),
+            ("EMAIL",             self._profile_data["email"],   "email"),
+            ("SỐ ĐIỆN THOẠI",     self._profile_data["phone"],   "phone"),
+            ("ĐỊA CHỈ HIỆN TẠI",  self._profile_data["address"], ""),
         ]):
             ef = _EditableField(
                 label=lbl, value=val, validator=vtype,
@@ -2489,8 +3150,7 @@ class UserDashboard:
         # ── Card 2: Chuyên môn ─────────────────────────────────
         s_card = QFrame()
         s_card.setStyleSheet(
-            "QFrame{background:white; border:1px solid #e5e7eb;"
-            "border-radius:16px;}"
+            "QFrame{background:white; border:none; border-radius:16px;}"
         )
         _shadow(s_card, 8, 3, 10)
         sc_lo = QVBoxLayout(s_card)
@@ -2504,10 +3164,10 @@ class UserDashboard:
         s_grid.setHorizontalSpacing(24)
         s_grid.setVerticalSpacing(6)
         for i, (lbl, val, vtype) in enumerate([
-            ("NGÀNH NGHỀ",         "Phát triển Phần mềm",   ""),
-            ("BẰNG CẤP",           "Cử nhân CNTT",           ""),
-            ("SỐ NĂM KINH NGHIỆM", "5 năm kinh nghiệm",      ""),
-            ("NGÔN NGỮ",           "Tiếng Anh (IELTS 7.5)",  ""),
+            ("NGÀNH NGHỀ",         self._profile_data["field"],  ""),
+            ("BẰNG CẤP",           self._profile_data["degree"], ""),
+            ("SỐ NĂM KINH NGHIỆM", self._profile_data["exp"],    ""),
+            ("NGÔN NGỮ",           self._profile_data["lang"],   ""),
         ]):
             ef = _EditableField(
                 label=lbl, value=val, validator=vtype,
@@ -2518,24 +3178,14 @@ class UserDashboard:
         sc_lo.addLayout(s_grid)
         sc_lo.addSpacing(20)
 
-        # skill chips by category
-        for cat_title, cat_chips in [
-            ("FRONTEND",    [("React", "#dbeafe", _BLUE),
-                             ("TypeScript", "#dbeafe", _BLUE)]),
-            ("BACKEND",     [("Python", "#dcfce7", "#16a34a"),
-                             ("Node.js", "#dcfce7", "#16a34a")]),
-            ("CLOUD / DEVOPS", [("Docker", "#fce7f3", "#db2777"),
-                                ("AWS", "#fef3c7", "#d97706")]),
-        ]:
-            cat_lbl = QLabel(cat_title)
-            cat_lbl.setStyleSheet(
-                f"color:{_TXT_M}; font-size:10px; font-weight:700;"
-                "letter-spacing:0.8px; border:none; background:transparent;"
-            )
-            sc_lo.addWidget(cat_lbl)
-            sc_lo.addSpacing(5)
-            sc_lo.addWidget(self._skill_chip_row(cat_chips))
-            sc_lo.addSpacing(12)
+        # ── Skill chips container (dynamic — rebuilt on edit) ─────
+        self._skill_chips_widget = QWidget()
+        self._skill_chips_widget.setStyleSheet("background:transparent;")
+        self._skill_chips_lo = QVBoxLayout(self._skill_chips_widget)
+        self._skill_chips_lo.setContentsMargins(0, 0, 0, 0)
+        self._skill_chips_lo.setSpacing(0)
+        self._rebuild_skill_chips()
+        sc_lo.addWidget(self._skill_chips_widget)
 
         right_col.addWidget(s_card)
 
@@ -3156,6 +3806,35 @@ class UserDashboard:
         # _apply_hist_filters reads self._applied_hist + _HIST_DATA
         self._apply_hist_filters()
 
+    def _rebuild_skill_chips(self) -> None:
+        """Xóa và vẽ lại toàn bộ skill chips từ _profile_data['skills']."""
+        lo = self._skill_chips_lo
+        # Xóa widgets cũ
+        while lo.count():
+            item = lo.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        skills_dict: dict = self._profile_data.get("skills", {})
+        for ci, (cat, tags) in enumerate(skills_dict.items()):
+            if not tags:
+                continue
+            bg, fg = _SKILL_CAT_COLORS[ci % len(_SKILL_CAT_COLORS)]
+
+            # Category label
+            cat_lbl = QLabel(cat.upper())
+            cat_lbl.setStyleSheet(
+                f"color:{_TXT_M}; font-size:10px; font-weight:700;"
+                "letter-spacing:0.8px; border:none; background:transparent;"
+            )
+            lo.addWidget(cat_lbl)
+            lo.addSpacing(5)
+
+            # Chip row
+            chips = [(t, bg, fg) for t in tags if t.strip()]
+            lo.addWidget(self._skill_chip_row(chips))
+            lo.addSpacing(12)
+
     def _poll_application_statuses(self) -> None:
         """Kiểm tra định kỳ xem HR có cập nhật trạng thái nào chưa."""
         changed = False
@@ -3188,6 +3867,165 @@ class UserDashboard:
                     )
         if changed:
             self._apply_hist_filters()
+
+    # ══════════════════════════════════════════════════════════
+    #  PROFILE ACTIONS
+    # ══════════════════════════════════════════════════════════
+    @staticmethod
+    def _make_circle_pixmap(path: str, size: int) -> QPixmap:
+        """Load ảnh từ path, scale + crop thành hình tròn hoàn hảo."""
+        src = QPixmap(path)
+        if src.isNull():
+            return QPixmap()
+        # Scale ảnh gốc để cạnh ngắn nhất = size (cover)
+        src = src.scaled(size, size, Qt.KeepAspectRatioByExpanding,
+                         Qt.SmoothTransformation)
+        # Crop về đúng size x size (center crop)
+        if src.width() > size or src.height() > size:
+            x = (src.width()  - size) // 2
+            y = (src.height() - size) // 2
+            src = src.copy(x, y, size, size)
+
+        # Vẽ lên canvas trong suốt với clip hình tròn
+        from PySide6.QtGui import QPainterPath
+        result = QPixmap(size, size)
+        result.fill(Qt.transparent)
+        painter = QPainter(result)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        path_clip = QPainterPath()
+        path_clip.addEllipse(0, 0, size, size)
+        painter.setClipPath(path_clip)
+        painter.drawPixmap(0, 0, src)
+        painter.end()
+        return result
+
+    def _change_avatar(self) -> None:
+        """Mở file dialog để chọn ảnh đại diện mới, bo tròn tự động."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.win, "Chọn ảnh đại diện",
+            "",
+            "Image Files (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)"
+        )
+        if not file_path:
+            return
+
+        circle_pm = self._make_circle_pixmap(file_path, 84)
+        if not circle_pm.isNull():
+            # Xóa gradient background, chỉ hiện ảnh tròn
+            self._av_lbl.setStyleSheet(
+                "border-radius:42px; border:none; background:transparent;"
+            )
+            self._av_lbl.setText("")
+            self._av_lbl.setPixmap(circle_pm)
+        else:
+            # Fallback: dùng initials nếu không load được ảnh
+            initials = "".join(
+                p[0].upper() for p in self._profile_data["name"].split()[:2]
+            ) or "UV"
+            self._av_lbl.setText(initials)
+
+        _Toast(
+            self.win.centralWidget(),
+            "Ảnh đại diện đã được cập nhật",
+            accent=_INDIGO, duration_ms=2500,
+            title_text="Đổi ảnh thành công 📷", icon_char="📷",
+        )
+
+    def _open_profile_edit(self) -> None:
+        """Mở dialog chỉnh sửa hồ sơ đầy đủ."""
+        dlg = _ProfileEditDialog(self._profile_data, self.win)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        new_data = dlg.get_data()
+        self._profile_data.update(new_data)
+
+        # Sync sidebar labels
+        self._prof_name_lbl.setText(new_data["name"])
+        self._prof_tag_lbl.setText(new_data["tagline"])
+        for key, lbl in self._prof_contact_lbls.items():
+            lbl.setText(new_data.get(key, ""))
+        # Sync avatar initials if no image loaded
+        if not self._av_lbl.pixmap() or self._av_lbl.pixmap().isNull():
+            initials = "".join(
+                p[0].upper() for p in new_data["name"].split()[:2]
+            ) or "UV"
+            self._av_lbl.setText(initials)
+
+        # Rebuild editable field grids with new values
+        for ef in self._prof_field_refs:
+            key_map = {
+                "HỌ VÀ TÊN":        "name",
+                "EMAIL":             "email",
+                "SỐ ĐIỆN THOẠI":     "phone",
+                "ĐỊA CHỈ HIỆN TẠI":  "address",
+                "NGÀNH NGHỀ":        "field",
+                "BẰNG CẤP":          "degree",
+                "SỐ NĂM KINH NGHIỆM":"exp",
+                "NGÔN NGỮ":          "lang",
+            }
+            if ef._label in key_map:
+                ef._set_value(new_data.get(key_map[ef._label], ef._value))
+
+        # Rebuild skill chips with new data
+        self._rebuild_skill_chips()
+
+        self._update_profile_progress()
+        _Toast(
+            self.win.centralWidget(),
+            "Thông tin hồ sơ đã được lưu",
+            accent="#10b981", duration_ms=3000,
+            title_text="Hồ sơ cập nhật thành công ✅", icon_char="✓",
+        )
+
+    def _open_cv_preview(self) -> None:
+        """Mở dialog xem CV."""
+        dlg = _CVPreviewDialog(self._profile_data.get("cv_path"), self.win)
+        dlg.exec()
+        # If user uploaded a new CV inside the dialog
+        new_path = dlg.get_cv_path()
+        if new_path and new_path != self._profile_data.get("cv_path"):
+            self._profile_data["cv_path"] = new_path
+            from pathlib import Path as _Path
+            _Toast(
+                self.win.centralWidget(),
+                f"CV mới: {_Path(new_path).name}",
+                accent=_BLUE, duration_ms=3000,
+                title_text="Tải CV lên thành công 📄", icon_char="📄",
+            )
+
+    def _download_cv(self) -> None:
+        """Tải CV về máy."""
+        cv_path = self._profile_data.get("cv_path")
+        if not cv_path:
+            _Toast(
+                self.win.centralWidget(),
+                "Bạn chưa tải CV lên. Nhấn 'Xem CV' để tải lên trước.",
+                accent="#f59e0b", duration_ms=3500,
+                title_text="Chưa có CV", icon_char="⚠",
+            )
+            return
+        from pathlib import Path as _Path
+        fname = _Path(cv_path).name
+        save_path, _ = QFileDialog.getSaveFileName(
+            self.win, "Lưu CV về máy",
+            fname,
+            "All Files (*)"
+        )
+        if not save_path:
+            return
+        import shutil as _shutil
+        try:
+            _shutil.copy2(cv_path, save_path)
+            _Toast(
+                self.win.centralWidget(),
+                f"Đã lưu tại: {save_path}",
+                accent="#10b981", duration_ms=3500,
+                title_text="Tải xuống thành công ⬇", icon_char="⬇",
+            )
+        except Exception as exc:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self.win, "Lỗi", f"Không thể lưu file:\n{exc}")
 
     # ══════════════════════════════════════════════════════════
     #  ACTIONS
