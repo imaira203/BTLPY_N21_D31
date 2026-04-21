@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS hr_profiles (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL UNIQUE,
   company_name VARCHAR(255) NOT NULL,
+  avatar_storage_key VARCHAR(512) NULL,
   contact_phone VARCHAR(64) NULL,
   company_description TEXT NULL,
   approval_status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
@@ -78,6 +79,18 @@ CREATE TABLE IF NOT EXISTS candidate_subscriptions (
   INDEX idx_sub_cand (candidate_id)
 );
 
+CREATE TABLE IF NOT EXISTS candidate_saved_jobs (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  candidate_id INT NOT NULL,
+  job_id INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_candidate_saved_job (candidate_id, job_id),
+  INDEX idx_saved_jobs_candidate (candidate_id),
+  INDEX idx_saved_jobs_job (job_id)
+);
+
 CREATE TABLE IF NOT EXISTS candidate_profiles (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL UNIQUE,
@@ -109,4 +122,19 @@ CREATE TABLE IF NOT EXISTS invoices (
   INDEX idx_invoice_owner (owner_user_id),
   INDEX idx_invoice_application (application_id),
   INDEX idx_invoice_status (status)
+);
+
+CREATE TABLE IF NOT EXISTS candidate_subscription_payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  candidate_id INT NOT NULL,
+  invoice_id INT NULL UNIQUE,
+  months INT NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  currency VARCHAR(8) NOT NULL DEFAULT 'VND',
+  paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+  INDEX idx_candidate_sub_payments_candidate (candidate_id),
+  INDEX idx_candidate_sub_payments_paid_at (paid_at)
 );

@@ -16,6 +16,7 @@ class HRProfile(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    avatar_storage_key: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     contact_phone: Mapped[Optional[str]] = mapped_column(String(64))
     company_description: Mapped[Optional[str]] = mapped_column(Text)
     approval_status: Mapped[HRApprovalStatus] = mapped_column(Enum(HRApprovalStatus), default=HRApprovalStatus.pending)

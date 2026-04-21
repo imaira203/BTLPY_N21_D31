@@ -3423,6 +3423,229 @@ class UserDashboard:
         lo.addLayout(grid)
         return card
 
+    # ── Editable card: icon header + stacked or grid fields ───
+    def _prof_editable_card(self, icon_svg: str, accent: str,
+                            title: str, fields: list,
+                            cols: int = 1) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame{background:white; border:1px solid #e5e7eb;"
+            "border-radius:16px;}"
+        )
+        _shadow(card, 8, 3, 10)
+        lo = QVBoxLayout(card)
+        lo.setContentsMargins(24, 20, 24, 24)
+        lo.setSpacing(16)
+
+        # ── Card title row ─────────────────────────────────────
+        title_row = QHBoxLayout()
+        title_row.setSpacing(12)
+        title_row.setContentsMargins(0, 0, 0, 0)
+
+        ic_bg = QFrame()
+        ic_bg.setFixedSize(36, 36)
+        ic_bg.setStyleSheet(
+            f"background:{accent}20; border-radius:10px;"
+        )
+        ic_lo = QHBoxLayout(ic_bg)
+        ic_lo.setContentsMargins(0, 0, 0, 0)
+        ic_lbl = QLabel()
+        ic_lbl.setFixedSize(20, 20)
+        ic_lbl.setAlignment(Qt.AlignCenter)
+        ic_lbl.setStyleSheet("background:transparent;")
+        ic_lbl.setPixmap(_svg_pm(icon_svg, 18, accent))
+        ic_lo.addWidget(ic_lbl, 0, Qt.AlignCenter)
+
+        t_lbl = QLabel(title)
+        t_lbl.setStyleSheet(
+            f"color:{_TXT_H}; font-size:15px; font-weight:700;"
+        )
+        title_row.addWidget(ic_bg)
+        title_row.addWidget(t_lbl)
+        title_row.addStretch()
+        lo.addLayout(title_row)
+
+        # ── Fields ─────────────────────────────────────────────
+        if cols == 1:
+            for lbl, val, vtype in fields:
+                ef = _EditableField(
+                    label=lbl, value=val, validator=vtype,
+                    on_save=self._on_profile_field_saved
+                )
+                self._prof_field_refs.append(ef)
+                lo.addWidget(ef)
+        else:
+            grid = QGridLayout()
+            grid.setHorizontalSpacing(14)
+            grid.setVerticalSpacing(14)
+            for i, (lbl, val, vtype) in enumerate(fields):
+                ef = _EditableField(
+                    label=lbl, value=val, validator=vtype,
+                    on_save=self._on_profile_field_saved
+                )
+                self._prof_field_refs.append(ef)
+                grid.addWidget(ef, i // cols, i % cols)
+            lo.addLayout(grid)
+        return card
+
+    # ── Callbacks ─────────────────────────────────────────────
+    def _on_profile_field_saved(self, label: str, value: str) -> None:
+        self._update_profile_progress()
+        self._update_profile_save_status()
+
+    def _update_profile_progress(self) -> None:
+        if not hasattr(self, "_prof_field_refs"):
+            return
+        total  = max(len(self._prof_field_refs), 1)
+        filled = sum(
+            1 for ef in self._prof_field_refs if ef.get_value().strip()
+        )
+        pct = round(filled / total * 100)
+
+        self._prof_progress.setRange(0, total)
+        self._prof_progress.setValue(filled)
+        self._prog_count_lbl.setText(f"{filled}/{total} mục đã hoàn thành")
+
+        if hasattr(self, "_prof_pct_lbl"):
+            self._prof_pct_lbl.setText(f"{pct}%")
+
+        remaining = total - filled
+        if remaining == 0:
+            self._prof_progress.setStyleSheet(
+                f"QProgressBar{{background:#e5e7eb; border-radius:5px; border:none;}}"
+                f"QProgressBar::chunk{{background:{_BLUE}; border-radius:5px;}}"
+            )
+            if hasattr(self, "_prog_status_badge"):
+                self._prog_status_badge.setText("Tuyệt vời! 🎉")
+                self._prog_status_badge.setStyleSheet(
+                    "background:#d1fae5; color:#065f46; border-radius:12px;"
+                    "padding:0 12px; font-size:12px; font-weight:700;"
+                )
+            if hasattr(self, "_prof_pct_lbl"):
+                self._prof_pct_lbl.setStyleSheet(
+                    f"color:{_BLUE}; font-size:18px; font-weight:800;"
+                )
+        elif pct >= 50:
+            self._prof_progress.setStyleSheet(
+                f"QProgressBar{{background:#e5e7eb; border-radius:5px; border:none;}}"
+                f"QProgressBar::chunk{{background:{_BLUE}; border-radius:5px;}}"
+            )
+            if hasattr(self, "_prog_status_badge"):
+                self._prog_status_badge.setText(f"Đang hoàn thiện · {pct}%")
+                self._prog_status_badge.setStyleSheet(
+                    "background:#fef3c7; color:#92400e; border-radius:12px;"
+                    "padding:0 12px; font-size:12px; font-weight:700;"
+                )
+        else:
+            self._prof_progress.setStyleSheet(
+                f"QProgressBar{{background:#e5e7eb; border-radius:5px; border:none;}}"
+                f"QProgressBar::chunk{{background:#f59e0b; border-radius:5px;}}"
+            )
+            if hasattr(self, "_prog_status_badge"):
+                self._prog_status_badge.setText(f"Cần bổ sung · {pct}%")
+                self._prog_status_badge.setStyleSheet(
+                    "background:#fee2e2; color:#991b1b; border-radius:12px;"
+                    "padding:0 12px; font-size:12px; font-weight:700;"
+                )
+
+    def _update_profile_save_status(self) -> None:
+        if not hasattr(self, "_save_status_lbl"):
+            return
+        now = datetime.now().strftime("%H:%M")
+        self._save_status_lbl.setText(f"✓ Đã lưu {now}")
+        self._save_status_lbl.setStyleSheet(
+            "color:#10b981; font-size:10px; font-weight:600;"
+        )
+        def _fade():
+            if hasattr(self, "_save_status_lbl"):
+                self._save_status_lbl.setStyleSheet(
+                    f"color:{_TXT_M}; font-size:10px;"
+                )
+        QTimer.singleShot(3000, _fade)
+
+    # ── Stats chip with progress bar ──────────────────────────
+    def _prof_stat_chip(self, val: str, label: str,
+                        color: str, pct: int) -> QFrame:
+        f = QFrame()
+        f.setStyleSheet(
+            "QFrame{background:white; border:1px solid #eaecf0;"
+            "border-radius:14px;}"
+        )
+        f.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        _shadow(f, 6, 2, 8)
+
+        lo = QVBoxLayout(f)
+        lo.setContentsMargins(14, 12, 14, 12)
+        lo.setSpacing(5)
+
+        # Number + color dot
+        top = QHBoxLayout()
+        top.setSpacing(6)
+        top.setContentsMargins(0, 0, 0, 0)
+        num = QLabel(val)
+        num.setStyleSheet(
+            f"color:{color}; font-size:22px; font-weight:800;"
+        )
+        dot = QFrame()
+        dot.setFixedSize(8, 8)
+        dot.setStyleSheet(f"background:{color}; border-radius:4px;")
+        top.addWidget(num)
+        top.addStretch()
+        top.addWidget(dot, 0, Qt.AlignVCenter)
+
+        lbl_w = QLabel(label)
+        lbl_w.setStyleSheet(
+            f"color:{_TXT_M}; font-size:11px; font-weight:500;"
+        )
+
+        # Progress bar
+        prog = QProgressBar()
+        prog.setFixedHeight(4)
+        prog.setRange(0, 100)
+        prog.setValue(pct)
+        prog.setTextVisible(False)
+        prog.setStyleSheet(
+            "QProgressBar{background:#f1f5f9; border-radius:2px; border:none;}"
+            f"QProgressBar::chunk{{background:{color}; border-radius:2px;}}"
+        )
+
+        lo.addLayout(top)
+        lo.addWidget(lbl_w)
+        lo.addWidget(prog)
+        return f
+
+    # ── Section card wrapper ───────────────────────────────────
+    def _prof_section_card(self, icon_svg: str, color: str,
+                           title: str, fields: list) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame{background:#f8fafc; border:1px solid #eaecf0;"
+            "border-radius:16px;}"
+        )
+
+        lo = QVBoxLayout(card)
+        lo.setContentsMargins(20, 16, 20, 20)
+        lo.setSpacing(14)
+
+        lo.addWidget(self._prof_section_title(icon_svg, color, title))
+
+        div = QFrame()
+        div.setFrameShape(QFrame.HLine)
+        div.setStyleSheet("background:#e4e7eb;")
+        div.setFixedHeight(1)
+        lo.addWidget(div)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(10)
+        for i, (fi, fc, lbl, fval) in enumerate(fields):
+            grid.addWidget(
+                self._prof_field(fi, fc, lbl, fval),
+                i // 2, i % 2
+            )
+        lo.addLayout(grid)
+        return card
+
     def _prof_section_title(self, icon_svg: str, color: str,
                             title: str) -> QWidget:
         w = QWidget()
@@ -3570,6 +3793,17 @@ class UserDashboard:
                 j for j in _JOBS_DATA
                 if not q or q in j[0].lower() or q in j[1].lower() or q in j[4].lower()
             ]
+
+        if not jobs:
+            empty = QLabel(
+                "Chưa có việc làm đã lưu" if is_saved else "Không tìm thấy việc làm phù hợp"
+            )
+            empty.setAlignment(Qt.AlignCenter)
+            empty.setStyleSheet(
+                f"color:{_TXT_M}; font-size:13px; padding:48px;"
+            )
+            grid.addWidget(empty, 0, 0, 1, 2)
+            return
 
         if not jobs:
             empty = QLabel(

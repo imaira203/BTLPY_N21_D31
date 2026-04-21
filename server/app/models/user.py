@@ -25,6 +25,8 @@ class User(Base):
     hr_profile: Mapped[Optional["HRProfile"]] = relationship(back_populates="user", uselist=False)
     candidate_profile: Mapped[Optional["CandidateProfile"]] = relationship(back_populates="user", uselist=False)
     candidate_subscription: Mapped[Optional["CandidateSubscription"]] = relationship(back_populates="candidate", uselist=False)
+    subscription_payments: Mapped[List["CandidateSubscriptionPayment"]] = relationship(back_populates="candidate")
+    saved_jobs: Mapped[List["CandidateSavedJob"]] = relationship(back_populates="candidate")
     cvs: Mapped[List["CVDocument"]] = relationship(back_populates="user")
     jobs: Mapped[List["Job"]] = relationship(back_populates="hr_user")
     applications: Mapped[List["JobApplication"]] = relationship(back_populates="candidate")
