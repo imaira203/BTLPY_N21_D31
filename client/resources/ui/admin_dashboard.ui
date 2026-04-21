@@ -92,6 +92,66 @@ QPushButton.navBtn:checked {
     font-weight: 800;
     border-radius: 20px;
 }
+
+/* ── COMBOBOX DROPDOWN STYLING ────────────────────────────────── */
+#monthFilter {
+    background-color: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1E293B;
+    height: 40px;
+}
+
+#monthFilter:hover {
+    border: 1.5px solid #CBD5E1;
+}
+
+#monthFilter:focus {
+    border: 2px solid #6366F1;
+    background-color: #FFFFFF;
+    outline: none;
+}
+
+#monthFilter::drop-down {
+    border: none;
+    width: 32px;
+    background: transparent;
+}
+
+#monthFilter::down-arrow {
+    image: none;
+    width: 0px;
+}
+
+#monthFilter QAbstractItemView {
+    background-color: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+    color: #1E293B;
+    margin-top: 4px;
+    outline: none;
+}
+
+#monthFilter QAbstractItemView::item {
+    padding: 10px 14px;
+    min-height: 36px;
+    color: #475569;
+    font-weight: 500;
+}
+
+#monthFilter QAbstractItemView::item:hover {
+    background-color: #F1F5F9;
+    color: #6366F1;
+}
+
+#monthFilter QAbstractItemView::item:selected {
+    background-color: #EEF2FF;
+    color: #6366F1;
+    font-weight: 600;
+}
    </string>
   </property>
   <widget class="QWidget" name="centralwidget">
@@ -445,48 +505,14 @@ QPushButton.navBtn:checked {
                   <property name="minimumSize">
                    <size>
                     <width>150</width>
-                    <height>36</height>
+                    <height>40</height>
                    </size>
                   </property>
                   <property name="maximumSize">
                    <size>
                     <width>200</width>
-                    <height>36</height>
+                    <height>40</height>
                    </size>
-                  </property>
-                  <property name="styleSheet">
-                   <string notr="true">
-                    QComboBox {
-                        background-color: #FFFFFF;
-                        border: 1.5px solid #E2E8F0;
-                        border-radius: 8px;
-                        padding: 4px 12px;
-                        font-size: 13px;
-                        font-weight: 500;
-                        color: #1E293B;
-                    }
-                    QComboBox:hover {
-                        border: 1.5px solid #CBD5E1;
-                    }
-                    QComboBox:focus {
-                        border: 2px solid #6366F1;
-                    }
-                    QComboBox::drop-down {
-                        border: none;
-                        width: 28px;
-                    }
-                    QComboBox QAbstractItemView {
-                        background-color: #FFFFFF;
-                        border: 1.5px solid #E2E8F0;
-                        border-radius: 8px;
-                        selection-background-color: #EEF2FF;
-                        selection-color: #6366F1;
-                    }
-                    QComboBox QAbstractItemView::item {
-                        padding: 8px 12px;
-                        min-height: 32px;
-                    }
-                   </string>
                   </property>
                   <item>
                    <property name="text">
