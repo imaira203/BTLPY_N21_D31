@@ -480,3 +480,60 @@ MOCK_PENDING_HR: list[dict] = [
 MOCK_PENDING_JOBS: list[dict] = [
     {"id": 701, "title": "Marketing Executive — chờ duyệt"},
 ]
+
+# ── Shared candidate application store (runtime, mutable) ─────────────────
+# Đây là nguồn chung giữa UserDashboard và HRDashboard.
+# User apply → add_candidate_application()
+# HR approve/reject → update_application_status()
+# User polls → đọc status mới nhất để cập nhật lịch sử
+
+CANDIDATE_APPLICATIONS: list[dict] = []
+_next_app_id = [10_000]   # mutable counter (list trick)
+
+
+def add_candidate_application(
+    title: str,
+    company: str,
+    location: str,
+    applied_at: str,
+    cv_name: str = "CV.pdf",
+    candidate_name: str = "Ứng viên",
+    candidate_email: str = "user@jobhub.vn",
+    job_id: int = 0,
+) -> dict:
+    """Thêm đơn ứng tuyển mới vào shared store. Trả về entry dict."""
+    app_id = _next_app_id[0]
+    _next_app_id[0] += 1
+    entry: dict = {
+        "application_id": app_id,
+        "job_id":          job_id,
+        "candidate_name":  candidate_name,
+        "candidate_email": candidate_email,
+        "job_title":       title,
+        "company_name":    company,
+        "location":        location,
+        "applied_at":      applied_at,
+        "status":          "pending",
+        "cv_name":         cv_name,
+    }
+    CANDIDATE_APPLICATIONS.append(entry)
+    return entry
+
+
+def update_application_status(app_id: int, new_status: str) -> bool:
+    """Cập nhật trạng thái đơn trong CANDIDATE_APPLICATIONS hoặc MOCK_HR_APPLICATIONS."""
+    for store in (CANDIDATE_APPLICATIONS, MOCK_HR_APPLICATIONS):
+        for app in store:
+            if app.get("application_id") == app_id:
+                app["status"] = new_status
+                return True
+    return False
+
+
+def get_application_status(app_id: int) -> str | None:
+    """Lấy trạng thái hiện tại của đơn theo app_id."""
+    for store in (CANDIDATE_APPLICATIONS, MOCK_HR_APPLICATIONS):
+        for app in store:
+            if app.get("application_id") == app_id:
+                return app.get("status")
+    return None

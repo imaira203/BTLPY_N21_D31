@@ -1765,9 +1765,13 @@ class HRDashboard:
         lo.addStretch()
         return wrap
 
+    def _all_applications(self) -> list:
+        """Kết hợp đơn mới từ candidate + mock cũ (mới nhất lên đầu)."""
+        return list(mock_data.CANDIDATE_APPLICATIONS) + list(mock_data.MOCK_HR_APPLICATIONS)
+
     def _fill_cands_table(self) -> None:
         self._cands_page = 0
-        self._render_cands(mock_data.MOCK_HR_APPLICATIONS)
+        self._render_cands(self._all_applications())
 
     def _filter_cands(self, text: str) -> None:
         kw = text.strip().lower()
@@ -1778,7 +1782,7 @@ class HRDashboard:
         status_filter = st_map.get(
             self._cands_status_filter.currentIndex()
         )
-        data = mock_data.MOCK_HR_APPLICATIONS
+        data = self._all_applications()
         if kw:
             data = [a for a in data
                     if kw in a.get("candidate_name", "").lower()
@@ -1955,22 +1959,13 @@ class HRDashboard:
         btn_rej = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Từ chối")
 
         btn_cv.clicked.connect(
-            lambda: QMessageBox.information(
-                self.win, "Xem CV", f"Mở tệp: {cv_name}"
-            )
+            lambda _=False, _aid=app_id: self._hr_set_status(_aid, "reviewed")
         )
         btn_ok.clicked.connect(
-            lambda: QMessageBox.information(
-                self.win, "Phê duyệt",
-                f"Đã phê duyệt đơn ứng tuyển #{app_id}"
-            )
+            lambda _=False, _aid=app_id: self._hr_set_status(_aid, "approved")
         )
         btn_rej.clicked.connect(
-            lambda: QMessageBox.question(
-                self.win, "Xác nhận từ chối",
-                f"Bạn có chắc muốn từ chối đơn #{app_id}?",
-                QMessageBox.Yes | QMessageBox.No,
-            )
+            lambda _=False, _aid=app_id: self._hr_set_status(_aid, "rejected")
         )
 
         lo.addWidget(btn_cv)
@@ -1978,6 +1973,45 @@ class HRDashboard:
         lo.addWidget(btn_rej)
         lo.addStretch()
         return wrap
+
+    # ── Status update (approve / reject / review) ─────────────
+    _STATUS_LABEL_VI: dict[str, str] = {
+        "reviewed": "Đã xem",
+        "approved": "Phê duyệt",
+        "rejected": "Từ chối",
+    }
+    _STATUS_CONFIRM: dict[str, str] = {
+        "reviewed": "Đánh dấu đã xem xét đơn #{id}?",
+        "approved": "Phê duyệt đơn ứng tuyển #{id}?",
+        "rejected": "Từ chối đơn ứng tuyển #{id}?",
+    }
+
+    def _hr_set_status(self, app_id: int, new_status: str) -> None:
+        """Cập nhật trạng thái đơn, refresh bảng, hiện thông báo."""
+        label_vi = self._STATUS_LABEL_VI.get(new_status, new_status)
+        confirm_msg = self._STATUS_CONFIRM.get(
+            new_status, "Xác nhận thay đổi trạng thái?"
+        ).replace("{id}", str(app_id))
+
+        reply = QMessageBox.question(
+            self.win, "Xác nhận", confirm_msg,
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        ok = mock_data.update_application_status(app_id, new_status)
+        if ok:
+            QMessageBox.information(
+                self.win, "Thành công",
+                f"Đã cập nhật trạng thái → {label_vi} (Đơn #{app_id})"
+            )
+        else:
+            QMessageBox.warning(
+                self.win, "Lỗi", f"Không tìm thấy đơn #{app_id}"
+            )
+        # Refresh table với dữ liệu mới nhất
+        self._fill_cands_table()
 
     # ── pagination ────────────────────────────────────────────
     def _update_cands_pagination(self, n_pages: int, total: int) -> None:
