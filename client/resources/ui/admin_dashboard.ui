@@ -456,36 +456,70 @@ QPushButton.navBtn:checked {
                   </property>
                   <property name="styleSheet">
                    <string notr="true">
-                    QComboBox {
-                        background-color: #FFFFFF;
-                        border: 1.5px solid #E2E8F0;
-                        border-radius: 8px;
-                        padding: 4px 12px;
-                        font-size: 13px;
-                        font-weight: 500;
-                        color: #1E293B;
-                    }
-                    QComboBox:hover {
-                        border: 1.5px solid #CBD5E1;
-                    }
-                    QComboBox:focus {
-                        border: 2px solid #6366F1;
-                    }
-                    QComboBox::drop-down {
-                        border: none;
-                        width: 28px;
-                    }
-                    QComboBox QAbstractItemView {
-                        background-color: #FFFFFF;
-                        border: 1.5px solid #E2E8F0;
-                        border-radius: 8px;
-                        selection-background-color: #EEF2FF;
-                        selection-color: #6366F1;
-                    }
-                    QComboBox QAbstractItemView::item {
-                        padding: 8px 12px;
-                        min-height: 32px;
-                    }
+/* Main ComboBox Styling */
+QComboBox {
+    background-color: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 8px 12px 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #1E293B;
+}
+
+QComboBox:hover {
+    border: 1.5px solid #94A3B8;
+    background-color: #F8FAFC;
+}
+
+QComboBox:focus {
+    border: 2px solid #6366F1;
+    background-color: #FFFFFF;
+}
+
+/* Dropdown arrow styling */
+QComboBox::drop-down {
+    border: none;
+    width: 32px;
+    padding-right: 8px;
+    background-color: transparent;
+}
+
+QComboBox::down-arrow {
+    image: none;
+    width: 18px;
+    height: 18px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+
+/* Dropdown list styling */
+QComboBox QAbstractItemView {
+    background-color: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 8px;
+    selection-background-color: #6366F1;
+    selection-color: #FFFFFF;
+    padding: 4px;
+    margin-top: 2px;
+    outline: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Dropdown items styling */
+QComboBox QAbstractItemView::item {
+    padding: 10px 14px;
+    min-height: 38px;
+    border-radius: 6px;
+}
+
+QComboBox QAbstractItemView::item:hover {
+    background-color: #E0E7FF;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background-color: #6366F1;
+    color: #FFFFFF;
+}
                    </string>
                   </property>
                   <item>
