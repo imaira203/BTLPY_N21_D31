@@ -218,6 +218,7 @@ def hr_detail(
         "full_name": target.full_name,
         "is_active": target.is_active,
         "company_name": hp.company_name,
+        "avatar_storage_key": hp.avatar_storage_key,
         "contact_phone": hp.contact_phone,
         "company_description": hp.company_description,
         "approval_status": hp.approval_status.value,
