@@ -32,6 +32,45 @@ def my_hr_profile(user: Annotated[User, Depends(get_current_user)]) -> HRProfile
     return user.hr_profile
 
 
+@router.post("/me/hr-avatar", response_model=HRProfileOut)
+async def upload_my_hr_avatar(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    file: UploadFile = File(...),
+) -> HRProfileOut:
+    if user.role != UserRole.hr or user.hr_profile is None:
+        raise HTTPException(status_code=403, detail="HR only")
+    ext = Path(file.filename or "").suffix[:16].lower()
+    if not ext:
+        ext = ".jpg"
+    if ext not in _AVATAR_EXT:
+        raise HTTPException(status_code=400, detail="Chỉ chấp nhận ảnh: jpg, jpeg, png, gif, webp")
+    sub = settings.subdir_for("hr_assets")
+    fname = f"hr_{user.id}_{uuid.uuid4().hex}{ext}"
+    storage_key = relative_key(sub, fname)
+    dest = absolute_path(settings, storage_key)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    content = await file.read()
+    if len(content) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large")
+
+    old_key = user.hr_profile.avatar_storage_key
+    dest.write_bytes(content)
+    user.hr_profile.avatar_storage_key = storage_key
+    db.commit()
+    db.refresh(user.hr_profile)
+
+    if old_key and old_key != storage_key:
+        old_path = resolve_existing_file(settings, old_key)
+        if old_path and old_path.is_file():
+            try:
+                old_path.unlink()
+            except OSError:
+                pass
+
+    return user.hr_profile
+
+
 @router.get("/me/candidate-profile", response_model=CandidateProfileOut | None)
 def my_candidate_profile(
     user: Annotated[User, Depends(get_current_user)],

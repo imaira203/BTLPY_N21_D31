@@ -14,7 +14,9 @@ from ..db import get_db
 from ..deps import get_current_user
 from ..models import (
     CVDocument,
+    CandidateSavedJob,
     CandidateSubscription,
+    CandidateSubscriptionPayment,
     HRProfile,
     Invoice,
     InvoiceStatus,
@@ -27,7 +29,16 @@ from ..models import (
     UserRole,
 )
 from ..runtime_cache import runtime_cache
-from ..schemas import CandidateSubscriptionOut, InvoiceOut, ProUpgradeIn, ApplyIn, CVOut, JobOut
+from ..schemas import (
+    ApplyIn,
+    CandidateSubscriptionOut,
+    CandidateSubscriptionPaymentOut,
+    CVOut,
+    InvoiceOut,
+    JobOut,
+    ProUpgradeIn,
+    SavedJobOut,
+)
 from ..storage_paths import absolute_path, relative_key, resolve_existing_file
 
 router = APIRouter(prefix="/candidate", tags=["candidate"])
@@ -204,6 +215,85 @@ def apply_job(
     return {"ok": True, "application_id": app.id}
 
 
+@router.post("/jobs/{job_id}/save", response_model=SavedJobOut)
+def save_job(
+    job_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CandidateSavedJob:
+    _require_candidate(user)
+    job = db.get(Job, job_id)
+    if not job or job.status != JobStatus.published:
+        raise HTTPException(status_code=404, detail="Job not found")
+    existing = db.scalar(
+        select(CandidateSavedJob).where(
+            CandidateSavedJob.candidate_id == user.id,
+            CandidateSavedJob.job_id == job_id,
+        )
+    )
+    if existing:
+        return existing
+    saved_job = CandidateSavedJob(candidate_id=user.id, job_id=job_id)
+    db.add(saved_job)
+    db.commit()
+    db.refresh(saved_job)
+    return saved_job
+
+
+@router.delete("/jobs/{job_id}/save")
+def unsave_job(
+    job_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_candidate(user)
+    saved = db.scalar(
+        select(CandidateSavedJob).where(
+            CandidateSavedJob.candidate_id == user.id,
+            CandidateSavedJob.job_id == job_id,
+        )
+    )
+    if not saved:
+        return {"ok": True}
+    db.delete(saved)
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/jobs/saved", response_model=list[JobOut])
+def list_saved_jobs(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[JobOut]:
+    _require_candidate(user)
+    rows = db.execute(
+        select(Job, HRProfile.company_name)
+        .join(CandidateSavedJob, CandidateSavedJob.job_id == Job.id)
+        .outerjoin(HRProfile, HRProfile.user_id == Job.hr_user_id)
+        .where(CandidateSavedJob.candidate_id == user.id, Job.status == JobStatus.published)
+        .order_by(CandidateSavedJob.created_at.desc())
+    ).all()
+    out: list[JobOut] = []
+    for job, company_name in rows:
+        out.append(
+            JobOut(
+                id=job.id,
+                hr_user_id=job.hr_user_id,
+                title=job.title,
+                description=job.description,
+                salary_text=job.salary_text,
+                avg_salary=job.avg_salary,
+                location=job.location,
+                job_type=job.job_type,
+                status=job.status,
+                admin_note=job.admin_note,
+                created_at=job.created_at,
+                company_name=company_name,
+            )
+        )
+    return out
+
+
 @router.get("/subscription", response_model=CandidateSubscriptionOut)
 def my_subscription(
     user: Annotated[User, Depends(get_current_user)],
@@ -274,10 +364,38 @@ def mark_candidate_invoice_paid(
         months = max(1, round(amount / max(1, settings.pro_monthly_price_vnd)))
         sub.status = SubscriptionStatus.active
         sub.pro_expires_at = current_start + timedelta(days=duration_days * months)
+        existing_payment = db.scalar(
+            select(CandidateSubscriptionPayment).where(CandidateSubscriptionPayment.invoice_id == invoice.id)
+        )
+        if not existing_payment:
+            db.add(
+                CandidateSubscriptionPayment(
+                    candidate_id=user.id,
+                    invoice_id=invoice.id,
+                    months=months,
+                    amount=invoice.amount,
+                    currency=invoice.currency,
+                    paid_at=invoice.paid_at or datetime.utcnow(),
+                )
+            )
         runtime_cache.upsert_subscription(sub)
     db.commit()
     db.refresh(invoice)
     return invoice
+
+
+@router.get("/subscription/payments", response_model=list[CandidateSubscriptionPaymentOut])
+def list_subscription_payments(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CandidateSubscriptionPayment]:
+    _require_candidate(user)
+    rows = db.scalars(
+        select(CandidateSubscriptionPayment)
+        .where(CandidateSubscriptionPayment.candidate_id == user.id)
+        .order_by(CandidateSubscriptionPayment.paid_at.desc(), CandidateSubscriptionPayment.id.desc())
+    ).all()
+    return list(rows)
 
 
 @router.get("/jobs/{job_id}/competitors")

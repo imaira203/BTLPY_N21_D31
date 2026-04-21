@@ -1,4 +1,6 @@
+from .candidate_saved_job import CandidateSavedJob
 from .candidate_subscription import CandidateSubscription
+from .candidate_subscription_payment import CandidateSubscriptionPayment
 from .candidate_profile import CandidateProfile
 from .cv_document import CVDocument
 from .enums import (
@@ -19,7 +21,9 @@ from .user import User
 __all__ = [
     "ApplicationStatus",
     "CandidateProfile",
+    "CandidateSavedJob",
     "CandidateSubscription",
+    "CandidateSubscriptionPayment",
     "CVDocument",
     "HRApprovalStatus",
     "HRProfile",
