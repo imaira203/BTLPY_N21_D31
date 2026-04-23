@@ -217,36 +217,102 @@ MOCK_HR_DASHBOARD: dict = {
 
 MOCK_HR_ACTIVITY: list[dict] = [
     {
+        "type": "apply",
         "dot_color": "#6366f1",
-        "text": "Nguyễn Văn A ứng tuyển cho Senior Developer",
+        "text": "Nguyễn Văn A ứng tuyển cho Senior Backend Engineer",
+        "time": "30 phút trước",
+        "group": "today",
+        "bold": True,
+        "action_label": "Xem hồ sơ",
+        "action_page": 3,
+    },
+    {
+        "type": "apply",
+        "dot_color": "#6366f1",
+        "text": "Trần Thị Bình ứng tuyển cho Product Designer",
         "time": "1 giờ trước",
+        "group": "today",
         "bold": True,
+        "action_label": "Xem hồ sơ",
+        "action_page": 3,
     },
     {
-        "dot_color": "#94a3b8",
-        "text": "Lịch phỏng vấn với Trần Thị B",
-        "time": "10:00 AM mai",
+        "type": "interview",
+        "dot_color": "#0ea5e9",
+        "text": "Lịch phỏng vấn với Lê Hoàng Cường lúc 14:00",
+        "time": "10:00 sáng nay",
+        "group": "today",
         "bold": False,
+        "action_label": "Xem lịch",
+        "action_page": 3,
     },
     {
-        "dot_color": "#6366f1",
-        "text": "Hồ sơ của Lê Thanh C đã được cập nhật",
-        "time": "2 giờ trước",
-        "bold": True,
-    },
-    {
+        "type": "approved",
         "dot_color": "#10b981",
-        "text": "Tin đăng 'Frontend Developer' được duyệt",
+        "text": "Tin đăng 'Senior Backend Engineer' được duyệt",
         "time": "Hôm qua 17:30",
+        "group": "yesterday",
         "bold": False,
+        "action_label": "Xem tin",
+        "action_page": 2,
     },
     {
-        "dot_color": "#f59e0b",
-        "text": "Phạm Minh D đã xem hồ sơ của bạn",
-        "time": "3 giờ trước",
+        "type": "view",
+        "dot_color": "#94a3b8",
+        "text": "Phạm Minh Đức đã xem tin tuyển dụng DevOps",
+        "time": "Hôm qua 15:20",
+        "group": "yesterday",
         "bold": False,
+        "action_label": "Chi tiết",
+        "action_page": 2,
+    },
+    {
+        "type": "update",
+        "dot_color": "#f59e0b",
+        "text": "Hồ sơ của Võ Thị Em đã được cập nhật kỹ năng",
+        "time": "Hôm qua 09:00",
+        "group": "yesterday",
+        "bold": False,
+        "action_label": "Xem hồ sơ",
+        "action_page": 3,
+    },
+    {
+        "type": "apply",
+        "dot_color": "#6366f1",
+        "text": "Hoàng Anh Tuấn ứng tuyển cho Data Analyst",
+        "time": "T2, 09/04",
+        "group": "week",
+        "bold": False,
+        "action_label": "Xem hồ sơ",
+        "action_page": 3,
+    },
+    {
+        "type": "approved",
+        "dot_color": "#10b981",
+        "text": "Tin đăng 'UX Researcher' được phê duyệt đăng",
+        "time": "T3, 08/04",
+        "group": "week",
+        "bold": False,
+        "action_label": "Xem tin",
+        "action_page": 2,
     },
 ]
+
+# ── Chart data for different time periods ──────────────────────────────────
+MOCK_HR_CHART_DATA: dict = {
+    "week": {
+        "labels": ["T2", "T3", "T4", "T5", "T6", "T7", "CN"],
+        "values": [18, 24, 31, 27, 35, 22, 14],
+    },
+    "month": {
+        "labels": ["Tuần 1", "Tuần 2", "Tuần 3", "Tuần 4"],
+        "values": [68, 85, 97, 74],
+    },
+    "quarter": {
+        "labels": ["Tháng 1", "Tháng 2", "Tháng 3"],
+        "values": [210, 265, 240],
+    },
+}
 
 MOCK_HR_JOBS: list[dict] = [
     {
@@ -481,6 +547,262 @@ MOCK_PENDING_JOBS: list[dict] = [
     {"id": 701, "title": "Marketing Executive — chờ duyệt"},
 ]
 
+# ── Shared Job Store (runtime, mutable) ───────────────────────────────────
+# HR đăng → status "draft" hoặc "pending_approval"
+# Admin duyệt → "published"; Admin từ chối → "rejected"
+# User chỉ thấy job status="published"
+
+JOB_STORE: list[dict] = [
+    {
+        "id": 501, "title": "Senior Backend Engineer",
+        "company_name": "TechCorp Vietnam",
+        "department": "Kỹ thuật & Công nghệ",
+        "location": "Hà Nội",
+        "salary_text": "2000 - 3000 USD",
+        "job_type": "Toàn thời gian",
+        "level": "Trưởng nhóm",
+        "count": "2",
+        "deadline": "31/05/2026",
+        "description": "Phát triển và duy trì hệ thống backend hiệu suất cao.",
+        "applicants_count": 24, "created_at": "15/10/2023",
+        "status": "published", "hr_id": 1,
+    },
+    {
+        "id": 502, "title": "Product Designer (UI/UX)",
+        "company_name": "Design Studio",
+        "department": "Thiết kế",
+        "location": "Đà Nẵng",
+        "salary_text": "1000 - 1800 USD",
+        "job_type": "Remote",
+        "level": "Nhân viên",
+        "count": "1",
+        "deadline": "30/05/2026",
+        "description": "Thiết kế trải nghiệm người dùng cho sản phẩm số.",
+        "applicants_count": 18, "created_at": "14/10/2023",
+        "status": "draft", "hr_id": 3,
+    },
+    {
+        "id": 503, "title": "Marketing Manager",
+        "company_name": "StartUp Innovation",
+        "department": "Marketing",
+        "location": "TP. Hồ Chí Minh",
+        "salary_text": "1500 - 2500 USD",
+        "job_type": "Toàn thời gian",
+        "level": "Quản lý",
+        "count": "1",
+        "deadline": "15/05/2026",
+        "description": "Lên chiến lược và thực thi các chiến dịch marketing.",
+        "applicants_count": 0, "created_at": "10/10/2023",
+        "status": "published", "hr_id": 2,
+    },
+    {
+        "id": 504, "title": "Content Writer",
+        "company_name": "Digital Agency",
+        "department": "Marketing",
+        "location": "Hà Nội",
+        "salary_text": "800 - 1200 USD",
+        "job_type": "Bán thời gian",
+        "level": "Nhân viên",
+        "count": "3",
+        "deadline": "01/05/2026",
+        "description": "Viết nội dung sáng tạo cho blog, mạng xã hội và website.",
+        "applicants_count": 32, "created_at": "05/10/2023",
+        "status": "closed", "hr_id": 4,
+    },
+    {
+        "id": 505, "title": "Data Analyst",
+        "company_name": "Cloud Solutions",
+        "department": "Kinh doanh",
+        "location": "TP. Hồ Chí Minh",
+        "salary_text": "1800 - 2800 USD",
+        "job_type": "Toàn thời gian",
+        "level": "Nhân viên",
+        "count": "2",
+        "deadline": "20/05/2026",
+        "description": "Phân tích dữ liệu kinh doanh, xây dựng báo cáo và dashboard.",
+        "applicants_count": 11, "created_at": "28/09/2023",
+        "status": "published", "hr_id": 5,
+    },
+    {
+        "id": 506, "title": "DevOps Engineer",
+        "company_name": "Cloud Solutions",
+        "department": "Kỹ thuật & Công nghệ",
+        "location": "Remote",
+        "salary_text": "2200 - 3200 USD",
+        "job_type": "Remote",
+        "level": "Nhân viên",
+        "count": "1",
+        "deadline": "25/05/2026",
+        "description": "Quản lý hạ tầng cloud, CI/CD pipeline và container orchestration.",
+        "applicants_count": 7, "created_at": "20/09/2023",
+        "status": "pending_approval", "hr_id": 5,
+    },
+    {
+        "id": 507, "title": "UX Researcher",
+        "company_name": "Design Studio",
+        "department": "Thiết kế",
+        "location": "Hà Nội",
+        "salary_text": "1200 - 2000 USD",
+        "job_type": "Toàn thời gian",
+        "level": "Nhân viên",
+        "count": "1",
+        "deadline": "18/05/2026",
+        "description": "Nghiên cứu người dùng, phân tích hành vi và đề xuất cải tiến UX.",
+        "applicants_count": 14, "created_at": "15/09/2023",
+        "status": "published", "hr_id": 3,
+    },
+    {
+        "id": 508, "title": "Backend Engineer (Python)",
+        "company_name": "TechCorp Vietnam",
+        "department": "Kỹ thuật & Công nghệ",
+        "location": "Hà Nội",
+        "salary_text": "1500 - 2500 USD",
+        "job_type": "Toàn thời gian",
+        "level": "Nhân viên",
+        "count": "2",
+        "deadline": "30/05/2026",
+        "description": "Xây dựng API RESTful với Python/FastAPI, tích hợp PostgreSQL.",
+        "applicants_count": 22, "created_at": "10/09/2023",
+        "status": "draft", "hr_id": 1,
+    },
+    {
+        "id": 509, "title": "Sales Manager",
+        "company_name": "StartUp Innovation",
+        "department": "Kinh doanh",
+        "location": "TP. Hồ Chí Minh",
+        "salary_text": "2000 - 3500 USD",
+        "job_type": "Toàn thời gian",
+        "level": "Quản lý",
+        "count": "1",
+        "deadline": "10/05/2026",
+        "description": "Quản lý đội ngũ bán hàng, phát triển chiến lược doanh thu.",
+        "applicants_count": 0, "created_at": "05/09/2023",
+        "status": "pending_approval", "hr_id": 2,
+    },
+    {
+        "id": 510, "title": "Senior Frontend Developer",
+        "company_name": "TechCorp Vietnam",
+        "department": "Kỹ thuật & Công nghệ",
+        "location": "Hà Nội",
+        "salary_text": "2000 - 3000 USD",
+        "job_type": "Toàn thời gian",
+        "level": "Trưởng nhóm",
+        "count": "1",
+        "deadline": "28/05/2026",
+        "description": "Xây dựng giao diện web hiện đại với React, TypeScript.",
+        "applicants_count": 19, "created_at": "01/04/2026",
+        "status": "published", "hr_id": 1,
+    },
+    {
+        "id": 511, "title": "Full Stack Developer",
+        "company_name": "Digital Agency",
+        "department": "Kỹ thuật & Công nghệ",
+        "location": "Đà Nẵng",
+        "salary_text": "2500 - 4000 USD",
+        "job_type": "Toàn thời gian",
+        "level": "Nhân viên",
+        "count": "2",
+        "deadline": "05/06/2026",
+        "description": "Phát triển cả frontend lẫn backend cho các sản phẩm web.",
+        "applicants_count": 15, "created_at": "03/04/2026",
+        "status": "published", "hr_id": 4,
+    },
+]
+_next_job_id = [600]
+
+
+def add_job(
+    title: str,
+    company_name: str,
+    department: str,
+    location: str,
+    salary_text: str,
+    job_type: str,
+    level: str = "Nhân viên",
+    count: str = "1",
+    deadline: str = "",
+    description: str = "",
+    hr_id: int = 1,
+    draft: bool = False,
+) -> dict:
+    """HR tạo tin mới. draft=True → status 'draft', False → 'pending_approval'."""
+    from datetime import datetime
+    job_id = _next_job_id[0]
+    _next_job_id[0] += 1
+    entry: dict = {
+        "id":              job_id,
+        "title":           title,
+        "company_name":    company_name,
+        "department":      department,
+        "location":        location,
+        "salary_text":     salary_text,
+        "job_type":        job_type,
+        "level":           level,
+        "count":           count,
+        "deadline":        deadline,
+        "description":     description,
+        "applicants_count": 0,
+        "created_at":      datetime.now().strftime("%d/%m/%Y"),
+        "status":          "draft" if draft else "pending_approval",
+        "hr_id":           hr_id,
+    }
+    JOB_STORE.append(entry)
+    return entry
+
+
+def update_job_status(job_id: int, new_status: str) -> bool:
+    """Admin duyệt/từ chối tin đăng. new_status: 'published' hoặc 'rejected'."""
+    for job in JOB_STORE:
+        if job.get("id") == job_id:
+            job["status"] = new_status
+            # ── Đồng bộ sang HR activity feed ─────────────────
+            job_title = job.get("title", f"#{job_id}")
+            if new_status == "published":
+                add_hr_activity(
+                    act_type="approved",
+                    text=f"✅ Admin đã duyệt tin '{job_title}' — đang hiển thị công khai",
+                    action_label="Xem tin",
+                    action_page=2,
+                    dot_color="#10b981",
+                )
+            elif new_status == "rejected":
+                add_hr_activity(
+                    act_type="update",
+                    text=f"❌ Admin từ chối tin '{job_title}' — vui lòng kiểm tra lại",
+                    action_label="Xem tin",
+                    action_page=2,
+                    dot_color="#ef4444",
+                )
+            return True
+    return False
+
+
+def delete_job(job_id: int) -> bool:
+    """HR xoá tin đăng theo job_id."""
+    for i, job in enumerate(JOB_STORE):
+        if job.get("id") == job_id:
+            JOB_STORE.pop(i)
+            return True
+    return False
+
+
+def get_public_jobs() -> list[dict]:
+    """Trả về danh sách tin đăng đang tuyển (status='published') cho ứng viên."""
+    return [j for j in JOB_STORE if j.get("status") == "published"]
+
+
+def get_pending_jobs() -> list[dict]:
+    """Trả về tin đăng chờ admin duyệt."""
+    return [j for j in JOB_STORE if j.get("status") == "pending_approval"]
+
+
+def get_hr_jobs(hr_id: int | None = None) -> list[dict]:
+    """Trả về tất cả tin của HR. hr_id=None → trả tất cả."""
+    if hr_id is None:
+        return list(JOB_STORE)
+    return [j for j in JOB_STORE if j.get("hr_id") == hr_id]
+
+
 # ── Shared candidate application store (runtime, mutable) ─────────────────
 # Đây là nguồn chung giữa UserDashboard và HRDashboard.
 # User apply → add_candidate_application()
@@ -489,6 +811,35 @@ MOCK_PENDING_JOBS: list[dict] = [
 
 CANDIDATE_APPLICATIONS: list[dict] = []
 _next_app_id = [10_000]   # mutable counter (list trick)
+
+
+# ── HR Activity Store (runtime) ──────────────────────────────────────────────
+# Các hoạt động thực tế từ User (ứng tuyển) và Admin (duyệt/từ chối tin)
+# được push vào đây để HR thấy ngay trên dashboard.
+
+HR_ACTIVITY_STORE: list[dict] = []
+
+
+def add_hr_activity(
+    act_type: str,
+    text: str,
+    action_label: str = "Xem",
+    action_page: int = 3,
+    dot_color: str = "#6366f1",
+) -> None:
+    """Thêm hoạt động vào HR activity feed từ các role khác."""
+    from datetime import datetime as _dt
+    entry: dict = {
+        "type":         act_type,
+        "dot_color":    dot_color,
+        "text":         text,
+        "time":         _dt.now().strftime("%H:%M, %d/%m"),
+        "group":        "today",
+        "bold":         True,
+        "action_label": action_label,
+        "action_page":  action_page,
+    }
+    HR_ACTIVITY_STORE.insert(0, entry)   # mới nhất lên đầu
 
 
 def add_candidate_application(
@@ -517,6 +868,14 @@ def add_candidate_application(
         "cv_name":         cv_name,
     }
     CANDIDATE_APPLICATIONS.append(entry)
+    # ── Đồng bộ sang HR activity feed ─────────────────────────
+    add_hr_activity(
+        act_type="apply",
+        text=f"{candidate_name} ứng tuyển cho {title} tại {company}",
+        action_label="Xem hồ sơ",
+        action_page=3,
+        dot_color="#6366f1",
+    )
     return entry
 
 
@@ -526,6 +885,33 @@ def update_application_status(app_id: int, new_status: str) -> bool:
         for app in store:
             if app.get("application_id") == app_id:
                 app["status"] = new_status
+                # ── Đồng bộ sang HR activity feed ─────────────
+                name  = app.get("candidate_name", "Ứng viên")
+                title = app.get("job_title", "")
+                if new_status == "approved":
+                    add_hr_activity(
+                        act_type="approved",
+                        text=f"🎉 {name} được phê duyệt cho vị trí {title}",
+                        action_label="Xem hồ sơ",
+                        action_page=3,
+                        dot_color="#10b981",
+                    )
+                elif new_status == "rejected":
+                    add_hr_activity(
+                        act_type="update",
+                        text=f"Từ chối hồ sơ {name} — vị trí {title}",
+                        action_label="Xem hồ sơ",
+                        action_page=3,
+                        dot_color="#ef4444",
+                    )
+                elif new_status == "reviewed":
+                    add_hr_activity(
+                        act_type="view",
+                        text=f"Đã xem xét hồ sơ của {name} ({title})",
+                        action_label="Xem hồ sơ",
+                        action_page=3,
+                        dot_color="#94a3b8",
+                    )
                 return True
     return False
 
