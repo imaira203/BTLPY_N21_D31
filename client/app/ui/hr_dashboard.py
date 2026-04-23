@@ -258,119 +258,130 @@ class _NavBtn(QWidget):
         self._cb = fn
 
 
+# ── helper: hex color → rgba() string (Qt CSS safe) ──────────
+def _rgba(hex_color: str, alpha: float = 0.12) -> str:
+    """Convert '#rrggbb' → 'rgba(r,g,b,alpha)' for Qt CSS."""
+    h = hex_color.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 # ══════════════════════════════════════════════════════════════
-#  METRIC CARD — glassmorphism dark + sparkline
+#  METRIC CARD — clean, no hover effect, proper rgba backgrounds
 # ══════════════════════════════════════════════════════════════
 class _MetricCard(QFrame):
+    """
+    Layout:
+    ┌──────────────────────────────────────┐
+    │ [icon 40px]              [sparkline] │
+    │                          [7 ngày qua]│
+    │ 36px bold number                     │
+    │ 11px gray label                      │
+    │ [subtle badge]                       │
+    └──────────────────────────────────────┘
+    Background: white  |  Border: very light  |  No hover change
+    """
+
     def __init__(self, icon_svg: str, icon_color: str, icon_bg: str,
                  label: str, value: str, hint: str,
-                 hint_color: str = "#34d399", hint_bg: str = "rgba(52,211,153,0.18)",
+                 hint_color: str = "#10b981", hint_bg: str = "#d1fae5",
                  glow_color: str = "#6366f1",
                  sparkline_data: list | None = None,
                  sparkline_color: str = "#818cf8",
                  parent=None):
         super().__init__(parent)
-        self._glow   = QColor(glow_color)
-        self._glow_a = 55
 
+        # Card: white bg, very light border, soft shadow — static (no hover)
         self.setStyleSheet(
-            f"QFrame{{background:{CARD_BG};border:1px solid {BORDER};"
-            "border-radius:20px;}}"
+            f"QFrame{{background:#ffffff;border:1px solid #f1f5f9;"
+            "border-radius:18px;}}"
         )
-        self.setMinimumWidth(190)
+        self.setMinimumWidth(180)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setFixedHeight(172)
+        self.setFixedHeight(164)
 
-        # Subtle shadow (light mode — neutral, not colored)
-        self._fx = QGraphicsDropShadowEffect(self)
-        self._fx.setBlurRadius(18)
-        self._fx.setOffset(0, 5)
-        self._fx.setColor(QColor(0, 0, 0, 16))
-        self.setGraphicsEffect(self._fx)
+        fx = QGraphicsDropShadowEffect(self)
+        fx.setBlurRadius(16)
+        fx.setOffset(0, 3)
+        fx.setColor(QColor(0, 0, 0, 12))
+        self.setGraphicsEffect(fx)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(22, 20, 22, 18)
+        root.setContentsMargins(20, 18, 20, 16)
         root.setSpacing(0)
 
-        # ── Row 1: Icon badge (left)  +  Sparkline (right) ──
+        # ── Top row: icon badge  |  sparkline ─────────────────
         top_row = QHBoxLayout()
         top_row.setSpacing(0)
         top_row.setContentsMargins(0, 0, 0, 0)
 
+        # Icon badge — rgba background (correct alpha, no ARGB confusion)
         badge = QFrame()
-        badge.setFixedSize(52, 52)
+        badge.setFixedSize(40, 40)
         badge.setStyleSheet(
-            f"background:{icon_bg};border-radius:16px;border:none;"
+            f"background:{_rgba(icon_color, 0.10)};border-radius:12px;border:none;"
         )
         b_lo = QHBoxLayout(badge)
         b_lo.setContentsMargins(0, 0, 0, 0)
         ic = QLabel()
         ic.setAlignment(Qt.AlignCenter)
-        ic.setPixmap(_svg_pm(icon_svg, 22, icon_color))
+        ic.setPixmap(_svg_pm(icon_svg, 18, icon_color))
         ic.setStyleSheet("background:transparent;border:none;")
         b_lo.addWidget(ic)
-
-        top_row.addWidget(badge, alignment=Qt.AlignVCenter)
+        top_row.addWidget(badge, 0, Qt.AlignVCenter | Qt.AlignLeft)
         top_row.addStretch()
 
+        # Sparkline + "7 ngày qua" label
         if sparkline_data and len(sparkline_data) >= 2:
+            sp_col = QVBoxLayout()
+            sp_col.setSpacing(2)
+            sp_col.setContentsMargins(0, 0, 0, 0)
             sp = _Sparkline(sparkline_data, sparkline_color)
-            top_row.addWidget(sp, alignment=Qt.AlignVCenter)
+            sp.setFixedSize(78, 36)
+            period_lbl = QLabel("7 ngày qua")
+            period_lbl.setAlignment(Qt.AlignRight)
+            period_lbl.setStyleSheet(
+                "color:#cbd5e1;font-size:9px;font-weight:500;"
+                "background:transparent;border:none;letter-spacing:0.3px;"
+            )
+            sp_col.addWidget(sp, 0, Qt.AlignRight)
+            sp_col.addWidget(period_lbl, 0, Qt.AlignRight)
+            top_row.addLayout(sp_col)
 
         root.addLayout(top_row)
-        root.addSpacing(12)
+        root.addSpacing(10)
 
-        # ── Row 2: Large value ───────────────────────────────
+        # ── Number — dominant ──────────────────────────────────
         val_lbl = QLabel(value)
         val_lbl.setStyleSheet(
-            f"color:{TXT_H};font-size:32px;font-weight:800;"
-            "background:transparent;border:none;letter-spacing:-0.5px;"
+            f"color:{TXT_H};font-size:36px;font-weight:800;"
+            "background:transparent;border:none;letter-spacing:-1px;"
         )
         root.addWidget(val_lbl)
         root.addSpacing(3)
 
-        # ── Row 3: Label ─────────────────────────────────────
+        # ── Label — quiet ──────────────────────────────────────
         lab_lbl = QLabel(label)
         lab_lbl.setStyleSheet(
-            f"color:{TXT_M};font-size:12px;font-weight:500;"
-            "background:transparent;border:none;"
+            "color:#94a3b8;font-size:11px;font-weight:400;"
+            "background:transparent;border:none;letter-spacing:0.2px;"
         )
         root.addWidget(lab_lbl)
-        root.addSpacing(14)
+        root.addSpacing(10)
 
-        # ── Row 4: Trend pill (left) ─────────────────────────
+        # ── Trend badge — subtle rgba tint ─────────────────────
         pill_row = QHBoxLayout()
         pill_row.setContentsMargins(0, 0, 0, 0)
         pill_row.setSpacing(0)
         hint_pill = QLabel(hint)
         hint_pill.setStyleSheet(
-            f"background:{hint_bg};color:{hint_color};"
+            f"background:{_rgba(icon_color, 0.10)};color:{icon_color};"
             "font-size:11px;font-weight:600;"
-            "border-radius:20px;padding:4px 12px;"
+            "border-radius:6px;padding:3px 10px;border:none;"
         )
-        pill_row.addWidget(hint_pill)
+        pill_row.addWidget(hint_pill, 0, Qt.AlignLeft)
         pill_row.addStretch()
         root.addLayout(pill_row)
-
-    def enterEvent(self, e):
-        self._fx.setBlurRadius(30)
-        self._fx.setOffset(0, 10)
-        self._fx.setColor(QColor(0, 0, 0, 28))
-        self.setStyleSheet(
-            f"QFrame{{background:{CARD_BG};border:1.5px solid #c7d2fe;"
-            "border-radius:20px;}}"
-        )
-        super().enterEvent(e)
-
-    def leaveEvent(self, e):
-        self._fx.setBlurRadius(18)
-        self._fx.setOffset(0, 5)
-        self._fx.setColor(QColor(0, 0, 0, 16))
-        self.setStyleSheet(
-            f"QFrame{{background:{CARD_BG};border:1px solid {BORDER};"
-            "border-radius:20px;}}"
-        )
-        super().leaveEvent(e)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -730,6 +741,183 @@ class HRDashboard:
 
         QTimer.singleShot(duration, _dismiss)
 
+    # ── global search popup ───────────────────────────────────
+    def _show_global_search_popup(self) -> None:
+        kw = self.search_input.text().strip().lower()
+        if not kw:
+            self._hide_global_search_popup()
+            return
+
+        # Search jobs
+        job_hits = [j for j in mock_data.JOB_STORE
+                    if kw in j.get("title", "").lower()
+                    or kw in j.get("department", "").lower()
+                    or kw in j.get("location", "").lower()
+                    or kw in j.get("job_type", "").lower()
+                    or kw in j.get("company_name", "").lower()][:5]
+
+        # Search candidates
+        all_apps = list(mock_data.CANDIDATE_APPLICATIONS) + list(mock_data.MOCK_HR_APPLICATIONS)
+        cand_hits = [a for a in all_apps
+                     if kw in a.get("candidate_name",  "").lower()
+                     or kw in a.get("candidate_email", "").lower()
+                     or kw in a.get("job_title",       "").lower()][:5]
+
+        if not job_hits and not cand_hits:
+            self._hide_global_search_popup()
+            return
+
+        # Build popup
+        if self._global_popup:
+            self._global_popup.deleteLater()
+        popup = QFrame(self.win)
+        popup.setWindowFlags(Qt.SubWindow)
+        popup.setStyleSheet(
+            f"QFrame{{background:#ffffff;border:1.5px solid {BORDER};"
+            "border-radius:12px;}}"
+            f"QLabel{{color:{TXT_H};background:transparent;border:none;}}"
+        )
+        sh = QGraphicsDropShadowEffect()
+        sh.setBlurRadius(20); sh.setXOffset(0); sh.setYOffset(6)
+        sh.setColor(QColor(0, 0, 0, 35))
+        popup.setGraphicsEffect(sh)
+
+        vlo = QVBoxLayout(popup)
+        vlo.setContentsMargins(0, 8, 0, 8)
+        vlo.setSpacing(0)
+
+        def _section_hdr(txt):
+            l = QLabel(f"  {txt}")
+            l.setFixedHeight(28)
+            l.setStyleSheet(
+                f"color:{TXT_M};font-size:10px;font-weight:700;"
+                "letter-spacing:1.2px;background:#f8fafc;"
+                f"border-bottom:1px solid {BORDER};border:none;"
+                "padding-left:14px;"
+            )
+            return l
+
+        def _result_row(icon, title, sub, on_click):
+            row = QWidget()
+            row.setCursor(Qt.PointingHandCursor)
+            row.setFixedHeight(48)
+            row.setStyleSheet("QWidget{background:transparent;border-radius:0px;}")
+            row_lo = QHBoxLayout(row)
+            row_lo.setContentsMargins(14, 0, 14, 0)
+            row_lo.setSpacing(10)
+
+            ic = QLabel(icon)
+            ic.setFixedSize(30, 30)
+            ic.setAlignment(Qt.AlignCenter)
+            ic.setStyleSheet(
+                "background:#f1f5f9;border-radius:15px;"
+                f"font-size:14px;color:{TXT_M};border:none;"
+            )
+            txt_col = QVBoxLayout()
+            txt_col.setSpacing(1)
+            t_lbl = QLabel(title[:50] + ("…" if len(title) > 50 else ""))
+            t_lbl.setStyleSheet(
+                f"color:{TXT_H};font-size:13px;font-weight:600;"
+                "background:transparent;border:none;"
+            )
+            s_lbl = QLabel(sub[:60] + ("…" if len(sub) > 60 else ""))
+            s_lbl.setStyleSheet(
+                f"color:{TXT_M};font-size:11px;"
+                "background:transparent;border:none;"
+            )
+            txt_col.addWidget(t_lbl)
+            txt_col.addWidget(s_lbl)
+            row_lo.addWidget(ic)
+            row_lo.addLayout(txt_col, 1)
+
+            def _on_enter(e, w=row):
+                w.setStyleSheet("QWidget{background:#f8fafc;border-radius:0;}")
+            def _on_leave(e, w=row):
+                w.setStyleSheet("QWidget{background:transparent;border-radius:0;}")
+            row.enterEvent = _on_enter
+            row.leaveEvent = _on_leave
+            row.mousePressEvent = lambda e, fn=on_click: fn()
+            return row
+
+        if job_hits:
+            vlo.addWidget(_section_hdr(f"TIN ĐĂNG  ({len(job_hits)})"))
+            for j in job_hits:
+                sub = f"{j.get('company_name','')}  ·  {j.get('location','')}  ·  {j.get('job_type','')}"
+                def _go_job(jid=j["id"], title=j["title"]):
+                    self._hide_global_search_popup()
+                    self._go(2)
+                    self._jobs_search.setText(title)
+                vlo.addWidget(_result_row("💼", j.get("title",""), sub, _go_job))
+
+        if cand_hits:
+            vlo.addWidget(_section_hdr(f"ỨNG VIÊN  ({len(cand_hits)})"))
+            for a in cand_hits:
+                sub = f"{a.get('job_title','')}  ·  {a.get('candidate_email','')}"
+                def _go_cand(name=a.get("candidate_name","")):
+                    self._hide_global_search_popup()
+                    self._go(3)
+                    self._cands_search.setText(name)
+                vlo.addWidget(_result_row("👤", a.get("candidate_name",""), sub, _go_cand))
+
+        # Footer "Tìm tất cả"
+        footer = QWidget()
+        footer.setFixedHeight(38)
+        footer.setCursor(Qt.PointingHandCursor)
+        footer.setStyleSheet(
+            f"QWidget{{background:transparent;border-top:1px solid {BORDER};}}"
+        )
+        f_lo = QHBoxLayout(footer)
+        f_lo.setContentsMargins(14, 0, 14, 0)
+        f_all = QLabel(f"🔍  Tìm tất cả kết quả cho  \"{self.search_input.text().strip()}\"")
+        f_all.setStyleSheet(
+            f"color:{P};font-size:12px;font-weight:600;"
+            "background:transparent;border:none;"
+        )
+        f_lo.addWidget(f_all)
+        f_lo.addStretch()
+        footer.enterEvent = lambda e: footer.setStyleSheet(
+            f"QWidget{{background:#f5f3ff;border-top:1px solid {BORDER};}}"
+        )
+        footer.leaveEvent = lambda e: footer.setStyleSheet(
+            f"QWidget{{background:transparent;border-top:1px solid {BORDER};}}"
+        )
+        footer.mousePressEvent = lambda e: self._global_search_enter()
+        vlo.addWidget(footer)
+
+        # Position popup below search bar
+        popup.adjustSize()
+        ref = self._search_outer_ref
+        pos = ref.mapTo(self.win, QPoint(0, ref.height() + 4))
+        popup.setFixedWidth(max(ref.width(), 460))
+        popup.move(pos)
+        popup.show()
+        popup.raise_()
+        self._global_popup = popup
+
+    def _hide_global_search_popup(self) -> None:
+        if self._global_popup:
+            self._global_popup.hide()
+            self._global_popup.deleteLater()
+            self._global_popup = None
+
+    def _global_search_enter(self) -> None:
+        """Navigate to best matching tab and apply search term."""
+        kw = self.search_input.text().strip()
+        self._hide_global_search_popup()
+        if not kw:
+            return
+        # Decide which tab to land on based on results
+        job_hits = [j for j in mock_data.JOB_STORE
+                    if kw.lower() in j.get("title","").lower()
+                    or kw.lower() in j.get("company_name","").lower()]
+        if job_hits:
+            self._go(2)
+            self._jobs_search.setText(kw)
+        else:
+            self._go(3)
+            self._cands_search.setText(kw)
+        self.search_input.clear()
+
     # ── sidebar ───────────────────────────────────────────────
     def _build_sidebar(self) -> QFrame:
         sb = QFrame()
@@ -901,6 +1089,22 @@ class HRDashboard:
         s_lo.addWidget(search_ic)
         s_lo.addWidget(self.search_input, 1)
         lo.addWidget(search_outer, 1)   # stretch to fill center
+
+        # Debounce timer for global search
+        self._global_search_timer = QTimer()
+        self._global_search_timer.setSingleShot(True)
+        self._global_search_timer.timeout.connect(self._show_global_search_popup)
+        self.search_input.textChanged.connect(
+            lambda t: (
+                self._global_search_timer.stop(),
+                self._global_search_timer.start(250) if t.strip() else self._hide_global_search_popup()
+            )
+        )
+        self.search_input.returnPressed.connect(self._global_search_enter)
+        # Store reference for popup positioning
+        self._search_outer_ref = search_outer
+        # Popup widget (created lazily)
+        self._global_popup: QWidget | None = None
 
         # ── RIGHT: profile section ────────────────────────────
         profile_wrap = QWidget()
@@ -1179,30 +1383,47 @@ class HRDashboard:
             "views":     [1900, 2200, 2600, 2900, 3050, 3200],
             "response":  [34, 36, 38, 40, 41, 42],
         }
+        # (icon, accent_color, label, value, hint_text, sp_data, sp_color)
         card_defs = [
-            ("ic_jobs.svg",  "#ef4444", "#fee2e2",
-             "Tin đang đăng",  str(cards.get("jobs", 0)),
-             "↑ +2 tuần này",  "#dc2626", "#fee2e2",
-             "#ef4444", sp["jobs"], "#f87171"),
-            ("ic_users.svg", "#f59e0b", "#fef3c7",
-             "Tổng ứng viên", str(cards.get("candidates", 0)),
-             "↑ +15 mới",      "#d97706", "#fef9c3",
-             "#f59e0b", sp["candidates"], "#fbbf24"),
-            ("ic_view.svg",  "#0ea5e9", "#e0f2fe",
-             "Lượt xem tin",  f"{cards.get('views', 0):,}",
-             "↑ +12% xu hướng","#0284c7", "#e0f2fe",
-             "#0ea5e9", sp["views"], "#38bdf8"),
-            ("ic_chat.svg",  "#10b981", "#d1fae5",
-             "Tỷ lệ phản hồi",f"{cards.get('response_rate', 0)}%",
-             "● Tối ưu",       "#059669", "#d1fae5",
-             "#10b981", sp["response"], "#34d399"),
+            ("ic_jobs.svg",
+             "#6366f1",           # indigo — thay đỏ
+             "Tin đang đăng",
+             str(cards.get("jobs", 0)),
+             "↑ +2 tuần này",
+             sp["jobs"],   "#818cf8"),
+
+            ("ic_users.svg",
+             "#f97316",           # orange — thay vàng đậm
+             "Tổng ứng viên",
+             str(cards.get("candidates", 0)),
+             "↑ +15 mới",
+             sp["candidates"], "#fb923c"),
+
+            ("ic_view.svg",
+             "#0ea5e9",           # sky — giữ nguyên
+             "Lượt xem tin",
+             f"{cards.get('views', 0):,}",
+             "↑ +12% xu hướng",
+             sp["views"],  "#38bdf8"),
+
+            ("ic_chat.svg",
+             "#10b981",           # emerald — giữ nguyên
+             "Tỷ lệ phản hồi",
+             f"{cards.get('response_rate', 0)}%",
+             "● Tối ưu",
+             sp["response"], "#34d399"),
         ]
-        for (icon, ic_col, ic_bg, label, val,
-             hint, hcol, hbg, glow, sp_data, sp_col) in card_defs:
+        for (icon, accent, label, val, hint, sp_data, sp_col) in card_defs:
             c = _MetricCard(
-                icon, ic_col, ic_bg, label, val,
-                hint, hcol, hbg,
-                glow_color=glow,
+                icon_svg=icon,
+                icon_color=accent,
+                icon_bg=accent + "20",   # unused in new design but kept for compat
+                label=label,
+                value=val,
+                hint=hint,
+                hint_color=accent,
+                hint_bg=accent + "18",
+                glow_color=accent,
                 sparkline_data=sp_data,
                 sparkline_color=sp_col,
             )
@@ -1556,7 +1777,7 @@ class HRDashboard:
         toolbar = QHBoxLayout()
         toolbar.setSpacing(12)
 
-        # Search bar
+        # Search bar (with inline clear button)
         search_wrap = QFrame()
         search_wrap.setFixedHeight(42)
         search_wrap.setStyleSheet(
@@ -1565,24 +1786,60 @@ class HRDashboard:
             f"QFrame:focus-within{{border-color:{P};}}"
         )
         sw_lo = QHBoxLayout(search_wrap)
-        sw_lo.setContentsMargins(14, 0, 14, 0)
+        sw_lo.setContentsMargins(14, 0, 8, 0)
         sw_lo.setSpacing(8)
         s_ic = QLabel()
         s_ic.setPixmap(_svg_pm("ic_search.svg", 16, "#94a3b8"))
         s_ic.setStyleSheet("background:transparent;border:none;")
         self._jobs_search = QLineEdit()
         self._jobs_search.setPlaceholderText(
-            "Tìm kiếm tin đăng, vị trí, kỹ năng..."
+            "Tìm tiêu đề, vị trí, địa điểm, lương..."
         )
         self._jobs_search.setFrame(False)
         self._jobs_search.setStyleSheet(
             f"background:transparent;border:none;"
             f"font-size:13px;color:{TXT_H};"
         )
-        self._jobs_search.textChanged.connect(self._filter_jobs)
+        # Clear button inside search bar
+        self._jobs_search_clear = QPushButton("×")
+        self._jobs_search_clear.setFixedSize(22, 22)
+        self._jobs_search_clear.setCursor(Qt.PointingHandCursor)
+        self._jobs_search_clear.setVisible(False)
+        self._jobs_search_clear.setStyleSheet(
+            f"QPushButton{{background:#e2e8f0;color:{TXT_M};"
+            "border:none;border-radius:11px;font-size:14px;font-weight:700;}}"
+            f"QPushButton:hover{{background:#cbd5e1;color:{TXT_H};}}"
+        )
+        self._jobs_search_clear.clicked.connect(
+            lambda: self._jobs_search.clear()
+        )
+        self._jobs_search.textChanged.connect(self._on_jobs_search_changed)
         sw_lo.addWidget(s_ic)
         sw_lo.addWidget(self._jobs_search, 1)
+        sw_lo.addWidget(self._jobs_search_clear)
         toolbar.addWidget(search_wrap, 1)
+
+        # Status filter combo
+        self._jobs_status_filter = _combo(
+            ["Tất cả TT", "Hiển thị", "Chờ duyệt", "Nháp", "Từ chối"]
+        )
+        self._jobs_status_filter.setFixedHeight(42)
+        self._jobs_status_filter.setFixedWidth(148)
+        self._jobs_status_filter.currentIndexChanged.connect(
+            lambda: self._filter_jobs(self._jobs_search.text())
+        )
+        toolbar.addWidget(self._jobs_status_filter)
+
+        # Job type filter combo
+        self._jobs_type_filter = _combo(
+            ["Tất cả loại", "Full-time", "Part-time", "Remote", "Hybrid", "Contract"]
+        )
+        self._jobs_type_filter.setFixedHeight(42)
+        self._jobs_type_filter.setFixedWidth(148)
+        self._jobs_type_filter.currentIndexChanged.connect(
+            lambda: self._filter_jobs(self._jobs_search.text())
+        )
+        toolbar.addWidget(self._jobs_type_filter)
 
         # "+ Đăng tin mới" button
         btn_new = _btn_primary("+ Đăng tin mới")
@@ -1628,6 +1885,18 @@ class HRDashboard:
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
         flo.addWidget(self.table_jobs)
+
+        # "No results" placeholder
+        self._jobs_no_result_lbl = QLabel(
+            "🔍  Không tìm thấy tin đăng nào khớp với bộ lọc."
+        )
+        self._jobs_no_result_lbl.setAlignment(Qt.AlignCenter)
+        self._jobs_no_result_lbl.setFixedHeight(56)
+        self._jobs_no_result_lbl.setStyleSheet(
+            f"color:{TXT_M};font-size:13px;background:transparent;border:none;"
+        )
+        self._jobs_no_result_lbl.setVisible(False)
+        flo.addWidget(self._jobs_no_result_lbl)
 
         # ── Pagination ────────────────────────────────────────
         pag_div = QFrame()
@@ -1695,21 +1964,65 @@ class HRDashboard:
             f"background:transparent;border:none;"
             f"font-size:13px;color:{TXT_H};"
         )
-        self._cands_search.textChanged.connect(self._filter_cands)
+        self._cands_search.textChanged.connect(self._on_cands_search_changed)
+
+        # Clear button inside cands search bar
+        self._cands_search_clear = QPushButton("×")
+        self._cands_search_clear.setFixedSize(22, 22)
+        self._cands_search_clear.setCursor(Qt.PointingHandCursor)
+        self._cands_search_clear.setVisible(False)
+        self._cands_search_clear.setStyleSheet(
+            f"QPushButton{{background:#e2e8f0;color:{TXT_M};"
+            "border:none;border-radius:11px;font-size:14px;font-weight:700;}}"
+            f"QPushButton:hover{{background:#cbd5e1;color:{TXT_H};}}"
+        )
+        self._cands_search_clear.clicked.connect(
+            lambda: self._cands_search.clear()
+        )
         sw_lo.addWidget(s_ic)
         sw_lo.addWidget(self._cands_search, 1)
+        sw_lo.addWidget(self._cands_search_clear)
         toolbar.addWidget(search_wrap, 1)
 
+        # Status filter
         self._cands_status_filter = _combo(
             ["Tất cả trạng thái", "Chờ xét duyệt",
              "Đã xem xét", "Phê duyệt", "Từ chối"]
         )
         self._cands_status_filter.setFixedHeight(42)
-        self._cands_status_filter.setFixedWidth(190)
+        self._cands_status_filter.setFixedWidth(175)
         self._cands_status_filter.currentIndexChanged.connect(
             lambda: self._filter_cands(self._cands_search.text())
         )
         toolbar.addWidget(self._cands_status_filter)
+
+        # Sort combo
+        self._cands_sort = _combo(
+            ["Mới nhất trước", "Cũ nhất trước", "Tên A→Z", "Tên Z→A"]
+        )
+        self._cands_sort.setFixedHeight(42)
+        self._cands_sort.setFixedWidth(160)
+        self._cands_sort.currentIndexChanged.connect(
+            lambda: self._filter_cands(self._cands_search.text())
+        )
+        toolbar.addWidget(self._cands_sort)
+
+        # Reset all filters button
+        btn_reset = QPushButton("↺ Xoá bộ lọc")
+        btn_reset.setFixedHeight(42)
+        btn_reset.setCursor(Qt.PointingHandCursor)
+        btn_reset.setStyleSheet(
+            f"QPushButton{{background:#f1f5f9;color:{TXT_S};"
+            "border:none;border-radius:10px;padding:0 14px;font-size:13px;}}"
+            "QPushButton:hover{background:#e2e8f0;}"
+        )
+        def _reset_cands():
+            self._cands_search.clear()
+            self._cands_status_filter.setCurrentIndex(0)
+            self._cands_sort.setCurrentIndex(0)
+        btn_reset.clicked.connect(_reset_cands)
+        toolbar.addWidget(btn_reset)
+
         outer.addLayout(toolbar)
         outer.addStretch(1)        # đẩy card xuống một chút
 
@@ -1746,6 +2059,18 @@ class HRDashboard:
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
         flo.addWidget(self.table_cands)
+
+        # "No results" placeholder
+        self._cands_no_result_lbl = QLabel(
+            "🔍  Không tìm thấy ứng viên nào khớp với bộ lọc."
+        )
+        self._cands_no_result_lbl.setAlignment(Qt.AlignCenter)
+        self._cands_no_result_lbl.setFixedHeight(56)
+        self._cands_no_result_lbl.setStyleSheet(
+            f"color:{TXT_M};font-size:13px;background:transparent;border:none;"
+        )
+        self._cands_no_result_lbl.setVisible(False)
+        flo.addWidget(self._cands_no_result_lbl)
 
         # Proportional resizer: Ứng viên 36% — Vị trí 64% of flexible space
         # Fixed cols: Date(140)+Status(136)+Actions(120) = 396
@@ -1866,18 +2191,59 @@ class HRDashboard:
         self._jobs_page = 0
         self._render_jobs_page()
 
+    def _on_jobs_search_changed(self, text: str) -> None:
+        """Show/hide clear button + trigger filter."""
+        self._jobs_search_clear.setVisible(bool(text))
+        self._filter_jobs(text)
+
     def _filter_jobs(self, text: str) -> None:
         kw = text.strip().lower()
         all_jobs = mock_data.get_hr_jobs()
-        self._jobs_data = (
-            all_jobs if not kw
-            else [j for j in all_jobs
-                  if kw in j.get("title", "").lower()
-                  or kw in j.get("department", "").lower()
-                  or kw in j.get("company_name", "").lower()]
+
+        # ── Status filter ────────────────────────────────────
+        _STATUS_MAP = {
+            0: None,
+            1: "published",
+            2: "pending_approval",
+            3: "draft",
+            4: "rejected",
+        }
+        status_filter = _STATUS_MAP.get(
+            self._jobs_status_filter.currentIndex()
         )
+
+        # ── Job type filter ──────────────────────────────────
+        type_idx = self._jobs_type_filter.currentIndex()
+        type_options = [None, "Full-time", "Part-time", "Remote", "Hybrid", "Contract"]
+        type_filter = type_options[type_idx] if type_idx < len(type_options) else None
+
+        # ── Text search (broad: title, dept, company, location,
+        #    job_type, level, salary, description) ─────────────
+        if kw:
+            all_jobs = [j for j in all_jobs
+                        if kw in j.get("title",        "").lower()
+                        or kw in j.get("department",   "").lower()
+                        or kw in j.get("company_name", "").lower()
+                        or kw in j.get("location",     "").lower()
+                        or kw in j.get("job_type",     "").lower()
+                        or kw in j.get("level",        "").lower()
+                        or kw in j.get("salary_text",  "").lower()
+                        or kw in j.get("description",  "").lower()]
+
+        if status_filter:
+            all_jobs = [j for j in all_jobs
+                        if j.get("status") == status_filter]
+
+        if type_filter:
+            all_jobs = [j for j in all_jobs
+                        if j.get("job_type") == type_filter]
+
+        self._jobs_data = all_jobs
         self._jobs_page = 0
         self._render_jobs_page()
+
+        # Show "no results" hint if empty
+        self._jobs_no_result_lbl.setVisible(len(all_jobs) == 0)
 
     def _render_jobs_page(self) -> None:
         """Slice data by current page and render table + pagination bar."""
@@ -2367,6 +2733,11 @@ class HRDashboard:
         self._cands_page = 0
         self._render_cands(self._all_applications())
 
+    def _on_cands_search_changed(self, text: str) -> None:
+        """Show/hide clear button + trigger filter."""
+        self._cands_search_clear.setVisible(bool(text))
+        self._filter_cands(text)
+
     def _filter_cands(self, text: str) -> None:
         kw = text.strip().lower()
         st_map = {
@@ -2377,16 +2748,38 @@ class HRDashboard:
             self._cands_status_filter.currentIndex()
         )
         data = self._all_applications()
+
+        # ── Text search (name, email, job title, company) ─────
         if kw:
             data = [a for a in data
-                    if kw in a.get("candidate_name", "").lower()
+                    if kw in a.get("candidate_name",  "").lower()
                     or kw in a.get("candidate_email", "").lower()
-                    or kw in a.get("job_title", "").lower()]
+                    or kw in a.get("job_title",       "").lower()
+                    or kw in a.get("company",         "").lower()
+                    or kw in a.get("location",        "").lower()]
+
+        # ── Status filter ─────────────────────────────────────
         if status_filter:
             data = [a for a in data
                     if a.get("status") == status_filter]
+
+        # ── Sort ──────────────────────────────────────────────
+        sort_idx = self._cands_sort.currentIndex()
+        if sort_idx == 0:   # Mới nhất trước (default order, already newest first)
+            pass
+        elif sort_idx == 1: # Cũ nhất trước
+            data = list(reversed(data))
+        elif sort_idx == 2: # Tên A→Z
+            data = sorted(data, key=lambda a: a.get("candidate_name", "").lower())
+        elif sort_idx == 3: # Tên Z→A
+            data = sorted(data, key=lambda a: a.get("candidate_name", "").lower(),
+                          reverse=True)
+
         self._cands_page = 0
         self._render_cands(data)
+
+        # Show "no results" hint if empty
+        self._cands_no_result_lbl.setVisible(len(data) == 0)
 
     def _render_cands(self, apps: list) -> None:
         # ── Store full data + paginate ────────────────────────
