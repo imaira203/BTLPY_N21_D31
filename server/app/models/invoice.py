@@ -29,6 +29,10 @@ class Invoice(Base):
     application_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_applications.id"), nullable=True, index=True)
 
     owner: Mapped["User"] = relationship(back_populates="invoices")
+    candidate_subscription_payment: Mapped[Optional["CandidateSubscriptionPayment"]] = relationship(
+        back_populates="invoice",
+        uselist=False,
+    )
 
     def is_payable(self) -> bool:
         return self.status == InvoiceStatus.pending

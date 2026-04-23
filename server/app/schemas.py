@@ -63,6 +63,7 @@ class UpdatePasswordIn(BaseModel):
 class HRProfileOut(BaseModel):
     id: int
     company_name: str
+    avatar_storage_key: str | None = None
     contact_phone: str | None
     company_description: str | None
     approval_status: HRApprovalStatus
@@ -159,6 +160,28 @@ class CandidateSubscriptionOut(BaseModel):
 
 class ProUpgradeIn(BaseModel):
     months: int = Field(default=1, ge=1, le=12)
+
+
+class SavedJobOut(BaseModel):
+    id: int
+    candidate_id: int
+    job_id: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CandidateSubscriptionPaymentOut(BaseModel):
+    id: int
+    candidate_id: int
+    invoice_id: int | None
+    months: int
+    amount: float
+    currency: str
+    paid_at: datetime
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class InvoiceOut(BaseModel):

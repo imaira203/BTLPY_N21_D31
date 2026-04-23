@@ -28,6 +28,7 @@ class Job(Base):
 
     hr_user: Mapped["User"] = relationship(back_populates="jobs", foreign_keys=[hr_user_id])
     applications: Mapped[List["JobApplication"]] = relationship(back_populates="job")
+    saved_by_candidates: Mapped[List["CandidateSavedJob"]] = relationship(back_populates="job")
 
     def is_published(self) -> bool:
         return self.status == JobStatus.published
