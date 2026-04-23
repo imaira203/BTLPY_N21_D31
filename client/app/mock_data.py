@@ -215,27 +215,249 @@ MOCK_HR_DASHBOARD: dict = {
     "values": [18, 24, 31, 27],
 }
 
+MOCK_HR_ACTIVITY: list[dict] = [
+    {
+        "dot_color": "#6366f1",
+        "text": "Nguyễn Văn A ứng tuyển cho Senior Developer",
+        "time": "1 giờ trước",
+        "bold": True,
+    },
+    {
+        "dot_color": "#94a3b8",
+        "text": "Lịch phỏng vấn với Trần Thị B",
+        "time": "10:00 AM mai",
+        "bold": False,
+    },
+    {
+        "dot_color": "#6366f1",
+        "text": "Hồ sơ của Lê Thanh C đã được cập nhật",
+        "time": "2 giờ trước",
+        "bold": True,
+    },
+    {
+        "dot_color": "#10b981",
+        "text": "Tin đăng 'Frontend Developer' được duyệt",
+        "time": "Hôm qua 17:30",
+        "bold": False,
+    },
+    {
+        "dot_color": "#f59e0b",
+        "text": "Phạm Minh D đã xem hồ sơ của bạn",
+        "time": "3 giờ trước",
+        "bold": False,
+    },
+]
+
 MOCK_HR_JOBS: list[dict] = [
-    {"id": 501, "title": "Senior Backend Engineer", "status": "published"},
-    {"id": 502, "title": "Product Designer (UI/UX)", "status": "draft"},
+    {
+        "id": 501,
+        "title": "Senior Backend Engineer",
+        "department": "Kỹ thuật & Công nghệ",
+        "created_at": "15/10/2023",
+        "applicants_count": 24,
+        "status": "published",
+    },
+    {
+        "id": 502,
+        "title": "Product Designer (UI/UX)",
+        "department": "Thiết kế",
+        "created_at": "14/10/2023",
+        "applicants_count": 18,
+        "status": "draft",
+    },
+    {
+        "id": 503,
+        "title": "Marketing Manager",
+        "department": "Marketing",
+        "created_at": "10/10/2023",
+        "applicants_count": 0,
+        "status": "published",
+    },
+    {
+        "id": 504,
+        "title": "Content Writer",
+        "department": "Marketing",
+        "created_at": "05/10/2023",
+        "applicants_count": 32,
+        "status": "closed",
+    },
+    {
+        "id": 505,
+        "title": "Data Analyst",
+        "department": "Kinh doanh",
+        "created_at": "28/09/2023",
+        "applicants_count": 11,
+        "status": "published",
+    },
+    {
+        "id": 506,
+        "title": "DevOps Engineer",
+        "department": "Kỹ thuật & Công nghệ",
+        "created_at": "20/09/2023",
+        "applicants_count": 7,
+        "status": "pending_approval",
+    },
+    {
+        "id": 507,
+        "title": "UX Researcher",
+        "department": "Thiết kế",
+        "created_at": "15/09/2023",
+        "applicants_count": 14,
+        "status": "published",
+    },
+    {
+        "id": 508,
+        "title": "Backend Engineer (Python)",
+        "department": "Kỹ thuật & Công nghệ",
+        "created_at": "10/09/2023",
+        "applicants_count": 22,
+        "status": "draft",
+    },
+    {
+        "id": 509,
+        "title": "Sales Manager",
+        "department": "Kinh doanh",
+        "created_at": "05/09/2023",
+        "applicants_count": 0,
+        "status": "pending_approval",
+    },
 ]
 
 MOCK_HR_APPLICATIONS: list[dict] = [
     {
         "application_id": 9001,
-        "candidate_name": "Trần Thị B",
-        "candidate_email": "b.tran@email.com",
+        "candidate_name": "Trần Thị Bình",
+        "candidate_email": "binh.tran@email.com",
         "job_title": "Senior Backend Engineer",
         "status": "pending",
         "cv_name": "TranThiB_CV.pdf",
+        "applied_at": "15/04/2026",
     },
     {
         "application_id": 9002,
-        "candidate_name": "Lê Văn C",
-        "candidate_email": "c.le@email.com",
+        "candidate_name": "Lê Văn Cường",
+        "candidate_email": "cuong.le@email.com",
         "job_title": "Product Designer (UI/UX)",
         "status": "reviewed",
         "cv_name": "LeVanC_Portfolio.pdf",
+        "applied_at": "14/04/2026",
+    },
+    {
+        "application_id": 9003,
+        "candidate_name": "Nguyễn Văn An",
+        "candidate_email": "an.nguyen@email.com",
+        "job_title": "Data Analyst",
+        "status": "approved",
+        "cv_name": "NguyenVanA_CV.pdf",
+        "applied_at": "13/04/2026",
+    },
+    {
+        "application_id": 9004,
+        "candidate_name": "Phạm Minh Đức",
+        "candidate_email": "duc.pham@email.com",
+        "job_title": "DevOps Engineer",
+        "status": "rejected",
+        "cv_name": "PhamMinhD_CV.pdf",
+        "applied_at": "12/04/2026",
+    },
+    {
+        "application_id": 9005,
+        "candidate_name": "Võ Thị Em",
+        "candidate_email": "em.vo@email.com",
+        "job_title": "Marketing Manager",
+        "status": "pending",
+        "cv_name": "VoThiE_Resume.pdf",
+        "applied_at": "11/04/2026",
+    },
+    {
+        "application_id": 9006,
+        "candidate_name": "Hoàng Anh Tuấn",
+        "candidate_email": "tuan.hoang@email.com",
+        "job_title": "Senior Backend Engineer",
+        "status": "reviewed",
+        "cv_name": "HoangAnhT_CV.pdf",
+        "applied_at": "10/04/2026",
+    },
+    {
+        "application_id": 9007,
+        "candidate_name": "Đặng Thị Lan",
+        "candidate_email": "lan.dang@email.com",
+        "job_title": "Content Writer",
+        "status": "approved",
+        "cv_name": "DangThiL_Portfolio.pdf",
+        "applied_at": "09/04/2026",
+    },
+    {
+        "application_id": 9008,
+        "candidate_name": "Trần Văn Hùng",
+        "candidate_email": "hung.tran@email.com",
+        "job_title": "Senior Backend Engineer",
+        "status": "pending",
+        "cv_name": "TranVanH_CV.pdf",
+        "applied_at": "08/04/2026",
+    },
+    {
+        "application_id": 9009,
+        "candidate_name": "Nguyễn Thị Mai",
+        "candidate_email": "mai.nguyen@email.com",
+        "job_title": "Product Designer (UI/UX)",
+        "status": "approved",
+        "cv_name": "NguyenThiM_CV.pdf",
+        "applied_at": "07/04/2026",
+    },
+    {
+        "application_id": 9010,
+        "candidate_name": "Lê Quốc Bảo",
+        "candidate_email": "bao.le@email.com",
+        "job_title": "Data Analyst",
+        "status": "reviewed",
+        "cv_name": "LeQuocB_CV.pdf",
+        "applied_at": "06/04/2026",
+    },
+    {
+        "application_id": 9011,
+        "candidate_name": "Phùng Thị Hoa",
+        "candidate_email": "hoa.phung@email.com",
+        "job_title": "Marketing Manager",
+        "status": "rejected",
+        "cv_name": "PhungThiH_CV.pdf",
+        "applied_at": "05/04/2026",
+    },
+    {
+        "application_id": 9012,
+        "candidate_name": "Bùi Minh Khoa",
+        "candidate_email": "khoa.bui@email.com",
+        "job_title": "DevOps Engineer",
+        "status": "pending",
+        "cv_name": "BuiMinhK_CV.pdf",
+        "applied_at": "04/04/2026",
+    },
+    {
+        "application_id": 9013,
+        "candidate_name": "Vũ Thị Ngọc",
+        "candidate_email": "ngoc.vu@email.com",
+        "job_title": "Content Writer",
+        "status": "reviewed",
+        "cv_name": "VuThiN_CV.pdf",
+        "applied_at": "03/04/2026",
+    },
+    {
+        "application_id": 9014,
+        "candidate_name": "Đinh Công Sơn",
+        "candidate_email": "son.dinh@email.com",
+        "job_title": "Senior Backend Engineer",
+        "status": "approved",
+        "cv_name": "DinhCongS_CV.pdf",
+        "applied_at": "02/04/2026",
+    },
+    {
+        "application_id": 9015,
+        "candidate_name": "Cao Thị Yến",
+        "candidate_email": "yen.cao@email.com",
+        "job_title": "Data Analyst",
+        "status": "pending",
+        "cv_name": "CaoThiY_CV.pdf",
+        "applied_at": "01/04/2026",
     },
 ]
 
@@ -258,3 +480,60 @@ MOCK_PENDING_HR: list[dict] = [
 MOCK_PENDING_JOBS: list[dict] = [
     {"id": 701, "title": "Marketing Executive — chờ duyệt"},
 ]
+
+# ── Shared candidate application store (runtime, mutable) ─────────────────
+# Đây là nguồn chung giữa UserDashboard và HRDashboard.
+# User apply → add_candidate_application()
+# HR approve/reject → update_application_status()
+# User polls → đọc status mới nhất để cập nhật lịch sử
+
+CANDIDATE_APPLICATIONS: list[dict] = []
+_next_app_id = [10_000]   # mutable counter (list trick)
+
+
+def add_candidate_application(
+    title: str,
+    company: str,
+    location: str,
+    applied_at: str,
+    cv_name: str = "CV.pdf",
+    candidate_name: str = "Ứng viên",
+    candidate_email: str = "user@jobhub.vn",
+    job_id: int = 0,
+) -> dict:
+    """Thêm đơn ứng tuyển mới vào shared store. Trả về entry dict."""
+    app_id = _next_app_id[0]
+    _next_app_id[0] += 1
+    entry: dict = {
+        "application_id": app_id,
+        "job_id":          job_id,
+        "candidate_name":  candidate_name,
+        "candidate_email": candidate_email,
+        "job_title":       title,
+        "company_name":    company,
+        "location":        location,
+        "applied_at":      applied_at,
+        "status":          "pending",
+        "cv_name":         cv_name,
+    }
+    CANDIDATE_APPLICATIONS.append(entry)
+    return entry
+
+
+def update_application_status(app_id: int, new_status: str) -> bool:
+    """Cập nhật trạng thái đơn trong CANDIDATE_APPLICATIONS hoặc MOCK_HR_APPLICATIONS."""
+    for store in (CANDIDATE_APPLICATIONS, MOCK_HR_APPLICATIONS):
+        for app in store:
+            if app.get("application_id") == app_id:
+                app["status"] = new_status
+                return True
+    return False
+
+
+def get_application_status(app_id: int) -> str | None:
+    """Lấy trạng thái hiện tại của đơn theo app_id."""
+    for store in (CANDIDATE_APPLICATIONS, MOCK_HR_APPLICATIONS):
+        for app in store:
+            if app.get("application_id") == app_id:
+                return app.get("status")
+    return None

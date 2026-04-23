@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import HRApprovalStatus, HRProfile, Job, JobStatus, User, UserRole
+from ..runtime_cache import runtime_cache
 from ..schemas import AdminDecision, JobOut, StatsOut, UserOut
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -125,6 +126,7 @@ def approve_job(
     job.admin_note = body.note
     db.commit()
     db.refresh(job)
+    runtime_cache.upsert_job(job)
     return job
 
 
@@ -143,6 +145,7 @@ def reject_job(
     job.admin_note = body.note
     db.commit()
     db.refresh(job)
+    runtime_cache.upsert_job(job)
     return job
 
 
@@ -215,6 +218,7 @@ def hr_detail(
         "full_name": target.full_name,
         "is_active": target.is_active,
         "company_name": hp.company_name,
+        "avatar_storage_key": hp.avatar_storage_key,
         "contact_phone": hp.contact_phone,
         "company_description": hp.company_description,
         "approval_status": hp.approval_status.value,

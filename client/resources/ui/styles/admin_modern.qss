@@ -119,24 +119,28 @@ QLabel#pageSubtitle {
 QLineEdit#searchInput {
     background-color: #FFFFFF;
     border: 1.5px solid #E2E8F0;
-    border-radius: 10px;
-    /* icon chiếm 36px bên trái, inject bởi Python */
-    padding: 0px 14px;
-    font-size: 13px;
+    border-radius: 12px;
+    padding: 8px 16px 8px 42px;
+    font-size: 14px;
+    font-family: 'Segoe UI', 'Inter', sans-serif;
     color: #1E293B;
     selection-background-color: #EDE9FE;
     selection-color: #6D28D9;
 }
 
+QLineEdit#searchInput:hover {
+    border: 1.5px solid #CBD5E1;
+    background-color: #FAFBFF;
+}
+
 QLineEdit#searchInput:focus {
-    border-color: #7B2FBE;
+    border: 2px solid #7B2FBE;
     background-color: #FFFEFF;
-    /* subtle glow effect */
-    border-width: 2px;
+    outline: none;
 }
 
 QLineEdit#searchInput::placeholder {
-    color: #CBD5E1;
+    color: #A3ADB8;
 }
 
 
@@ -146,48 +150,68 @@ QLineEdit#searchInput::placeholder {
 QComboBox#statusFilter {
     background-color: #FFFFFF;
     border: 1.5px solid #E2E8F0;
-    border-radius: 10px;
-    padding: 0px 14px;
-    font-size: 13px;
+    border-radius: 12px;
+    padding: 6px 12px 6px 16px;
+    font-size: 14px;
+    font-family: 'Segoe UI', 'Inter', sans-serif;
     color: #1E293B;
     font-weight: 500;
+    outline: none;
+}
+
+QComboBox#statusFilter:hover {
+    border: 1.5px solid #CBD5E1;
+    background-color: #FAFBFF;
 }
 
 QComboBox#statusFilter:focus,
 QComboBox#statusFilter:on {
-    border-color: #7B2FBE;
+    border: 2px solid #7B2FBE;
+    background-color: #FFFEFF;
 }
 
 QComboBox#statusFilter::drop-down {
     border: none;
-    width: 30px;
+    width: 32px;
     subcontrol-position: right center;
 }
 
 QComboBox#statusFilter::down-arrow {
-    width: 10px;
-    height: 10px;
+    image: none;
+    width: 12px;
+    height: 12px;
 }
 
 QComboBox#statusFilter QAbstractItemView {
     background-color: #FFFFFF;
     border: 1.5px solid #E2E8F0;
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 6px;
+    margin-top: 4px;
     selection-background-color: #EDE9FE;
     selection-color: #6D28D9;
     outline: none;
-    font-size: 13px;
+    font-size: 14px;
+    font-family: 'Segoe UI', 'Inter', sans-serif;
 }
 
 QComboBox#statusFilter QAbstractItemView::item {
-    padding: 8px 12px;
-    border-radius: 6px;
-    min-height: 32px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    min-height: 36px;
+    font-weight: 500;
+    color: #334155;
 }
 
 QComboBox#statusFilter QAbstractItemView::item:hover {
     background-color: #F5F3FF;
+    color: #6D28D9;
+}
+
+QComboBox#statusFilter QAbstractItemView::item:selected {
+    background-color: #EDE9FE;
+    color: #6D28D9;
+    font-weight: 600;
 }
 
 
