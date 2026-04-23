@@ -334,18 +334,20 @@ class AdminDashboard:
 
         enhance_table(table, status_col=6, action_col=7, stretch_cols=[1, 2], show_lock_btn=True)
 
-    # ── Fill Jobs table from mock data ─────────────────────────────
+    _ADMIN_JOB_STATUS_MAP = {
+        "published":        "Đang tuyển",
+        "draft":            "Bản nháp",
+        "closed":           "Đã đóng",
+        "rejected":         "Vi phạm",
+        "pending_approval": "Chờ duyệt",
+    }
+
+    # ── Fill Jobs table from shared JOB_STORE ──────────────────────
     def _fill_jobs_table(self) -> None:
         table = self.table_jobs
         if not table:
             return
-        jobs = list(mock_data.MOCK_ADMIN_JOBS)
-        status_map = {
-            "published": "Đang tuyển",
-            "draft": "Đã đóng",
-            "rejected": "Vi phạm",
-            "pending_approval": "Chờ duyệt",
-        }
+        jobs = list(mock_data.JOB_STORE)
         table.setRowCount(0)
         table.setRowCount(len(jobs))
         table.setColumnCount(10)
@@ -364,11 +366,72 @@ class AdminDashboard:
             table.setItem(row, 5, QTableWidgetItem(j.get("job_type", "")))
             table.setItem(row, 6, QTableWidgetItem(f"👥 {j.get('applicants_count', 0)}"))
             table.setItem(row, 7, QTableWidgetItem(f"📅 {j.get('created_at', '')}"))
-            status = status_map.get(j.get("status", ""), j.get("status", ""))
-            table.setItem(row, 8, QTableWidgetItem(status))
+            status_vi = self._ADMIN_JOB_STATUS_MAP.get(j.get("status", ""), j.get("status", ""))
+            table.setItem(row, 8, QTableWidgetItem(status_vi))
             table.setItem(row, 9, QTableWidgetItem(""))
 
         enhance_table(table, status_col=8, action_col=9, stretch_cols=[1, 2], show_lock_btn=False)
+
+        # Override action column with context-aware admin buttons
+        for row, j in enumerate(jobs):
+            table.setCellWidget(row, 9, self._make_admin_job_actions(j["id"], j.get("status", "")))
+
+    def _make_admin_job_actions(self, job_id: int, status: str) -> QWidget:
+        """Action buttons cho admin: duyệt/từ chối (chờ duyệt) hoặc xoá."""
+        wrap = QWidget()
+        wrap.setStyleSheet("background:transparent;")
+        lo = QHBoxLayout(wrap)
+        lo.setContentsMargins(6, 0, 6, 0)
+        lo.setSpacing(4)
+        lo.setAlignment(Qt.AlignVCenter)
+
+        def _btn(label: str, bg: str, hover: str) -> QPushButton:
+            b = QPushButton(label)
+            b.setFixedHeight(28)
+            b.setMinimumWidth(60)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet(
+                f"QPushButton{{background:{bg};color:#fff;"
+                "font-size:11px;font-weight:700;border:none;"
+                "border-radius:6px;padding:0 8px;}}"
+                f"QPushButton:hover{{background:{hover};}}"
+            )
+            return b
+
+        if status == "pending_approval":
+            btn_approve = _btn("✓ Duyệt",  "#059669", "#047857")
+            btn_reject  = _btn("✗ Từ chối", "#dc2626", "#b91c1c")
+
+            def _approve(_jid=job_id):
+                mock_data.update_job_status(_jid, "published")
+                self._fill_jobs_table()
+
+            def _reject(_jid=job_id):
+                mock_data.update_job_status(_jid, "rejected")
+                self._fill_jobs_table()
+
+            btn_approve.clicked.connect(_approve)
+            btn_reject.clicked.connect(_reject)
+            lo.addWidget(btn_approve)
+            lo.addWidget(btn_reject)
+        else:
+            btn_del = _btn("🗑 Xoá", "#ef4444", "#dc2626")
+
+            def _delete(_jid=job_id):
+                ret = QMessageBox.question(
+                    self.win, "Xác nhận xoá",
+                    f"Xoá tin #{_jid}?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if ret == QMessageBox.Yes:
+                    mock_data.delete_job(_jid)
+                    self._fill_jobs_table()
+
+            btn_del.clicked.connect(_delete)
+            lo.addWidget(btn_del)
+
+        lo.addStretch()
+        return wrap
 
     def show(self) -> None:
         if self.win:

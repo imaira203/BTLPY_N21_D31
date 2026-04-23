@@ -6,15 +6,17 @@ from typing import Callable
 
 from PySide6.QtCore import (Qt, QSize, QPropertyAnimation,
                               QEasingCurve, QPoint, QByteArray,
-                              QEvent, QObject)
+                              QEvent, QObject, QTimer, QRect)
 from PySide6.QtGui import (QIcon, QFont, QColor, QPainter, QPixmap,
                             QPainterPath, QLinearGradient, QPen)
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QFrame, QGraphicsDropShadowEffect,
+    QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
+    QFrame, QGraphicsDropShadowEffect,
+    QGridLayout, QGroupBox,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
-    QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
+    QSizePolicy, QSpacerItem, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 from pathlib import Path
@@ -613,7 +615,14 @@ class HRDashboard:
         win.setWindowTitle("JobHub HR - Bảng điều khiển")
         win.setMinimumSize(1100, 680)
         win.resize(1280, 820)
-        win.setStyleSheet(f"QMainWindow{{background:{CONTENT_BG};}}")
+        win.setStyleSheet(
+            f"QMainWindow{{background:{CONTENT_BG};}}"
+            "QToolTip{"
+            "background:#1e293b;color:#f8fafc;"
+            "border:none;border-radius:6px;"
+            "padding:5px 10px;font-size:12px;"
+            "}"
+        )
         self.win = win
 
         root = QWidget()
@@ -624,6 +633,102 @@ class HRDashboard:
         rlo.addWidget(self._build_sidebar())
         rlo.addWidget(self._build_main(), 1)
         win.setCentralWidget(root)
+
+    # ── toast notification ────────────────────────────────────
+    def _show_toast(self, text: str, icon: str = "✅",
+                    color: str = "#10b981", duration: int = 3000) -> None:
+        """Hiện thông báo nổi góc phải-dưới, tự động tắt sau `duration` ms."""
+        toast = QWidget(self.win)
+        toast.setWindowFlags(Qt.FramelessWindowHint | Qt.SubWindow)
+        toast.setAttribute(Qt.WA_TranslucentBackground, False)
+        toast.setFixedWidth(320)
+
+        lo = QHBoxLayout(toast)
+        lo.setContentsMargins(14, 12, 14, 12)
+        lo.setSpacing(10)
+
+        # Icon badge
+        ic_lbl = QLabel(icon)
+        ic_lbl.setFixedSize(32, 32)
+        ic_lbl.setAlignment(Qt.AlignCenter)
+        ic_lbl.setStyleSheet(
+            f"background:{color}22;border-radius:16px;"
+            f"color:{color};font-size:16px;border:none;"
+        )
+
+        # Message
+        msg_lbl = QLabel(text)
+        msg_lbl.setWordWrap(True)
+        msg_lbl.setStyleSheet(
+            f"color:{TXT_H};font-size:13px;font-weight:500;"
+            "background:transparent;border:none;"
+        )
+
+        # Close btn
+        close_btn = QPushButton("×")
+        close_btn.setFixedSize(20, 20)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(
+            f"QPushButton{{background:transparent;color:{TXT_M};"
+            "border:none;font-size:16px;font-weight:700;border-radius:10px;}}"
+            f"QPushButton:hover{{background:#f1f5f9;color:{TXT_H};}}"
+        )
+        close_btn.clicked.connect(toast.hide)
+
+        lo.addWidget(ic_lbl)
+        lo.addWidget(msg_lbl, 1)
+        lo.addWidget(close_btn, 0, Qt.AlignTop)
+
+        toast.setStyleSheet(
+            "QWidget{"
+            f"background:#ffffff;border:1.5px solid {color}55;"
+            "border-radius:12px;"
+            "}"
+        )
+
+        # Drop shadow
+        sh = QGraphicsDropShadowEffect()
+        sh.setBlurRadius(24)
+        sh.setXOffset(0)
+        sh.setYOffset(4)
+        sh.setColor(QColor(0, 0, 0, 40))
+        toast.setGraphicsEffect(sh)
+
+        toast.adjustSize()
+        toast.setFixedHeight(toast.sizeHint().height())
+
+        # Position: bottom-right of window
+        pw = self.win.width()
+        ph = self.win.height()
+        tx = pw - toast.width() - 24
+        ty_end = ph - toast.height() - 24
+        ty_start = ph  # slide up from below
+
+        toast.move(tx, ty_start)
+        toast.show()
+        toast.raise_()
+
+        # Slide-in animation
+        anim_in = QPropertyAnimation(toast, b"pos")
+        anim_in.setDuration(280)
+        anim_in.setStartValue(QPoint(tx, ty_start))
+        anim_in.setEndValue(QPoint(tx, ty_end))
+        anim_in.setEasingCurve(QEasingCurve.OutCubic)
+        anim_in.start()
+        toast._anim_in = anim_in  # keep reference
+
+        # Auto-dismiss
+        def _dismiss():
+            anim_out = QPropertyAnimation(toast, b"pos")
+            anim_out.setDuration(220)
+            anim_out.setStartValue(QPoint(tx, ty_end))
+            anim_out.setEndValue(QPoint(tx, ty_start))
+            anim_out.setEasingCurve(QEasingCurve.InCubic)
+            anim_out.finished.connect(toast.deleteLater)
+            anim_out.start()
+            toast._anim_out = anim_out
+
+        QTimer.singleShot(duration, _dismiss)
 
     # ── sidebar ───────────────────────────────────────────────
     def _build_sidebar(self) -> QFrame:
@@ -860,7 +965,13 @@ class HRDashboard:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet("background:transparent;")
+        scroll.setStyleSheet(
+            "QScrollArea{background:transparent;border:none;}"
+            "QScrollBar:vertical{width:8px;background:transparent;margin:4px 2px;}"
+            "QScrollBar::handle:vertical{background:#cbd5e1;border-radius:4px;min-height:32px;}"
+            "QScrollBar::handle:vertical:hover{background:#94a3b8;}"
+            "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+        )
 
         pg = QWidget()
         pg.setStyleSheet(f"background:{CONTENT_BG};")
@@ -873,29 +984,108 @@ class HRDashboard:
         self._cards_row.setSpacing(18)
         lo.addLayout(self._cards_row)
 
+        # ── Quick stats divider bar ──────────────────────────
+        stats_bar = QFrame()
+        stats_bar.setFixedHeight(52)
+        stats_bar.setStyleSheet(
+            f"QFrame{{background:{CARD_BG};border:1px solid {BORDER};"
+            "border-radius:12px;}}"
+        )
+        stats_lo = QHBoxLayout(stats_bar)
+        stats_lo.setContentsMargins(20, 0, 20, 0)
+        stats_lo.setSpacing(0)
+
+        for i, (val, lbl, col) in enumerate([
+            ("3",   "Ứng viên mới hôm nay",    "#6366f1"),
+            ("1",   "Tin chờ Admin duyệt",      "#f59e0b"),
+            ("86%", "Tỷ lệ trả lời ứng viên",  "#10b981"),
+            ("2",   "Phỏng vấn sắp tới",        "#0ea5e9"),
+        ]):
+            if i > 0:
+                sep = QFrame()
+                sep.setFixedSize(1, 30)
+                sep.setStyleSheet(f"background:{BORDER};border:none;")
+                stats_lo.addWidget(sep)
+                stats_lo.addSpacing(0)
+
+            stat_w = QWidget()
+            stat_w.setStyleSheet("background:transparent;")
+            stat_inner = QHBoxLayout(stat_w)
+            stat_inner.setContentsMargins(20, 0, 20, 0)
+            stat_inner.setSpacing(8)
+            stat_inner.setAlignment(Qt.AlignCenter)
+
+            v_lbl = QLabel(val)
+            v_lbl.setStyleSheet(
+                f"color:{col};font-size:20px;font-weight:800;"
+                "background:transparent;border:none;"
+            )
+            t_lbl = QLabel(lbl)
+            t_lbl.setStyleSheet(
+                f"color:{TXT_M};font-size:12px;font-weight:500;"
+                "background:transparent;border:none;"
+            )
+            stat_inner.addWidget(v_lbl)
+            stat_inner.addWidget(t_lbl)
+            stats_lo.addWidget(stat_w, 1)
+
+        lo.addWidget(stats_bar)
+
         # ── Bottom: chart (left) + activity (right) ─────────
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(16)
 
-        # Chart card — takes ~60% width
+        # ── Chart card with period filter tabs ───────────────
         chart_frame, chart_lo = _card_frame()
+        chart_frame.setStyleSheet(
+            f"QFrame{{background:{CARD_BG};border:none;border-radius:16px;}}"
+        )
         chart_lo.setSpacing(12)
 
-        chart_title_row = QHBoxLayout()
-        chart_title_row.setSpacing(0)
+        chart_header_row = QHBoxLayout()
+        chart_header_row.setSpacing(0)
+
+        chart_left = QHBoxLayout()
+        chart_left.setSpacing(8)
+        chart_ic = QLabel()
+        chart_ic.setPixmap(_svg_pm("ic_trend.svg", 18, P))
+        chart_ic.setStyleSheet("background:transparent;border:none;")
         chart_title_lbl = QLabel("Xu hướng tuyển dụng")
         chart_title_lbl.setStyleSheet(
             f"color:{TXT_H};font-size:16px;font-weight:700;"
             "background:transparent;border:none;"
         )
-        chart_ic = QLabel()
-        chart_ic.setPixmap(_svg_pm("ic_trend.svg", 18, P))
-        chart_ic.setStyleSheet("background:transparent;")
-        chart_title_row.addWidget(chart_ic)
-        chart_title_row.addSpacing(8)
-        chart_title_row.addWidget(chart_title_lbl)
-        chart_title_row.addStretch()
-        chart_lo.addLayout(chart_title_row)
+        chart_left.addWidget(chart_ic)
+        chart_left.addWidget(chart_title_lbl)
+        chart_header_row.addLayout(chart_left, 1)
+
+        # Period filter pill-tabs
+        self._chart_period = "week"
+        self._chart_period_btns: list[QPushButton] = []
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(4)
+        for period, label in [("week", "Tuần"), ("month", "Tháng"), ("quarter", "Quý")]:
+            btn = QPushButton(label)
+            btn.setFixedHeight(28)
+            btn.setMinimumWidth(56)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setCheckable(True)
+            btn.setChecked(period == "week")
+            btn.setStyleSheet(
+                f"QPushButton{{background:#f1f5f9;color:{TXT_M};"
+                "border:none;border-radius:6px;"
+                "font-size:12px;font-weight:600;padding:0 12px;}}"
+                f"QPushButton:checked{{background:{P};color:white;}}"
+                "QPushButton:hover:!checked{background:#e2e8f0;}"
+            )
+            btn.clicked.connect(
+                lambda checked, p=period: self._switch_chart_period(p)
+            )
+            self._chart_period_btns.append(btn)
+            filter_row.addWidget(btn)
+
+        chart_header_row.addLayout(filter_row)
+        chart_lo.addLayout(chart_header_row)
 
         self._chart_holder = QWidget()
         self._chart_holder.setStyleSheet("background:transparent;")
@@ -904,30 +1094,53 @@ class HRDashboard:
         chart_lo.addWidget(self._chart_holder)
         bottom_row.addWidget(chart_frame, 6)
 
-        # Activity feed card — takes ~40% width
+        # ── Activity feed card ───────────────────────────────
         act_frame, act_lo = _card_frame()
+        act_frame.setStyleSheet(
+            f"QFrame{{background:{CARD_BG};border:none;border-radius:16px;}}"
+        )
         act_lo.setSpacing(0)
 
-        act_title_row = QHBoxLayout()
+        act_header = QHBoxLayout()
+        act_header.setSpacing(8)
+        act_ic = QLabel()
+        act_ic.setPixmap(_svg_pm("ic_activity.svg", 18, "#10b981"))
+        act_ic.setStyleSheet("background:transparent;")
         act_title_lbl = QLabel("Hoạt động gần đây")
         act_title_lbl.setStyleSheet(
             f"color:{TXT_H};font-size:16px;font-weight:700;"
             "background:transparent;border:none;"
         )
-        act_ic = QLabel()
-        act_ic.setPixmap(_svg_pm("ic_activity.svg", 18, "#10b981"))
-        act_ic.setStyleSheet("background:transparent;")
-        act_title_row.addWidget(act_ic)
-        act_title_row.addSpacing(8)
-        act_title_row.addWidget(act_title_lbl)
-        act_title_row.addStretch()
-        act_lo.addLayout(act_title_row)
-        act_lo.addSpacing(16)
+        act_count = QLabel(f"  {len(mock_data.MOCK_HR_ACTIVITY)} sự kiện  ")
+        act_count.setStyleSheet(
+            f"background:#ede9fe;color:{P};font-size:11px;font-weight:700;"
+            "border-radius:10px;padding:2px 0;"
+        )
+        act_header.addWidget(act_ic)
+        act_header.addWidget(act_title_lbl, 1)
+        act_header.addWidget(act_count)
+        act_lo.addLayout(act_header)
+        act_lo.addSpacing(12)
 
-        self._act_list_lo = QVBoxLayout()
+        # Scrollable activity list inside the card
+        act_scroll = QScrollArea()
+        act_scroll.setWidgetResizable(True)
+        act_scroll.setFrameShape(QFrame.NoFrame)
+        act_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        act_scroll.setStyleSheet(
+            "QScrollArea{background:transparent;border:none;}"
+            "QScrollBar:vertical{width:6px;background:transparent;}"
+            "QScrollBar::handle:vertical{background:#e2e8f0;border-radius:3px;min-height:20px;}"
+            "QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0;}"
+        )
+        act_inner = QWidget()
+        act_inner.setStyleSheet("background:transparent;")
+        self._act_list_lo = QVBoxLayout(act_inner)
         self._act_list_lo.setSpacing(0)
-        act_lo.addLayout(self._act_list_lo)
-        act_lo.addStretch()
+        self._act_list_lo.setContentsMargins(0, 0, 0, 0)
+        act_scroll.setWidget(act_inner)
+        act_scroll.setMinimumHeight(320)
+        act_lo.addWidget(act_scroll, 1)
         bottom_row.addWidget(act_frame, 4)
 
         lo.addLayout(bottom_row)
@@ -936,11 +1149,23 @@ class HRDashboard:
         scroll.setWidget(pg)
         return scroll
 
+    # Type → (emoji, bg_color, fg_color)
+    _ACT_TYPE_STYLE: dict = {
+        "apply":     ("📋", "#ede9fe", "#6366f1"),
+        "interview": ("📅", "#dbeafe", "#2563eb"),
+        "approved":  ("✅", "#d1fae5", "#059669"),
+        "update":    ("🔄", "#fef3c7", "#d97706"),
+        "view":      ("👁️",  "#f1f5f9", "#64748b"),
+    }
+    _ACT_GROUP_LABEL: dict = {
+        "today":     "Hôm nay",
+        "yesterday": "Hôm qua",
+        "week":      "Tuần này",
+    }
+
     def _load_dash(self) -> None:
-        data   = mock_data.MOCK_HR_DASHBOARD
-        cards  = data.get("cards") or {}
-        labels = data.get("labels") or []
-        values = data.get("values") or []
+        data  = mock_data.MOCK_HR_DASHBOARD
+        cards = data.get("cards") or {}
 
         # ── Metric cards ─────────────────────────────────────
         while self._cards_row.count():
@@ -948,52 +1173,34 @@ class HRDashboard:
             if it.widget():
                 it.widget().deleteLater()
 
-        # icon_svg, icon_color, icon_bg,
-        # label, value,
-        # hint_text, hint_color, hint_bg
-        # Sparkline trend data (last 6 data points per metric)
         sp = {
             "jobs":      [7, 8, 9, 10, 11, 12],
             "candidates":[30, 35, 39, 43, 46, 48],
             "views":     [1900, 2200, 2600, 2900, 3050, 3200],
             "response":  [34, 36, 38, 40, 41, 42],
         }
-
-        # icon, icon_bg(vivid),
-        # label, value,
-        # hint, hint_color, hint_bg(rgba for dark),
-        # glow_color, sparkline_data, sparkline_color
-        # icon_svg, icon_color, icon_bg,
-        # label, value,
-        # hint, hint_color, hint_bg,
-        # glow_color, sparkline_data, sparkline_color
         card_defs = [
             ("ic_jobs.svg",  "#ef4444", "#fee2e2",
              "Tin đang đăng",  str(cards.get("jobs", 0)),
              "↑ +2 tuần này",  "#dc2626", "#fee2e2",
              "#ef4444", sp["jobs"], "#f87171"),
-
             ("ic_users.svg", "#f59e0b", "#fef3c7",
              "Tổng ứng viên", str(cards.get("candidates", 0)),
              "↑ +15 mới",      "#d97706", "#fef9c3",
              "#f59e0b", sp["candidates"], "#fbbf24"),
-
             ("ic_view.svg",  "#0ea5e9", "#e0f2fe",
              "Lượt xem tin",  f"{cards.get('views', 0):,}",
              "↑ +12% xu hướng","#0284c7", "#e0f2fe",
              "#0ea5e9", sp["views"], "#38bdf8"),
-
             ("ic_chat.svg",  "#10b981", "#d1fae5",
              "Tỷ lệ phản hồi",f"{cards.get('response_rate', 0)}%",
              "● Tối ưu",       "#059669", "#d1fae5",
              "#10b981", sp["response"], "#34d399"),
         ]
         for (icon, ic_col, ic_bg, label, val,
-             hint, hcol, hbg,
-             glow, sp_data, sp_col) in card_defs:
+             hint, hcol, hbg, glow, sp_data, sp_col) in card_defs:
             c = _MetricCard(
-                icon, ic_col, ic_bg,
-                label, val,
+                icon, ic_col, ic_bg, label, val,
                 hint, hcol, hbg,
                 glow_color=glow,
                 sparkline_data=sp_data,
@@ -1001,83 +1208,155 @@ class HRDashboard:
             )
             self._cards_row.addWidget(c)
 
-        # ── Chart ────────────────────────────────────────────
+        # ── Chart (initial period = week) ─────────────────────
+        self._rebuild_chart("week")
+
+        # ── Activity feed (grouped) ───────────────────────────
+        self._rebuild_activity_feed()
+
+    def _switch_chart_period(self, period: str) -> None:
+        """Called when user clicks a chart period tab."""
+        self._chart_period = period
+        for btn in self._chart_period_btns:
+            btn.setChecked(btn.text() in {"Tuần": "week", "Tháng": "month", "Quý": "quarter"}
+                           and {"Tuần": "week", "Tháng": "month", "Quý": "quarter"}[btn.text()] == period)
+        self._rebuild_chart(period)
+
+    def _rebuild_chart(self, period: str) -> None:
+        """Rebuild the bar chart for the given period."""
+        chart_data = mock_data.MOCK_HR_CHART_DATA.get(period, {})
+        labels = chart_data.get("labels", [])
+        values = chart_data.get("values", [])
+
         lay = self._chart_holder.layout()
         while lay.count():
             it = lay.takeAt(0)
             if it.widget():
                 it.widget().deleteLater()
-        canvas = make_bar_chart([str(x) for x in labels],
-                                [int(x) for x in values],
-                                "#6366f1", dark=False)
+        canvas = make_bar_chart(
+            [str(x) for x in labels],
+            [int(x) for x in values],
+            "#6366f1", dark=False,
+        )
         canvas.setMinimumHeight(240)
         lay.addWidget(canvas)
 
-        # ── Activity feed ────────────────────────────────────
-        # Clear previous items
+    def _rebuild_activity_feed(self) -> None:
+        """Rebuild activity feed with grouping by day + icons."""
         while self._act_list_lo.count():
             it = self._act_list_lo.takeAt(0)
             if w := it.widget():
                 w.deleteLater()
 
-        activities = mock_data.MOCK_HR_ACTIVITY
-        for i, act in enumerate(activities):
-            item = self._make_activity_item(
-                act["dot_color"], act["text"],
-                act["time"], act.get("bold", False)
-            )
-            self._act_list_lo.addWidget(item)
-            if i < len(activities) - 1:
-                div = QFrame()
-                div.setFrameShape(QFrame.HLine)
-                div.setStyleSheet(
-                    f"background:{BORDER};max-height:1px;border:none;"
+        # Merge runtime events (from User/Admin actions) + static mock data
+        runtime = list(mock_data.HR_ACTIVITY_STORE)
+        activities = runtime + mock_data.MOCK_HR_ACTIVITY
+        current_group = None
+        for act in activities:
+            group = act.get("group", "week")
+            # Group header when group changes
+            if group != current_group:
+                current_group = group
+                grp_lbl = QLabel(self._ACT_GROUP_LABEL.get(group, group))
+                grp_lbl.setStyleSheet(
+                    f"color:{TXT_M};font-size:10px;font-weight:700;"
+                    "letter-spacing:1.5px;background:transparent;border:none;"
+                    "padding:12px 0 6px 0;"
                 )
-                self._act_list_lo.addWidget(div)
+                self._act_list_lo.addWidget(grp_lbl)
 
-    def _make_activity_item(self, dot_color: str, text: str,
-                             time_str: str, bold: bool = False) -> QWidget:
-        """Single activity row: colored dot | text + timestamp."""
+            item = self._make_activity_item(act)
+            self._act_list_lo.addWidget(item)
+
+            # Thin divider
+            div = QFrame()
+            div.setFixedHeight(1)
+            div.setStyleSheet(f"background:{BORDER};border:none;margin:0 4px;")
+            self._act_list_lo.addWidget(div)
+
+        self._act_list_lo.addStretch()
+
+    def _make_activity_item(self, act: dict) -> QWidget:
+        """Redesigned activity row: type icon | text + time | quick-action button."""
+        act_type  = act.get("type", "view")
+        dot_color = act.get("dot_color", TXT_M)
+        text      = act.get("text", "")
+        time_str  = act.get("time", "")
+        bold      = act.get("bold", False)
+        act_label = act.get("action_label", "")
+        act_page  = act.get("action_page", 0)
+
+        emoji, type_bg, type_fg = self._ACT_TYPE_STYLE.get(
+            act_type, ("●", "#f1f5f9", "#64748b")
+        )
+
         row = QWidget()
-        row.setStyleSheet("background:transparent;")
-        row.setMinimumHeight(56)
-        lo = QHBoxLayout(row)
-        lo.setContentsMargins(0, 10, 0, 10)
-        lo.setSpacing(14)
+        row.setMinimumHeight(52)
+        row.setStyleSheet("QWidget{background:transparent;border-radius:8px;}")
+        row.setCursor(Qt.PointingHandCursor)
 
-        # Colored dot
-        dot = QLabel("●")
-        dot.setFixedWidth(14)
-        dot.setAlignment(Qt.AlignCenter)
-        dot.setStyleSheet(
-            f"color:{dot_color};font-size:11px;"
-            "background:transparent;border:none;"
+        def _on_enter(e, w=row):
+            w.setStyleSheet("QWidget{background:#f8fafc;border-radius:8px;}")
+            super(QWidget, w).enterEvent(e)  # noqa
+
+        def _on_leave(e, w=row):
+            w.setStyleSheet("QWidget{background:transparent;border-radius:8px;}")
+            super(QWidget, w).leaveEvent(e)  # noqa
+
+        row.enterEvent = _on_enter
+        row.leaveEvent = _on_leave
+
+        lo = QHBoxLayout(row)
+        lo.setContentsMargins(4, 6, 4, 6)
+        lo.setSpacing(10)
+
+        # Type icon badge
+        badge = QLabel(emoji)
+        badge.setFixedSize(32, 32)
+        badge.setAlignment(Qt.AlignCenter)
+        badge.setStyleSheet(
+            f"background:{type_bg};border-radius:8px;"
+            "font-size:14px;border:none;"
         )
 
         # Text column
         txt_col = QVBoxLayout()
-        txt_col.setSpacing(3)
+        txt_col.setSpacing(2)
         txt_col.setContentsMargins(0, 0, 0, 0)
 
         main_lbl = QLabel(text)
         main_lbl.setWordWrap(True)
         weight = "600" if bold else "400"
         main_lbl.setStyleSheet(
-            f"color:{TXT_S};font-size:13px;font-weight:{weight};"
+            f"color:{TXT_S};font-size:12px;font-weight:{weight};"
             "background:transparent;border:none;"
         )
-
         time_lbl = QLabel(time_str)
         time_lbl.setStyleSheet(
-            f"color:{TXT_M};font-size:11px;font-weight:400;"
+            f"color:{TXT_M};font-size:10px;font-weight:400;"
             "background:transparent;border:none;"
         )
-
         txt_col.addWidget(main_lbl)
         txt_col.addWidget(time_lbl)
 
-        lo.addWidget(dot, 0, Qt.AlignTop | Qt.AlignHCenter)
+        lo.addWidget(badge, 0, Qt.AlignVCenter)
         lo.addLayout(txt_col, 1)
+
+        # Quick-action button
+        if act_label:
+            qa_btn = QPushButton(act_label)
+            qa_btn.setFixedHeight(24)
+            qa_btn.setMinimumWidth(64)
+            qa_btn.setCursor(Qt.PointingHandCursor)
+            qa_btn.setStyleSheet(
+                f"QPushButton{{background:{type_bg};color:{type_fg};"
+                "border:none;border-radius:6px;"
+                "font-size:10px;font-weight:700;padding:0 8px;}}"
+                f"QPushButton:hover{{background:{dot_color};color:white;}}"
+            )
+            qa_btn.clicked.connect(lambda _, p=act_page: self._go(p))
+            lo.addWidget(qa_btn, 0, Qt.AlignVCenter)
+
         return row
 
     # ── PAGE 1: POST JOB ──────────────────────────────────────
@@ -1528,8 +1807,41 @@ class HRDashboard:
             QMessageBox.warning(self.win, "Cảnh báo",
                                 "Vui lòng nhập tiêu đề công việc.")
             return
+
+        # Collect all form fields
+        level    = self.combo_level.currentText()
+        job_type = self.combo_type.currentText()
+        salary   = self.line_salary.text().strip()
+        location = self.line_location.text().strip()
+        count    = self.line_count.text().strip() or "1"
+        deadline = self.line_deadline.text().strip()
+        desc     = self.plain_desc.toPlainText().strip()
+
+        mock_data.add_job(
+            title=title,
+            company_name="TechCorp Vietnam",   # current HR company
+            department="Kỹ thuật & Công nghệ",
+            location=location or "Hà Nội",
+            salary_text=salary or "Thương lượng",
+            job_type=job_type,
+            level=level,
+            count=count,
+            deadline=deadline,
+            description=desc,
+            hr_id=1,
+            draft=draft,
+        )
+
+        # Clear form
+        self.line_title.clear()
+        self.line_salary.clear()
+        self.line_location.clear()
+        self.line_count.clear()
+        self.line_deadline.clear()
+        self.plain_desc.clear()
+
         msg = ("Đã lưu bản nháp thành công!" if draft
-               else "Tin tuyển dụng đã được đăng thành công!")
+               else "Tin đã gửi Admin duyệt thành công!")
         QMessageBox.information(self.win, "Thành công", msg)
         self._go(2)
 
@@ -1550,17 +1862,19 @@ class HRDashboard:
     }
 
     def _fill_jobs_table(self) -> None:
-        self._jobs_data = list(mock_data.MOCK_HR_JOBS)
+        self._jobs_data = mock_data.get_hr_jobs()
         self._jobs_page = 0
         self._render_jobs_page()
 
     def _filter_jobs(self, text: str) -> None:
         kw = text.strip().lower()
+        all_jobs = mock_data.get_hr_jobs()
         self._jobs_data = (
-            list(mock_data.MOCK_HR_JOBS) if not kw
-            else [j for j in mock_data.MOCK_HR_JOBS
+            all_jobs if not kw
+            else [j for j in all_jobs
                   if kw in j.get("title", "").lower()
-                  or kw in j.get("department", "").lower()]
+                  or kw in j.get("department", "").lower()
+                  or kw in j.get("company_name", "").lower()]
         )
         self._jobs_page = 0
         self._render_jobs_page()
@@ -1712,7 +2026,7 @@ class HRDashboard:
         self._jobs_resizer._apply()   # set proportional widths immediately
 
     def _make_job_actions(self, job_id: int) -> QWidget:
-        """Three icon-only action buttons per row."""
+        """Three icon-only action buttons per row with tooltip labels + toasts."""
         wrap = QWidget()
         wrap.setStyleSheet("background:transparent;")
         lo = QHBoxLayout(wrap)
@@ -1734,30 +2048,310 @@ class HRDashboard:
                 "border-radius:8px;}"
                 f"QPushButton:hover{{background:{hover_bg};"
                 f"border-color:{color};}}"
+                "QPushButton:pressed{"
+                "opacity:0.7;}"
             )
             return btn
 
-        btn_edit = _ic_btn("ic_edit.svg",   "#6366f1", "#ede9fe", "Chỉnh sửa")
-        btn_view = _ic_btn("ic_view.svg",   "#0ea5e9", "#e0f2fe", "Xem chi tiết")
-        btn_del  = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Xoá")
+        btn_edit = _ic_btn("ic_edit.svg",   "#6366f1", "#ede9fe", "✏️ Chỉnh sửa tin")
+        btn_view = _ic_btn("ic_view.svg",   "#0ea5e9", "#e0f2fe", "👁️ Xem chi tiết")
+        btn_del  = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "🗑️ Xoá tin")
 
-        btn_edit.clicked.connect(
-            lambda: QMessageBox.information(
-                self.win, "Chỉnh sửa", f"Chỉnh sửa tin #{job_id}"
+        # ── Edit dialog ──────────────────────────────────────────
+        def _do_edit(_jid=job_id):
+            job = next((j for j in mock_data.JOB_STORE if j["id"] == _jid), None)
+            if not job:
+                self._show_toast("Không tìm thấy tin đăng!", "❌", "#ef4444")
+                return
+
+            dlg = QDialog(self.win)
+            dlg.setWindowTitle(f"✏️ Chỉnh sửa tin — #{_jid}")
+            dlg.setMinimumWidth(540)
+            dlg.setStyleSheet(
+                f"QDialog{{background:{CONTENT_BG};border-radius:12px;}}"
+                f"QLabel{{color:{TXT_H};background:transparent;border:none;}}"
+                "QLineEdit,QComboBox,QPlainTextEdit{"
+                f"background:#ffffff;border:1.5px solid {BORDER};"
+                "border-radius:8px;padding:6px 10px;"
+                f"color:{TXT_H};font-size:13px;}}"
+                "QLineEdit:focus,QComboBox:focus,QPlainTextEdit:focus{"
+                f"border-color:{P};}}"
             )
-        )
-        btn_view.clicked.connect(
-            lambda: QMessageBox.information(
-                self.win, "Chi tiết", f"Xem chi tiết tin #{job_id}"
+            vlo = QVBoxLayout(dlg)
+            vlo.setContentsMargins(24, 20, 24, 20)
+            vlo.setSpacing(16)
+
+            # Header
+            h_lbl = QLabel(f"✏️  Chỉnh sửa tin đăng  #{_jid}")
+            h_lbl.setStyleSheet(
+                f"color:{TXT_H};font-size:16px;font-weight:700;"
+                f"background:transparent;border:none;padding-bottom:8px;"
             )
-        )
-        btn_del.clicked.connect(
-            lambda: QMessageBox.question(
-                self.win, "Xác nhận xoá",
-                f"Bạn có chắc muốn xoá tin #{job_id}?",
-                QMessageBox.Yes | QMessageBox.No
+            vlo.addWidget(h_lbl)
+
+            # Divider
+            div = QFrame(); div.setFixedHeight(1)
+            div.setStyleSheet(f"background:{BORDER};border:none;")
+            vlo.addWidget(div)
+
+            # Form grid
+            grid = QGridLayout()
+            grid.setHorizontalSpacing(16)
+            grid.setVerticalSpacing(10)
+
+            def _lbl(t):
+                l = QLabel(t)
+                l.setStyleSheet(
+                    f"color:{TXT_S};font-size:12px;font-weight:600;"
+                    "background:transparent;border:none;"
+                )
+                return l
+
+            # Row 0: title
+            grid.addWidget(_lbl("Tiêu đề *"), 0, 0, 1, 2)
+            e_title = QLineEdit(job.get("title", ""))
+            e_title.setPlaceholderText("Tiêu đề vị trí tuyển dụng")
+            grid.addWidget(e_title, 1, 0, 1, 2)
+
+            # Row 2: level | job_type
+            grid.addWidget(_lbl("Cấp độ"), 2, 0)
+            grid.addWidget(_lbl("Loại hình"), 2, 1)
+            c_level = QComboBox()
+            c_level.addItems(["Intern", "Junior", "Mid", "Senior", "Lead", "Manager"])
+            cur_lv = job.get("level", "")
+            idx = c_level.findText(cur_lv)
+            if idx >= 0: c_level.setCurrentIndex(idx)
+            c_type = QComboBox()
+            c_type.addItems(["Full-time", "Part-time", "Remote", "Hybrid", "Contract"])
+            cur_jt = job.get("job_type", "")
+            idx2 = c_type.findText(cur_jt)
+            if idx2 >= 0: c_type.setCurrentIndex(idx2)
+            grid.addWidget(c_level, 3, 0)
+            grid.addWidget(c_type, 3, 1)
+
+            # Row 4: salary | location
+            grid.addWidget(_lbl("Mức lương"), 4, 0)
+            grid.addWidget(_lbl("Địa điểm"), 4, 1)
+            e_sal = QLineEdit(job.get("salary_text", ""))
+            e_sal.setPlaceholderText("VD: 15–25 triệu")
+            e_loc = QLineEdit(job.get("location", ""))
+            e_loc.setPlaceholderText("Hà Nội, TP.HCM…")
+            grid.addWidget(e_sal, 5, 0)
+            grid.addWidget(e_loc, 5, 1)
+
+            # Row 6: count | deadline
+            grid.addWidget(_lbl("Số lượng"), 6, 0)
+            grid.addWidget(_lbl("Hạn nộp"), 6, 1)
+            e_count = QLineEdit(str(job.get("count", 1)))
+            e_count.setPlaceholderText("1")
+            e_dead = QLineEdit(job.get("deadline", ""))
+            e_dead.setPlaceholderText("DD/MM/YYYY")
+            grid.addWidget(e_count, 7, 0)
+            grid.addWidget(e_dead, 7, 1)
+
+            # Row 8: description
+            grid.addWidget(_lbl("Mô tả công việc"), 8, 0, 1, 2)
+            e_desc = QPlainTextEdit(job.get("description", ""))
+            e_desc.setFixedHeight(100)
+            e_desc.setPlaceholderText("Mô tả chi tiết vị trí tuyển dụng…")
+            grid.addWidget(e_desc, 9, 0, 1, 2)
+
+            vlo.addLayout(grid)
+
+            # Button row
+            btn_row = QHBoxLayout()
+            btn_row.addStretch()
+            btn_cancel = QPushButton("Huỷ")
+            btn_cancel.setFixedHeight(36)
+            btn_cancel.setStyleSheet(
+                f"QPushButton{{background:#f1f5f9;color:{TXT_S};"
+                "border:none;border-radius:8px;padding:0 20px;font-size:13px;}}"
+                "QPushButton:hover{background:#e2e8f0;}"
             )
-        )
+            btn_save = QPushButton("💾  Lưu thay đổi")
+            btn_save.setFixedHeight(36)
+            btn_save.setStyleSheet(
+                f"QPushButton{{background:{P};color:#ffffff;"
+                "border:none;border-radius:8px;padding:0 20px;font-size:13px;font-weight:600;}}"
+                f"QPushButton:hover{{background:{P_DARK};}}"
+            )
+            btn_cancel.clicked.connect(dlg.reject)
+            btn_row.addWidget(btn_cancel)
+            btn_row.addSpacing(8)
+            btn_row.addWidget(btn_save)
+            vlo.addLayout(btn_row)
+
+            def _save():
+                # Apply changes back to JOB_STORE
+                for j in mock_data.JOB_STORE:
+                    if j["id"] == _jid:
+                        j["title"]       = e_title.text().strip() or j["title"]
+                        j["level"]       = c_level.currentText()
+                        j["job_type"]    = c_type.currentText()
+                        j["salary_text"] = e_sal.text().strip() or j["salary_text"]
+                        j["location"]    = e_loc.text().strip() or j["location"]
+                        try:   j["count"] = int(e_count.text())
+                        except ValueError: pass
+                        j["deadline"]    = e_dead.text().strip() or j["deadline"]
+                        j["description"] = e_desc.toPlainText().strip() or j["description"]
+                        break
+                dlg.accept()
+                self._fill_jobs_table()
+                _saved_title = e_title.text().strip()
+                self._show_toast(
+                    f'Đã lưu thay đổi tin \u201c{_saved_title}\u201d',
+                    "✅", "#10b981"
+                )
+
+            btn_save.clicked.connect(_save)
+            dlg.exec()
+
+        # ── View dialog ──────────────────────────────────────────
+        def _do_view(_jid=job_id):
+            job = next((j for j in mock_data.JOB_STORE if j["id"] == _jid), None)
+            if not job:
+                self._show_toast("Không tìm thấy tin đăng!", "❌", "#ef4444")
+                return
+
+            dlg = QDialog(self.win)
+            dlg.setWindowTitle(f"👁️ Chi tiết tin — #{_jid}")
+            dlg.setMinimumWidth(480)
+            dlg.setStyleSheet(
+                f"QDialog{{background:{CONTENT_BG};}}"
+                f"QLabel{{color:{TXT_H};background:transparent;border:none;}}"
+            )
+            vlo = QVBoxLayout(dlg)
+            vlo.setContentsMargins(24, 20, 24, 20)
+            vlo.setSpacing(12)
+
+            # Title
+            t = QLabel(job.get("title", "—"))
+            t.setStyleSheet(
+                f"color:{TXT_H};font-size:18px;font-weight:700;"
+                "background:transparent;border:none;"
+            )
+            vlo.addWidget(t)
+
+            c = QLabel(f"🏢  {job.get('company_name','—')}  ·  {job.get('department','—')}")
+            c.setStyleSheet(f"color:{TXT_M};font-size:13px;background:transparent;border:none;")
+            vlo.addWidget(c)
+
+            div = QFrame(); div.setFixedHeight(1)
+            div.setStyleSheet(f"background:{BORDER};border:none;margin:4px 0;")
+            vlo.addWidget(div)
+
+            STATUS_COLORS = {
+                "published":        ("#d1fae5", "#059669"),
+                "pending_approval": ("#fef3c7", "#d97706"),
+                "draft":            ("#f1f5f9", "#64748b"),
+                "rejected":         ("#fee2e2", "#dc2626"),
+            }
+            st = job.get("status", "")
+            st_bg, st_fg = STATUS_COLORS.get(st, ("#f1f5f9", "#64748b"))
+            st_lbl = QLabel(st.replace("_", " ").title())
+            st_lbl.setFixedHeight(24)
+            st_lbl.setStyleSheet(
+                f"background:{st_bg};color:{st_fg};"
+                "border-radius:10px;padding:0 10px;"
+                "font-size:11px;font-weight:700;border:none;"
+            )
+
+            # Info chips row
+            chips_row = QHBoxLayout()
+            chips_row.setSpacing(8)
+            chips_row.addWidget(st_lbl)
+            chips_row.addStretch()
+            vlo.addLayout(chips_row)
+
+            # Details grid
+            fields = [
+                ("📍 Địa điểm",   job.get("location",    "—")),
+                ("💰 Lương",       job.get("salary_text", "—")),
+                ("🧑‍💼 Cấp độ",     job.get("level",       "—")),
+                ("🕐 Loại hình",   job.get("job_type",    "—")),
+                ("👥 Số lượng",    str(job.get("count",   "—"))),
+                ("📅 Hạn nộp",     job.get("deadline",    "—")),
+                ("📊 Ứng viên",    str(job.get("applicants_count", 0))),
+                ("🗓️ Đăng ngày",   job.get("created_at",  "—")),
+            ]
+            grid = QGridLayout()
+            grid.setHorizontalSpacing(20)
+            grid.setVerticalSpacing(6)
+            for i, (k, v) in enumerate(fields):
+                r, c2 = divmod(i, 2)
+                key_l = QLabel(k)
+                key_l.setStyleSheet(
+                    f"color:{TXT_M};font-size:12px;background:transparent;border:none;"
+                )
+                val_l = QLabel(f"<b>{v}</b>")
+                val_l.setTextFormat(Qt.RichText)
+                val_l.setStyleSheet(
+                    f"color:{TXT_H};font-size:13px;background:transparent;border:none;"
+                )
+                sub = QVBoxLayout()
+                sub.setSpacing(2)
+                sub.addWidget(key_l)
+                sub.addWidget(val_l)
+                grid.addLayout(sub, r, c2)
+            vlo.addLayout(grid)
+
+            # Description
+            desc_hdr = QLabel("📄  Mô tả")
+            desc_hdr.setStyleSheet(
+                f"color:{TXT_S};font-size:12px;font-weight:700;"
+                "background:transparent;border:none;margin-top:8px;"
+            )
+            vlo.addWidget(desc_hdr)
+            desc_txt = QLabel(job.get("description", "—")[:400] + ("…" if len(job.get("description","")) > 400 else ""))
+            desc_txt.setWordWrap(True)
+            desc_txt.setStyleSheet(
+                f"color:{TXT_S};font-size:12px;background:#f8fafc;"
+                "border-radius:8px;padding:10px;border:none;"
+            )
+            vlo.addWidget(desc_txt)
+
+            # Close btn
+            close_btn = QPushButton("Đóng")
+            close_btn.setFixedHeight(36)
+            close_btn.setStyleSheet(
+                f"QPushButton{{background:{P};color:#ffffff;"
+                "border:none;border-radius:8px;padding:0 24px;"
+                "font-size:13px;font-weight:600;}}"
+                f"QPushButton:hover{{background:{P_DARK};}}"
+            )
+            close_btn.clicked.connect(dlg.accept)
+            btn_row = QHBoxLayout()
+            btn_row.addStretch()
+            btn_row.addWidget(close_btn)
+            vlo.addLayout(btn_row)
+
+            dlg.exec()
+            _vt = job.get('title', '')
+            self._show_toast(
+                f'\u201c{_vt}\u201d \u2014 \u0111\u00e3 xem chi ti\u1ebft',
+                "👁️", "#0ea5e9"
+            )
+
+        # ── Delete ───────────────────────────────────────────────
+        def _do_delete(_jid=job_id):
+            job = next((j for j in mock_data.JOB_STORE if j["id"] == _jid), None)
+            job_title = job.get("title", f"#{_jid}") if job else f"#{_jid}"
+            ret = QMessageBox.question(
+                self.win, "🗑️  Xác nhận xoá",
+                f"Bạn có chắc muốn xoá tin:\n\"{job_title}\"?\n\nThao tác này không thể hoàn tác.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if ret == QMessageBox.Yes:
+                mock_data.delete_job(_jid)
+                self._fill_jobs_table()
+                self._show_toast(
+                    f'Đã xo\u00e1 tin \u201c{job_title}\u201d',
+                    "🗑️", "#ef4444"
+                )
+
+        btn_edit.clicked.connect(_do_edit)
+        btn_view.clicked.connect(_do_view)
+        btn_del.clicked.connect(_do_delete)
 
         lo.addWidget(btn_edit)
         lo.addWidget(btn_view)
@@ -2002,14 +2596,15 @@ class HRDashboard:
 
         ok = mock_data.update_application_status(app_id, new_status)
         if ok:
-            QMessageBox.information(
-                self.win, "Thành công",
-                f"Đã cập nhật trạng thái → {label_vi} (Đơn #{app_id})"
-            )
+            _TOAST = {
+                "reviewed": ("👁️",  "#0ea5e9", f"Đã đánh dấu xem xét đơn #{app_id}"),
+                "approved": ("✅",  "#10b981", f"Đã phê duyệt đơn ứng tuyển #{app_id}"),
+                "rejected": ("❌",  "#ef4444", f"Đã từ chối đơn ứng tuyển #{app_id}"),
+            }
+            ic, col, msg = _TOAST.get(new_status, ("ℹ️", "#6366f1", f"Cập nhật → {label_vi}"))
+            self._show_toast(msg, ic, col)
         else:
-            QMessageBox.warning(
-                self.win, "Lỗi", f"Không tìm thấy đơn #{app_id}"
-            )
+            self._show_toast(f"Không tìm thấy đơn #{app_id}", "❌", "#ef4444")
         # Refresh table với dữ liệu mới nhất
         self._fill_cands_table()
 
