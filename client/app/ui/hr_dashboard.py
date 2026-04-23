@@ -62,11 +62,33 @@ _CANDS_PER_PAGE = 5   # số ứng viên mỗi trang
 # ══════════════════════════════════════════════════════════════
 #  SVG HELPER
 # ══════════════════════════════════════════════════════════════
-def _svg_pm(name: str, size: int, color: str) -> QPixmap:
+def _lighten(hex_color: str, mix: float = 0.72) -> str:
+    """Mix hex_color with white by `mix` ratio → lighter shade for duotone."""
+    try:
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        r2 = int(r * (1 - mix) + 255 * mix)
+        g2 = int(g * (1 - mix) + 255 * mix)
+        b2 = int(b * (1 - mix) + 255 * mix)
+        return f"#{r2:02x}{g2:02x}{b2:02x}"
+    except Exception:
+        return hex_color
+
+
+def _svg_pm(name: str, size: int, color: str,
+            color2: str = "") -> QPixmap:
+    """
+    Render SVG icon at `size` px, replacing:
+      - currentColor  → color  (main stroke/fill)
+      - softColor     → color2 (duotone fill; auto-lightened if not given)
+    """
     p = _ICONS / name
     if not p.exists():
         return QPixmap()
-    raw = p.read_text(encoding="utf-8").replace("currentColor", color)
+    raw = p.read_text(encoding="utf-8")
+    raw = raw.replace("currentColor", color)
+    soft = color2 if color2 else _lighten(color, 0.78)
+    raw = raw.replace("softColor", soft)
     data = QByteArray(raw.encode())
     rdr  = QSvgRenderer(data)
     pm   = QPixmap(size, size)
@@ -374,15 +396,15 @@ class _MetricCard(QFrame):
         top_row.setContentsMargins(0, 0, 0, 0)
 
         badge = QFrame()
-        badge.setFixedSize(40, 40)
+        badge.setFixedSize(42, 42)
         badge.setStyleSheet(
-            f"background:{icon_bg};border-radius:12px;border:none;"
+            f"background:{icon_bg};border-radius:13px;border:none;"
         )
         b_lo = QHBoxLayout(badge)
         b_lo.setContentsMargins(0, 0, 0, 0)
         ic = QLabel()
         ic.setAlignment(Qt.AlignCenter)
-        ic.setPixmap(_svg_pm(icon_svg, 18, accent))
+        ic.setPixmap(_svg_pm(icon_svg, 20, accent, _lighten(accent, 0.65)))
         ic.setStyleSheet("background:transparent;border:none;")
         b_lo.addWidget(ic)
         top_row.addWidget(badge, 0, Qt.AlignVCenter | Qt.AlignLeft)
@@ -452,10 +474,10 @@ class _MetricCard(QFrame):
 def _card_frame(title: str = "") -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
     frame.setStyleSheet(
-        f"QFrame{{background:{CARD_BG};border:1px solid {BORDER};"
+        f"QFrame{{background:{CARD_BG};border:none;"
         "border-radius:16px;}}"
     )
-    _shadow(frame, blur=12, dy=3, alpha=10)
+    _shadow(frame, blur=16, dy=4, alpha=12)
     lo = QVBoxLayout(frame)
     lo.setContentsMargins(24, 20, 24, 20)
     lo.setSpacing(16)
@@ -631,7 +653,7 @@ def _style_table(tbl: QTableWidget) -> None:
     tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
     tbl.horizontalHeader().setStretchLastSection(False)
     tbl.setFrameShape(QFrame.NoFrame)
-    tbl.verticalHeader().setDefaultSectionSize(48)
+    tbl.verticalHeader().setDefaultSectionSize(52)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1281,7 +1303,7 @@ class HRDashboard:
         stats_bar = QFrame()
         stats_bar.setFixedHeight(52)
         stats_bar.setStyleSheet(
-            f"QFrame{{background:{CARD_BG};border:1px solid {BORDER};"
+            f"QFrame{{background:{CARD_BG};border:none;"
             "border-radius:12px;}}"
         )
         stats_lo = QHBoxLayout(stats_bar)
@@ -2485,28 +2507,36 @@ class HRDashboard:
         lo.setSpacing(6)
         lo.setAlignment(Qt.AlignVCenter)
 
-        def _ic_btn(svg: str, color: str, hover_bg: str,
+        def _ic_btn(svg: str, color: str, tint: str,
                     tooltip: str) -> QPushButton:
+            """Glassmorphism + Duotone icon button."""
+            h = color.lstrip("#")
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
             btn = QPushButton()
-            btn.setFixedSize(32, 32)
+            btn.setFixedSize(36, 36)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setToolTip(tooltip)
-            btn.setIcon(QIcon(_svg_pm(svg, 16, color)))
-            btn.setIconSize(QSize(16, 16))
+            # Render icon with duotone (auto-lightened softColor)
+            btn.setIcon(QIcon(_svg_pm(svg, 18, color)))
+            btn.setIconSize(QSize(18, 18))
             btn.setStyleSheet(
                 "QPushButton{"
-                f"background:transparent;border:1.5px solid {BORDER};"
-                "border-radius:8px;}"
-                f"QPushButton:hover{{background:{hover_bg};"
-                f"border-color:{color};}}"
+                "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+                "stop:0 #ffffff,stop:1 #f5f7ff);"
+                f"border:1px solid {BORDER};"
+                "border-radius:11px;}"
+                "QPushButton:hover{"
+                f"background:rgba({r},{g},{b},0.09);"
+                f"border:1.5px solid rgba({r},{g},{b},0.38);}}"
                 "QPushButton:pressed{"
-                "opacity:0.7;}"
+                f"background:rgba({r},{g},{b},0.16);"
+                f"border:1.5px solid rgba({r},{g},{b},0.55);}}"
             )
             return btn
 
-        btn_edit = _ic_btn("ic_edit.svg",   "#6366f1", "#ede9fe", "✏️ Chỉnh sửa tin")
-        btn_view = _ic_btn("ic_view.svg",   "#0ea5e9", "#e0f2fe", "👁️ Xem chi tiết")
-        btn_del  = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "🗑️ Xoá tin")
+        btn_edit = _ic_btn("ic_edit.svg",   "#6366f1", "#ede9fe", "Chỉnh sửa tin")
+        btn_view = _ic_btn("ic_view.svg",   "#0ea5e9", "#e0f2fe", "Xem chi tiết")
+        btn_del  = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Xoá tin")
 
         # ── Edit dialog ──────────────────────────────────────────
         def _do_edit(_jid=job_id):
@@ -3010,24 +3040,33 @@ class HRDashboard:
         lo.setAlignment(Qt.AlignVCenter)
 
         def _ic_btn(svg: str, color: str,
-                    hover_bg: str, tooltip: str) -> QPushButton:
+                    tint: str, tooltip: str) -> QPushButton:
+            """Glassmorphism + Duotone icon button."""
+            h = color.lstrip("#")
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
             btn = QPushButton()
-            btn.setFixedSize(32, 32)
+            btn.setFixedSize(36, 36)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setToolTip(tooltip)
-            btn.setIcon(QIcon(_svg_pm(svg, 16, color)))
-            btn.setIconSize(QSize(16, 16))
+            btn.setIcon(QIcon(_svg_pm(svg, 18, color)))
+            btn.setIconSize(QSize(18, 18))
             btn.setStyleSheet(
                 "QPushButton{"
-                f"background:transparent;border:1.5px solid {BORDER};"
-                "border-radius:8px;}"
-                f"QPushButton:hover{{background:{hover_bg};"
-                f"border-color:{color};}}"
+                "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
+                "stop:0 #ffffff,stop:1 #f5f7ff);"
+                f"border:1px solid {BORDER};"
+                "border-radius:11px;}"
+                "QPushButton:hover{"
+                f"background:rgba({r},{g},{b},0.09);"
+                f"border:1.5px solid rgba({r},{g},{b},0.38);}}"
+                "QPushButton:pressed{"
+                f"background:rgba({r},{g},{b},0.16);"
+                f"border:1.5px solid rgba({r},{g},{b},0.55);}}"
             )
             return btn
 
         btn_cv  = _ic_btn("ic_view.svg",   "#0ea5e9", "#e0f2fe", f"Xem CV: {cv_name}")
-        btn_ok  = _ic_btn("ic_edit.svg",   "#10b981", "#d1fae5", "Phê duyệt")
+        btn_ok  = _ic_btn("ic_check.svg",  "#10b981", "#d1fae5", "Phê duyệt")
         btn_rej = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Từ chối")
 
         btn_cv.clicked.connect(
