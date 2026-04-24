@@ -19,13 +19,14 @@ class JobStatus(str, enum.Enum):
     draft = "draft"
     pending_approval = "pending_approval"
     published = "published"
+    closed = "closed"
     rejected = "rejected"
 
 
 class ApplicationStatus(str, enum.Enum):
-    submitted = "submitted"
+    pending = "pending"
     reviewed = "reviewed"
-    accepted = "accepted"
+    approved = "approved"
     rejected = "rejected"
 
 

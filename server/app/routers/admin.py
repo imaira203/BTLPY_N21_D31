@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import HRApprovalStatus, HRProfile, Job, JobStatus, User, UserRole
+from ..models import HRApprovalStatus, HRProfile, Job, JobApplication, JobStatus, User, UserRole
 from ..runtime_cache import runtime_cache
 from ..schemas import AdminDecision, JobOut, StatsOut, UserOut
 
@@ -111,6 +111,13 @@ def pending_jobs(user: Annotated[User, Depends(get_current_user)], db: Annotated
     return list(rows)
 
 
+@router.get("/jobs", response_model=list[JobOut])
+def all_jobs(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
+    _require_admin(user)
+    rows = db.scalars(select(Job).order_by(Job.id.desc()).limit(1000)).all()
+    return list(rows)
+
+
 @router.post("/jobs/{job_id}/approve", response_model=JobOut)
 def approve_job(
     job_id: int,
@@ -149,11 +156,105 @@ def reject_job(
     return job
 
 
+@router.delete("/jobs/{job_id}")
+def delete_job(
+    job_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_admin(user)
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    db.delete(job)
+    db.commit()
+    runtime_cache.jobs_by_id.pop(job_id, None)
+    runtime_cache.published_job_ids = [jid for jid in runtime_cache.published_job_ids if jid != job_id]
+    return {"ok": True}
+
+
 @router.get("/users", response_model=list[UserOut])
 def list_users(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[User]:
     _require_admin(user)
     rows = db.scalars(select(User).order_by(User.id.desc()).limit(500)).all()
     return list(rows)
+
+
+@router.get("/users/candidates")
+def candidate_overview(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[dict]:
+    _require_admin(user)
+    rows = db.execute(
+        select(
+            User.id,
+            User.full_name,
+            User.email,
+            User.created_at,
+            User.is_active,
+            User.role,
+            func.count(JobApplication.id),
+        )
+        .outerjoin(JobApplication, JobApplication.candidate_id == User.id)
+        .where(User.role == UserRole.candidate)
+        .group_by(User.id, User.full_name, User.email, User.created_at, User.is_active, User.role)
+        .order_by(User.id.desc())
+    ).all()
+    out: list[dict] = []
+    for user_id, full_name, email, created_at, is_active, role, app_count in rows:
+        out.append(
+            {
+                "id": user_id,
+                "full_name": full_name,
+                "email": email,
+                "phone": "",
+                "created_at": created_at.strftime("%d/%m/%Y"),
+                "applications_count": int(app_count or 0),
+                "is_active": bool(is_active),
+                "role": role.value,
+            }
+        )
+    return out
+
+
+@router.get("/users/hrs")
+def hr_overview(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[dict]:
+    _require_admin(user)
+    rows = db.execute(
+        select(
+            User.id,
+            User.email,
+            User.created_at,
+            User.is_active,
+            HRProfile.company_name,
+            HRProfile.contact_phone,
+            func.count(Job.id),
+        )
+        .join(HRProfile, HRProfile.user_id == User.id)
+        .outerjoin(Job, Job.hr_user_id == User.id)
+        .where(User.role == UserRole.hr)
+        .group_by(
+            User.id,
+            User.email,
+            User.created_at,
+            User.is_active,
+            HRProfile.company_name,
+            HRProfile.contact_phone,
+        )
+        .order_by(User.id.desc())
+    ).all()
+    out: list[dict] = []
+    for user_id, email, created_at, is_active, company_name, contact_phone, jobs_count in rows:
+        out.append(
+            {
+                "id": user_id,
+                "company_name": company_name,
+                "email": email,
+                "phone": contact_phone or "",
+                "created_at": created_at.strftime("%d/%m/%Y"),
+                "jobs_count": int(jobs_count or 0),
+                "is_active": bool(is_active),
+            }
+        )
+    return out
 
 
 @router.get("/users/{target_user_id}", response_model=UserOut)

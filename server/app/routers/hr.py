@@ -14,6 +14,7 @@ from ..models import (
     CandidateProfile,
     CVDocument,
     HRApprovalStatus,
+    HRProfile,
     Invoice,
     InvoiceStatus,
     InvoiceType,
@@ -25,7 +26,7 @@ from ..models import (
     ApplicationStatus,
 )
 from ..runtime_cache import runtime_cache
-from ..schemas import InvoiceOut, JobCreate, JobOut, StatsOut
+from ..schemas import ApplicationDecisionIn, InvoiceOut, JobCreate, JobOut, StatsOut
 from ..storage_paths import resolve_existing_file
 
 router = APIRouter(prefix="/hr", tags=["hr"])
@@ -43,6 +44,33 @@ def _require_approved_hr(user: User) -> None:
         raise HTTPException(status_code=403, detail="HR profile not approved yet")
 
 
+def _to_job_out(job: Job, db: Session, company_name: str | None = None) -> JobOut:
+    app_count = db.scalar(select(func.count()).select_from(JobApplication).where(JobApplication.job_id == job.id)) or 0
+    if company_name is None:
+        hp = db.scalar(select(HRProfile).where(HRProfile.user_id == job.hr_user_id))
+        company_name = hp.company_name if hp else None
+    return JobOut(
+        id=job.id,
+        hr_user_id=job.hr_user_id,
+        title=job.title,
+        description=job.description,
+        department=job.department,
+        level=job.level,
+        salary_text=job.salary_text,
+        min_salary=job.min_salary,
+        max_salary=job.max_salary,
+        location=job.location,
+        job_type=job.job_type,
+        count=job.headcount,
+        deadline=job.deadline_text,
+        applicants_count=int(app_count),
+        status=job.status,
+        admin_note=job.admin_note,
+        created_at=job.created_at,
+        company_name=company_name,
+    )
+
+
 @router.get("/dashboard", response_model=StatsOut)
 def hr_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> StatsOut:
     _require_hr(user)
@@ -56,14 +84,53 @@ def hr_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annotated
         )
         or 0
     )
-    views = total_jobs * 42 + total_apps * 3
-    rate = min(100, int(50 + (total_apps / max(1, total_jobs))))
+    views = (
+        db.scalar(
+            select(func.coalesce(func.sum(Job.view_count), 0)).where(Job.hr_user_id == user.id)
+        )
+        or 0
+    )
+    responded_apps = (
+        db.scalar(
+            select(func.count())
+            .select_from(JobApplication)
+            .join(Job, Job.id == JobApplication.job_id)
+            .where(
+                Job.hr_user_id == user.id,
+                JobApplication.status != ApplicationStatus.pending,
+            )
+        )
+        or 0
+    )
+    rate = int((responded_apps * 100) / total_apps) if total_apps > 0 else 0
     monthly = db.execute(
         select(func.month(Job.created_at), func.count())
         .where(Job.hr_user_id == user.id)
         .group_by(func.month(Job.created_at))
         .order_by(func.month(Job.created_at))
     ).all()
+    pending_rows = db.execute(
+        select(JobApplication, Job, User)
+        .join(Job, Job.id == JobApplication.job_id)
+        .join(User, User.id == JobApplication.candidate_id)
+        .where(
+            Job.hr_user_id == user.id,
+            JobApplication.status == ApplicationStatus.pending,
+        )
+        .order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
+        .limit(30)
+    ).all()
+    recent_pending_apps: list[dict] = []
+    for app, job, cand in pending_rows:
+        recent_pending_apps.append(
+            {
+                "application_id": app.id,
+                "job_title": job.title,
+                "candidate_name": cand.full_name or cand.email,
+                "status": app.status.value,
+                "applied_at": app.created_at.isoformat(),
+            }
+        )
     labels = [f"T{m[0]}" for m in monthly] if monthly else ["T1", "T2", "T3"]
     values = [int(m[1]) for m in monthly] if monthly else [0, 0, 0]
     return StatsOut(
@@ -75,6 +142,7 @@ def hr_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annotated
             "views": views,
             "response_rate": rate,
         },
+        recent_pending_applications=recent_pending_apps,
     )
 
 
@@ -83,31 +151,36 @@ def create_job(
     body: JobCreate,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> Job:
+) -> JobOut:
     _require_approved_hr(user)
     st = JobStatus.draft if body.as_draft else JobStatus.pending_approval
     job = Job(
         hr_user_id=user.id,
         title=body.title,
         description=body.description,
-        salary_text=body.salary_text,
-        avg_salary=body.avg_salary,
+        department=body.department,
+        level=body.level,
+        min_salary=body.min_salary,
+        max_salary=body.max_salary,
         location=body.location,
         job_type=body.job_type,
+        headcount=body.count,
+        deadline_text=body.deadline,
         status=st,
     )
     db.add(job)
     db.commit()
     db.refresh(job)
     runtime_cache.upsert_job(job)
-    return job
+    return _to_job_out(job, db, company_name=user.hr_profile.company_name if user.hr_profile else None)
 
 
 @router.get("/jobs", response_model=list[JobOut])
 def my_jobs(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
     _require_hr(user)
     rows = db.scalars(select(Job).where(Job.hr_user_id == user.id).order_by(Job.id.desc())).all()
-    return list(rows)
+    company_name = user.hr_profile.company_name if user.hr_profile else None
+    return [_to_job_out(job, db, company_name=company_name) for job in rows]
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)
@@ -115,12 +188,12 @@ def get_job_detail(
     job_id: int,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> Job:
+) -> JobOut:
     _require_hr(user)
     job = db.get(Job, job_id)
     if not job or job.hr_user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
-    return job
+    return _to_job_out(job, db, company_name=user.hr_profile.company_name if user.hr_profile else None)
 
 
 @router.put("/jobs/{job_id}", response_model=JobOut)
@@ -129,23 +202,27 @@ def update_job(
     body: JobCreate,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> Job:
+) -> JobOut:
     _require_approved_hr(user)
     job = db.get(Job, job_id)
     if not job or job.hr_user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
     job.title = body.title
     job.description = body.description
-    job.salary_text = body.salary_text
-    job.avg_salary = body.avg_salary
+    job.department = body.department
+    job.level = body.level
+    job.min_salary = body.min_salary
+    job.max_salary = body.max_salary
     job.location = body.location
     job.job_type = body.job_type
+    job.headcount = body.count
+    job.deadline_text = body.deadline
     if job.status in (JobStatus.draft, JobStatus.rejected):
         job.status = JobStatus.draft if body.as_draft else JobStatus.pending_approval
     db.commit()
     db.refresh(job)
     runtime_cache.upsert_job(job)
-    return job
+    return _to_job_out(job, db, company_name=user.hr_profile.company_name if user.hr_profile else None)
 
 
 @router.delete("/jobs/{job_id}")
@@ -172,7 +249,7 @@ def submit_job(
     job_id: int,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> Job:
+) -> JobOut:
     _require_approved_hr(user)
     job = db.get(Job, job_id)
     if not job or job.hr_user_id != user.id:
@@ -183,7 +260,7 @@ def submit_job(
     db.commit()
     db.refresh(job)
     runtime_cache.upsert_job(job)
-    return job
+    return _to_job_out(job, db, company_name=user.hr_profile.company_name if user.hr_profile else None)
 
 
 @router.get("/applications", response_model=list[dict])
@@ -193,16 +270,17 @@ def list_applications_for_hr(
 ) -> list[dict]:
     _require_hr(user)
     q = (
-        select(JobApplication, Job, User)
+        select(JobApplication, Job, User, HRProfile.company_name)
         .join(Job, Job.id == JobApplication.job_id)
         .join(User, User.id == JobApplication.candidate_id)
+        .outerjoin(HRProfile, HRProfile.user_id == Job.hr_user_id)
         .where(Job.hr_user_id == user.id)
         .order_by(JobApplication.id.desc())
         .limit(500)
     )
     rows = db.execute(q).all()
     out: list[dict] = []
-    for app, job, cand in rows:
+    for app, job, cand, company_name in rows:
         cv = db.get(CVDocument, app.cv_id) if app.cv_id else None
         cprof = runtime_cache.candidate_profile_by_user_id.get(cand.id)
         if not cprof:
@@ -214,12 +292,14 @@ def list_applications_for_hr(
                 "application_id": app.id,
                 "job_title": job.title,
                 "candidate_name": cand.full_name or cand.email,
-                "candidate_email": cand.email if app.contact_unlocked_at else None,
+                "candidate_email": cand.email if app.contact_unlocked_at else "",
                 "contact_unlocked": bool(app.contact_unlocked_at),
                 "status": app.status.value,
                 "cv_id": app.cv_id,
                 "cv_name": cv.original_name if cv else None,
-                "created_at": app.created_at.isoformat(),
+                "applied_at": app.created_at.strftime("%d/%m/%Y"),
+                "company": company_name or "",
+                "location": job.location or "",
                 "candidate_profile": {
                     "headline": cprof.headline if cprof else None,
                     "introduction": cprof.introduction if cprof else None,
@@ -269,7 +349,7 @@ def accept_application_and_generate_invoice(
     if not row:
         raise HTTPException(status_code=404, detail="Application not found")
     app, job = row
-    if app.status == ApplicationStatus.accepted:
+    if app.status == ApplicationStatus.approved:
         existing = db.scalar(
             select(Invoice).where(
                 Invoice.application_id == app.id,
@@ -279,9 +359,6 @@ def accept_application_and_generate_invoice(
         )
         if existing:
             return existing
-    if not job.avg_salary or job.avg_salary <= 0:
-        raise HTTPException(status_code=400, detail="Job can co avg_salary de tinh phi 10%")
-
     amount = job.contact_unlock_fee()
     existing_pending = db.scalar(
         select(Invoice).where(
@@ -300,7 +377,7 @@ def accept_application_and_generate_invoice(
         owner_user_id=user.id,
         invoice_type=InvoiceType.candidate_contact_unlock,
         amount_vnd=amount,
-        note=f"Phi mo lien he ung vien {app.id} (10% luong trung binh)",
+        note=f"Phi mo lien he ung vien {app.id} (tinh theo luong cao nhat hoac cap bac)",
         application_id=app.id,
     )
     db.commit()
@@ -323,6 +400,29 @@ def mark_hr_invoice_paid(
     db.commit()
     db.refresh(invoice)
     return invoice
+
+
+@router.put("/applications/{application_id}/status")
+def update_application_status(
+    application_id: int,
+    body: ApplicationDecisionIn,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_hr(user)
+    row = db.execute(
+        select(JobApplication, Job)
+        .join(Job, Job.id == JobApplication.job_id)
+        .where(JobApplication.id == application_id, Job.hr_user_id == user.id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Application not found")
+    app, _job = row
+    app.status = body.status
+    if body.status == ApplicationStatus.approved:
+        app.accepted_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True, "application_id": application_id, "status": app.status.value}
 
 
 @router.get("/applications/{application_id}/contact")

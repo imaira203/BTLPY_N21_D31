@@ -50,7 +50,13 @@ def apply_mysql_schema_patches() -> None:
 
         add_column_if_missing("users", "avatar_storage_key", "VARCHAR(512) NULL", after="full_name")
         add_column_if_missing("hr_profiles", "avatar_storage_key", "VARCHAR(512) NULL", after="company_name")
-        add_column_if_missing("jobs", "avg_salary", "INT NULL", after="salary_text")
+        add_column_if_missing("jobs", "department", "VARCHAR(128) NULL", after="description")
+        add_column_if_missing("jobs", "level", "VARCHAR(64) NULL", after="department")
+        add_column_if_missing("jobs", "min_salary", "INT NULL", after="level")
+        add_column_if_missing("jobs", "max_salary", "INT NULL", after="min_salary")
+        add_column_if_missing("jobs", "headcount", "INT NULL", after="job_type")
+        add_column_if_missing("jobs", "deadline_text", "VARCHAR(32) NULL", after="headcount")
+        add_column_if_missing("jobs", "view_count", "INT NOT NULL DEFAULT 0", after="deadline_text")
         add_column_if_missing("job_applications", "accepted_at", "DATETIME NULL", after="status")
         add_column_if_missing("job_applications", "contact_unlocked_at", "DATETIME NULL", after="accepted_at")
         if not insp.has_table("candidate_profiles"):

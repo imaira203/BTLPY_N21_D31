@@ -31,6 +31,7 @@ from ..models import (
 from ..runtime_cache import runtime_cache
 from ..schemas import (
     ApplyIn,
+    CandidateApplicationHistoryOut,
     CandidateSubscriptionOut,
     CandidateSubscriptionPaymentOut,
     CVOut,
@@ -169,15 +170,23 @@ def browse_jobs(db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
         rows = db.execute(q).all()
     out: list[JobOut] = []
     for job, company_name in rows:
+        app_count = db.scalar(select(func.count()).select_from(JobApplication).where(JobApplication.job_id == job.id)) or 0
         out.append(
             JobOut(
                 id=job.id,
                 hr_user_id=job.hr_user_id,
                 title=job.title,
                 description=job.description,
+                department=job.department,
+                level=job.level,
                 salary_text=job.salary_text,
+                min_salary=job.min_salary,
+                max_salary=job.max_salary,
                 location=job.location,
                 job_type=job.job_type,
+                count=job.headcount,
+                deadline=job.deadline_text,
+                applicants_count=int(app_count),
                 status=job.status,
                 admin_note=job.admin_note,
                 created_at=job.created_at,
@@ -185,6 +194,19 @@ def browse_jobs(db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
             )
         )
     return out
+
+
+@router.post("/jobs/{job_id}/view")
+def track_job_view(
+    job_id: int,
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    job = db.get(Job, job_id)
+    if not job or job.status != JobStatus.published:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job.view_count = int(job.view_count or 0) + 1
+    db.commit()
+    return {"ok": True, "job_id": job.id, "view_count": int(job.view_count)}
 
 
 @router.post("/jobs/{job_id}/apply")
@@ -212,7 +234,37 @@ def apply_job(
     app = JobApplication(job_id=job_id, candidate_id=user.id, cv_id=cv.id)
     db.add(app)
     db.commit()
-    return {"ok": True, "application_id": app.id}
+    db.refresh(app)
+    return {"ok": True, "application_id": app.id, "status": app.status.value}
+
+
+@router.get("/applications", response_model=list[CandidateApplicationHistoryOut])
+def list_my_applications(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CandidateApplicationHistoryOut]:
+    _require_candidate(user)
+    rows = db.execute(
+        select(JobApplication, Job, HRProfile.company_name)
+        .join(Job, Job.id == JobApplication.job_id)
+        .outerjoin(HRProfile, HRProfile.user_id == Job.hr_user_id)
+        .where(JobApplication.candidate_id == user.id)
+        .order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
+    ).all()
+    out: list[CandidateApplicationHistoryOut] = []
+    for app, job, company_name in rows:
+        out.append(
+            CandidateApplicationHistoryOut(
+                id=app.id,
+                job_id=app.job_id,
+                title=job.title,
+                company_name=company_name,
+                location=job.location,
+                status=app.status,
+                applied_at=app.created_at,
+            )
+        )
+    return out
 
 
 @router.post("/jobs/{job_id}/save", response_model=SavedJobOut)
@@ -275,16 +327,23 @@ def list_saved_jobs(
     ).all()
     out: list[JobOut] = []
     for job, company_name in rows:
+        app_count = db.scalar(select(func.count()).select_from(JobApplication).where(JobApplication.job_id == job.id)) or 0
         out.append(
             JobOut(
                 id=job.id,
                 hr_user_id=job.hr_user_id,
                 title=job.title,
                 description=job.description,
+                department=job.department,
+                level=job.level,
                 salary_text=job.salary_text,
-                avg_salary=job.avg_salary,
+                min_salary=job.min_salary,
+                max_salary=job.max_salary,
                 location=job.location,
                 job_type=job.job_type,
+                count=job.headcount,
+                deadline=job.deadline_text,
+                applicants_count=int(app_count),
                 status=job.status,
                 admin_note=job.admin_note,
                 created_at=job.created_at,

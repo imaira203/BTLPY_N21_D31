@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from typing import Callable
 
 from PySide6.QtCore import (Qt, QSize, QPropertyAnimation,
@@ -23,7 +24,6 @@ from pathlib import Path
 
 from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
-from .. import mock_data
 from ..paths import resource_icon
 from ..session_store import clear_session
 from .charts import make_bar_chart
@@ -835,7 +835,7 @@ class HRDashboard:
             return
 
         # Search jobs
-        job_hits = [j for j in mock_data.JOB_STORE
+        job_hits = [j for j in self._jobs_data
                     if kw in j.get("title", "").lower()
                     or kw in j.get("department", "").lower()
                     or kw in j.get("location", "").lower()
@@ -843,7 +843,7 @@ class HRDashboard:
                     or kw in j.get("company_name", "").lower()][:5]
 
         # Search candidates
-        all_apps = list(mock_data.CANDIDATE_APPLICATIONS) + list(mock_data.MOCK_HR_APPLICATIONS)
+        all_apps = self._all_applications()
         cand_hits = [a for a in all_apps
                      if kw in a.get("candidate_name",  "").lower()
                      or kw in a.get("candidate_email", "").lower()
@@ -998,7 +998,7 @@ class HRDashboard:
         if not kw:
             return
         # Decide which tab to land on based on results
-        job_hits = [j for j in mock_data.JOB_STORE
+        job_hits = [j for j in self._jobs_data
                     if kw.lower() in j.get("title","").lower()
                     or kw.lower() in j.get("company_name","").lower()]
         if job_hits:
@@ -1304,18 +1304,19 @@ class HRDashboard:
         stats_bar.setFixedHeight(52)
         stats_bar.setStyleSheet(
             f"QFrame{{background:{CARD_BG};border:none;"
-            "border-radius:12px;}}"
+            "border-radius:12px;}"
         )
         stats_lo = QHBoxLayout(stats_bar)
         stats_lo.setContentsMargins(20, 0, 20, 0)
         stats_lo.setSpacing(0)
-
-        for i, (val, lbl, col) in enumerate([
-            ("3",   "Ứng viên mới hôm nay",    "#6366f1"),
-            ("1",   "Tin chờ Admin duyệt",      "#f59e0b"),
-            ("86%", "Tỷ lệ trả lời ứng viên",  "#10b981"),
-            ("2",   "Phỏng vấn sắp tới",        "#0ea5e9"),
-        ]):
+        self._quick_stats_values: dict[str, QLabel] = {}
+        quick_defs = [
+            ("new_today", "0",  "Ứng viên mới hôm nay",   "#6366f1"),
+            ("pending_jobs", "0", "Tin chờ Admin duyệt",  "#f59e0b"),
+            ("response_rate", "0%", "Tỷ lệ trả lời ứng viên", "#10b981"),
+            ("upcoming_interviews", "0", "Phỏng vấn sắp tới", "#0ea5e9"),
+        ]
+        for i, (key, val, lbl, col) in enumerate(quick_defs):
             if i > 0:
                 sep = QFrame()
                 sep.setFixedSize(1, 28)
@@ -1335,6 +1336,7 @@ class HRDashboard:
                 f"color:{col};font-size:20px;font-weight:700;"
                 "background:transparent;border:none;letter-spacing:-0.5px;"
             )
+            self._quick_stats_values[key] = v_lbl
             t_lbl = QLabel(lbl)
             t_lbl.setStyleSheet(
                 f"color:{TXT_M};font-size:12px;font-weight:500;"
@@ -1438,14 +1440,14 @@ class HRDashboard:
             f"color:{TXT_H};font-size:15px;font-weight:600;"
             "background:transparent;border:none;letter-spacing:-0.2px;"
         )
-        act_count = QLabel(f"  {len(mock_data.MOCK_HR_ACTIVITY)} sự kiện  ")
-        act_count.setStyleSheet(
+        self._act_count = QLabel("  0 sự kiện  ")
+        self._act_count.setStyleSheet(
             f"background:#ede9fe;color:{P};font-size:11px;font-weight:600;"
             "border-radius:10px;padding:2px 0;"
         )
         act_header.addWidget(act_ic)
         act_header.addWidget(act_title_lbl, 1)
-        act_header.addWidget(act_count)
+        act_header.addWidget(self._act_count)
         act_lo.addLayout(act_header)
         act_lo.addSpacing(12)
 
@@ -1492,8 +1494,22 @@ class HRDashboard:
     }
 
     def _load_dash(self) -> None:
-        data  = mock_data.MOCK_HR_DASHBOARD
+        try:
+            data = jobhub_api.hr_dashboard()
+        except ApiError:
+            data = {
+                "cards": {"jobs": 0, "candidates": 0, "views": 0, "response_rate": 0},
+                "labels": [],
+                "values": [],
+                "recent_pending_applications": [],
+            }
         cards = data.get("cards") or {}
+        pending_apps = list(data.get("recent_pending_applications") or [])
+        self._refresh_quick_stats(cards)
+        try:
+            views_count = int(cards.get("views", 0) or 0)
+        except (TypeError, ValueError):
+            views_count = 0
 
         # ── Metric cards ─────────────────────────────────────
         while self._cards_row.count():
@@ -1501,20 +1517,13 @@ class HRDashboard:
             if it.widget():
                 it.widget().deleteLater()
 
-        sp = {
-            "jobs":      [7, 8, 9, 10, 11, 12],
-            "candidates":[30, 35, 39, 43, 46, 48],
-            "views":     [1900, 2200, 2600, 2900, 3050, 3200],
-            "response":  [34, 36, 38, 40, 41, 42],
-        }
-        # All cards use the SAME color system defined in _MetricCard class vars.
-        # Only icon SVG, label, value, hint text differ per card.
+        # All cards use real values from backend dashboard API.
         card_defs = [
             # (icon,          accent,      label,             value,                         hint)
-            ("ic_jobs.svg",  "#3b82f6",  "Tin đang đăng",   str(cards.get("jobs", 0)),     "↑ +2 tuần này"),
-            ("ic_users.svg", "#8b5cf6",  "Tổng ứng viên",   str(cards.get("candidates", 0)), "↑ +15 mới"),
-            ("ic_view.svg",  "#f97316",  "Lượt xem tin",    f"{cards.get('views', 0):,}",  "↑ +12% tháng này"),
-            ("ic_chat.svg",  "#10b981",  "Tỷ lệ phản hồi",  f"{cards.get('response_rate', 0)}%", "● Đang tối ưu"),
+            ("ic_jobs.svg",  "#3b82f6",  "Tin đang đăng",   str(cards.get("jobs", 0)),      "Số tin đã đăng tải"),
+            ("ic_users.svg", "#8b5cf6",  "Tổng ứng viên",   str(cards.get("candidates", 0)), f"{len(pending_apps)} hồ sơ chờ duyệt"),
+            ("ic_view.svg",  "#f97316",  "Lượt xem tin",    f"{views_count:,}",              "Số lượt xem tin đăng"),
+            ("ic_chat.svg",  "#10b981",  "Tỷ lệ phản hồi",  f"{cards.get('response_rate', 0)}%", "Tỷ lệ phản hồi ứng viên"),
         ]
         for (icon, accent, label, val, hint) in card_defs:
             c = _MetricCard(
@@ -1532,6 +1541,38 @@ class HRDashboard:
         # ── Activity feed (grouped) ───────────────────────────
         self._rebuild_activity_feed()
 
+    def _refresh_quick_stats(self, cards: dict) -> None:
+        if not hasattr(self, "_quick_stats_values"):
+            return
+        # Response rate: use backend-computed real metric
+        response_rate = int(cards.get("response_rate", 0) or 0)
+        # New candidates today + upcoming interviews: derived from applications API
+        new_today = 0
+        upcoming_interviews = 0
+        try:
+            apps = list(jobhub_api.hr_applications())
+        except ApiError:
+            apps = []
+        today_s = datetime.now().strftime("%d/%m/%Y")
+        for app in apps:
+            applied_at = str(app.get("applied_at", "")).strip()
+            if applied_at == today_s:
+                new_today += 1
+            if str(app.get("status", "")).lower() == "approved":
+                upcoming_interviews += 1
+        # Pending jobs for admin approval: derived from HR jobs API
+        pending_jobs = 0
+        try:
+            jobs = list(jobhub_api.hr_my_jobs())
+        except ApiError:
+            jobs = []
+        pending_jobs = sum(1 for j in jobs if str(j.get("status", "")).lower() == "pending_approval")
+
+        self._quick_stats_values["new_today"].setText(str(new_today))
+        self._quick_stats_values["pending_jobs"].setText(str(pending_jobs))
+        self._quick_stats_values["response_rate"].setText(f"{response_rate}%")
+        self._quick_stats_values["upcoming_interviews"].setText(str(upcoming_interviews))
+
     def _switch_chart_period(self, period: str) -> None:
         """Called when user clicks a chart period tab."""
         self._chart_period = period
@@ -1542,9 +1583,12 @@ class HRDashboard:
 
     def _rebuild_chart(self, period: str) -> None:
         """Rebuild the bar chart for the given period."""
-        chart_data = mock_data.MOCK_HR_CHART_DATA.get(period, {})
-        labels = chart_data.get("labels", [])
-        values = chart_data.get("values", [])
+        try:
+            dash = jobhub_api.hr_dashboard()
+        except ApiError:
+            dash = {"labels": [], "values": []}
+        labels = list(dash.get("labels", []))
+        values = list(dash.get("values", []))
 
         lay = self._chart_holder.layout()
         while lay.count():
@@ -1566,9 +1610,35 @@ class HRDashboard:
             if w := it.widget():
                 w.deleteLater()
 
-        # Merge runtime events (from User/Admin actions) + static mock data
-        runtime = list(mock_data.HR_ACTIVITY_STORE)
-        activities = runtime + mock_data.MOCK_HR_ACTIVITY
+        try:
+            dash = jobhub_api.hr_dashboard()
+        except ApiError:
+            dash = {}
+        apps = list(dash.get("recent_pending_applications") or [])
+        activities = []
+        for app in apps[:40]:
+            status = str(app.get("status", "pending"))
+            act_type = "apply" if status == "pending" else status
+            applied_at = str(app.get("applied_at", ""))
+            try:
+                dt = datetime.fromisoformat(applied_at.replace("Z", "+00:00"))
+                time_text = dt.strftime("%d/%m/%Y %H:%M")
+            except Exception:
+                time_text = applied_at
+            activities.append(
+                {
+                    "type": act_type,
+                    "dot_color": "#6366f1",
+                    "text": f"{app.get('candidate_name', 'Ứng viên')} ứng tuyển cho {app.get('job_title', '')}",
+                    "time": time_text,
+                    "group": "today",
+                    "bold": True,
+                    "action_label": "Xem hồ sơ",
+                    "action_page": 3,
+                }
+            )
+        if hasattr(self, "_act_count"):
+            self._act_count.setText(f"  {len(activities)} sự kiện  ")
         current_group = None
         for act in activities:
             group = act.get("group", "week")
@@ -1761,20 +1831,25 @@ class HRDashboard:
 
         row2 = QHBoxLayout(); row2.setSpacing(16)
         col_c = QVBoxLayout(); col_c.setSpacing(8)
-        col_c.addWidget(_lbl("Mức lương (VNĐ)", 13, bold=True))
-        self.line_salary = _input("Ví dụ: 15 – 25 triệu VNĐ")
-        self.line_salary.setMinimumHeight(46)
-        col_c.addWidget(self.line_salary)
+        col_c.addWidget(_lbl("Lương tối thiểu (VNĐ)", 13, bold=True))
+        self.line_min_salary = _input("Ví dụ: 15000000")
+        self.line_min_salary.setMinimumHeight(46)
+        col_c.addWidget(self.line_min_salary)
         col_d = QVBoxLayout(); col_d.setSpacing(8)
-        col_d.addWidget(_lbl("Địa điểm làm việc", 13, bold=True))
-        self.line_location = _input("Thành phố Hồ Chí Minh, Quận 1")
-        self.line_location.setMinimumHeight(46)
-        col_d.addWidget(self.line_location)
+        col_d.addWidget(_lbl("Lương tối đa (VNĐ)", 13, bold=True))
+        self.line_max_salary = _input("Ví dụ: 25000000")
+        self.line_max_salary.setMinimumHeight(46)
+        col_d.addWidget(self.line_max_salary)
         row2.addLayout(col_c)
         row2.addLayout(col_d)
         s2lo.addLayout(row2)
 
         row3 = QHBoxLayout(); row3.setSpacing(16)
+        col_loc = QVBoxLayout(); col_loc.setSpacing(8)
+        col_loc.addWidget(_lbl("Địa điểm làm việc", 13, bold=True))
+        self.line_location = _input("Thành phố Hồ Chí Minh, Quận 1")
+        self.line_location.setMinimumHeight(46)
+        col_loc.addWidget(self.line_location)
         col_e = QVBoxLayout(); col_e.setSpacing(8)
         col_e.addWidget(_lbl("Số lượng tuyển", 13, bold=True))
         self.line_count = _input("01")
@@ -1785,6 +1860,7 @@ class HRDashboard:
         self.line_deadline = _input("Ví dụ: 31/12/2025")
         self.line_deadline.setMinimumHeight(46)
         col_f.addWidget(self.line_deadline)
+        row3.addLayout(col_loc)
         row3.addLayout(col_e)
         row3.addLayout(col_f)
         s2lo.addLayout(row3)
@@ -2243,30 +2319,39 @@ class HRDashboard:
         # Collect all form fields
         level    = self.combo_level.currentText()
         job_type = self.combo_type.currentText()
-        salary   = self.line_salary.text().strip()
+        min_salary_txt = self.line_min_salary.text().strip()
+        max_salary_txt = self.line_max_salary.text().strip()
         location = self.line_location.text().strip()
         count    = self.line_count.text().strip() or "1"
         deadline = self.line_deadline.text().strip()
         desc     = self.plain_desc.toPlainText().strip()
 
-        mock_data.add_job(
-            title=title,
-            company_name="TechCorp Vietnam",   # current HR company
-            department="Kỹ thuật & Công nghệ",
-            location=location or "Hà Nội",
-            salary_text=salary or "Thương lượng",
-            job_type=job_type,
-            level=level,
-            count=count,
-            deadline=deadline,
-            description=desc,
-            hr_id=1,
-            draft=draft,
-        )
+        min_salary = int(min_salary_txt) if min_salary_txt.isdigit() else 0
+        max_salary = int(max_salary_txt) if max_salary_txt.isdigit() else 0
+        try:
+            jobhub_api.hr_create_job(
+                {
+                    "title": title,
+                    "description": desc,
+                    "department": "Kỹ thuật & Công nghệ",
+                    "level": level,
+                    "min_salary": min_salary if min_salary > 0 else None,
+                    "max_salary": max_salary if max_salary > 0 else None,
+                    "location": location or "Hà Nội",
+                    "job_type": job_type,
+                    "count": int(count) if str(count).isdigit() else 1,
+                    "deadline": deadline,
+                    "as_draft": draft,
+                }
+            )
+        except ApiError as e:
+            QMessageBox.warning(self.win, "Lỗi", str(e))
+            return
 
         # Clear form
         self.line_title.clear()
-        self.line_salary.clear()
+        self.line_min_salary.clear()
+        self.line_max_salary.clear()
         self.line_location.clear()
         self.line_count.clear()
         self.line_deadline.clear()
@@ -2294,7 +2379,11 @@ class HRDashboard:
     }
 
     def _fill_jobs_table(self) -> None:
-        self._jobs_data = mock_data.get_hr_jobs()
+        try:
+            self._jobs_data = list(jobhub_api.hr_my_jobs())
+        except ApiError as e:
+            QMessageBox.warning(self.win, "Lỗi", str(e))
+            self._jobs_data = []
         self._jobs_page = 0
         self._render_jobs_page()
 
@@ -2305,7 +2394,7 @@ class HRDashboard:
 
     def _filter_jobs(self, text: str) -> None:
         kw = text.strip().lower()
-        all_jobs = mock_data.get_hr_jobs()
+        all_jobs = list(self._jobs_data)
 
         # ── Status filter ────────────────────────────────────
         _STATUS_MAP = {
@@ -2540,7 +2629,11 @@ class HRDashboard:
 
         # ── Edit dialog ──────────────────────────────────────────
         def _do_edit(_jid=job_id):
-            job = next((j for j in mock_data.JOB_STORE if j["id"] == _jid), None)
+            try:
+                job = jobhub_api.hr_get_job(_jid)
+            except ApiError as e:
+                self._show_toast(str(e), "ic_x.svg", "#ef4444")
+                return
             if not job:
                 self._show_toast("Không tìm thấy tin đăng!", "ic_x.svg", "#ef4444")
                 return
@@ -2610,32 +2703,38 @@ class HRDashboard:
             grid.addWidget(c_level, 3, 0)
             grid.addWidget(c_type, 3, 1)
 
-            # Row 4: salary | location
-            grid.addWidget(_lbl("Mức lương"), 4, 0)
-            grid.addWidget(_lbl("Địa điểm"), 4, 1)
-            e_sal = QLineEdit(job.get("salary_text", ""))
-            e_sal.setPlaceholderText("VD: 15–25 triệu")
+            # Row 4: min/max salary
+            grid.addWidget(_lbl("Lương tối thiểu (VNĐ)"), 4, 0)
+            grid.addWidget(_lbl("Lương tối đa (VNĐ)"), 4, 1)
+            e_min_sal = QLineEdit(str(job.get("min_salary") or ""))
+            e_min_sal.setPlaceholderText("VD: 15000000")
+            e_max_sal = QLineEdit(str(job.get("max_salary") or ""))
+            e_max_sal.setPlaceholderText("VD: 25000000")
+            grid.addWidget(e_min_sal, 5, 0)
+            grid.addWidget(e_max_sal, 5, 1)
+
+            # Row 6: location | count
+            grid.addWidget(_lbl("Địa điểm"), 6, 0)
+            grid.addWidget(_lbl("Số lượng"), 6, 1)
             e_loc = QLineEdit(job.get("location", ""))
             e_loc.setPlaceholderText("Hà Nội, TP.HCM…")
-            grid.addWidget(e_sal, 5, 0)
-            grid.addWidget(e_loc, 5, 1)
-
-            # Row 6: count | deadline
-            grid.addWidget(_lbl("Số lượng"), 6, 0)
-            grid.addWidget(_lbl("Hạn nộp"), 6, 1)
             e_count = QLineEdit(str(job.get("count", 1)))
             e_count.setPlaceholderText("1")
+            grid.addWidget(e_loc, 7, 0)
+            grid.addWidget(e_count, 7, 1)
+
+            # Row 8: deadline
+            grid.addWidget(_lbl("Hạn nộp"), 8, 0, 1, 2)
             e_dead = QLineEdit(job.get("deadline", ""))
             e_dead.setPlaceholderText("DD/MM/YYYY")
-            grid.addWidget(e_count, 7, 0)
-            grid.addWidget(e_dead, 7, 1)
+            grid.addWidget(e_dead, 9, 0, 1, 2)
 
-            # Row 8: description
-            grid.addWidget(_lbl("Mô tả công việc"), 8, 0, 1, 2)
+            # Row 10: description
+            grid.addWidget(_lbl("Mô tả công việc"), 10, 0, 1, 2)
             e_desc = QPlainTextEdit(job.get("description", ""))
             e_desc.setFixedHeight(100)
             e_desc.setPlaceholderText("Mô tả chi tiết vị trí tuyển dụng…")
-            grid.addWidget(e_desc, 9, 0, 1, 2)
+            grid.addWidget(e_desc, 11, 0, 1, 2)
 
             vlo.addLayout(grid)
 
@@ -2663,19 +2762,24 @@ class HRDashboard:
             vlo.addLayout(btn_row)
 
             def _save():
-                # Apply changes back to JOB_STORE
-                for j in mock_data.JOB_STORE:
-                    if j["id"] == _jid:
-                        j["title"]       = e_title.text().strip() or j["title"]
-                        j["level"]       = c_level.currentText()
-                        j["job_type"]    = c_type.currentText()
-                        j["salary_text"] = e_sal.text().strip() or j["salary_text"]
-                        j["location"]    = e_loc.text().strip() or j["location"]
-                        try:   j["count"] = int(e_count.text())
-                        except ValueError: pass
-                        j["deadline"]    = e_dead.text().strip() or j["deadline"]
-                        j["description"] = e_desc.toPlainText().strip() or j["description"]
-                        break
+                payload = {
+                    "title": e_title.text().strip() or job.get("title", ""),
+                    "description": e_desc.toPlainText().strip() or job.get("description"),
+                    "department": job.get("department") or "Kỹ thuật & Công nghệ",
+                    "level": c_level.currentText(),
+                    "min_salary": int(e_min_sal.text()) if e_min_sal.text().isdigit() else None,
+                    "max_salary": int(e_max_sal.text()) if e_max_sal.text().isdigit() else None,
+                    "location": e_loc.text().strip() or job.get("location"),
+                    "job_type": c_type.currentText(),
+                    "count": int(e_count.text()) if e_count.text().isdigit() else int(job.get("count") or 1),
+                    "deadline": e_dead.text().strip() or job.get("deadline"),
+                    "as_draft": job.get("status") == "draft",
+                }
+                try:
+                    jobhub_api.hr_update_job(_jid, payload)
+                except ApiError as e:
+                    self._show_toast(str(e), "ic_x.svg", "#ef4444")
+                    return
                 dlg.accept()
                 self._fill_jobs_table()
                 _saved_title = e_title.text().strip()
@@ -2689,7 +2793,11 @@ class HRDashboard:
 
         # ── View dialog ──────────────────────────────────────────
         def _do_view(_jid=job_id):
-            job = next((j for j in mock_data.JOB_STORE if j["id"] == _jid), None)
+            try:
+                job = jobhub_api.hr_get_job(_jid)
+            except ApiError as e:
+                self._show_toast(str(e), "ic_x.svg", "#ef4444")
+                return
             if not job:
                 self._show_toast("Không tìm thấy tin đăng!", "ic_x.svg", "#ef4444")
                 return
@@ -2815,7 +2923,7 @@ class HRDashboard:
 
         # ── Delete ───────────────────────────────────────────────
         def _do_delete(_jid=job_id):
-            job = next((j for j in mock_data.JOB_STORE if j["id"] == _jid), None)
+            job = next((j for j in self._jobs_data if j.get("id") == _jid), None)
             job_title = job.get("title", f"#{_jid}") if job else f"#{_jid}"
             ret = QMessageBox.question(
                 self.win, "🗑️  Xác nhận xoá",
@@ -2823,7 +2931,11 @@ class HRDashboard:
                 QMessageBox.Yes | QMessageBox.No,
             )
             if ret == QMessageBox.Yes:
-                mock_data.delete_job(_jid)
+                try:
+                    jobhub_api.hr_delete_job(_jid)
+                except ApiError as e:
+                    self._show_toast(str(e), "ic_x.svg", "#ef4444")
+                    return
                 self._fill_jobs_table()
                 self._show_toast(
                     f'Đã xo\u00e1 tin \u201c{job_title}\u201d',
@@ -2841,8 +2953,10 @@ class HRDashboard:
         return wrap
 
     def _all_applications(self) -> list:
-        """Kết hợp đơn mới từ candidate + mock cũ (mới nhất lên đầu)."""
-        return list(mock_data.CANDIDATE_APPLICATIONS) + list(mock_data.MOCK_HR_APPLICATIONS)
+        try:
+            return list(jobhub_api.hr_applications())
+        except ApiError:
+            return []
 
     def _fill_cands_table(self) -> None:
         self._cands_page = 0
@@ -3111,7 +3225,11 @@ class HRDashboard:
         if reply != QMessageBox.Yes:
             return
 
-        ok = mock_data.update_application_status(app_id, new_status)
+        try:
+            result = jobhub_api.hr_update_application_status(app_id, new_status)
+            ok = bool(result.get("ok"))
+        except ApiError:
+            ok = False
         if ok:
             _TOAST = {
                 "reviewed": ("ic_view.svg",   "#0ea5e9", f"Đã đánh dấu xem xét đơn #{app_id}"),

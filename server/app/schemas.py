@@ -94,10 +94,14 @@ class CandidateProfileOut(BaseModel):
 class JobCreate(BaseModel):
     title: str = Field(min_length=1)
     description: str | None = None
-    salary_text: str | None = None
-    avg_salary: int | None = Field(default=None, ge=0)
+    department: str | None = None
+    level: str | None = None
+    min_salary: int | None = Field(default=None, ge=0)
+    max_salary: int | None = Field(default=None, ge=0)
     location: str | None = None
     job_type: str | None = None
+    count: int | None = Field(default=None, ge=1)
+    deadline: str | None = None
     as_draft: bool = False
 
 
@@ -106,10 +110,16 @@ class JobOut(BaseModel):
     hr_user_id: int
     title: str
     description: str | None
-    salary_text: str | None
-    avg_salary: int | None
+    department: str | None = None
+    level: str | None = None
+    salary_text: str | None = None
+    min_salary: int | None = None
+    max_salary: int | None = None
     location: str | None
     job_type: str | None
+    count: int | None = None
+    deadline: str | None = None
+    applicants_count: int = 0
     status: JobStatus
     admin_note: str | None
     created_at: datetime
@@ -134,10 +144,15 @@ class AdminDecision(BaseModel):
     note: str | None = None
 
 
+class ApplicationDecisionIn(BaseModel):
+    status: ApplicationStatus
+
+
 class StatsOut(BaseModel):
     labels: list[str]
     values: list[int]
     cards: dict[str, Any]
+    recent_pending_applications: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class JobApplicationOut(BaseModel):
@@ -151,6 +166,16 @@ class JobApplicationOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class CandidateApplicationHistoryOut(BaseModel):
+    id: int
+    job_id: int
+    title: str
+    company_name: str | None = None
+    location: str | None = None
+    status: ApplicationStatus
+    applied_at: datetime
 
 
 class CandidateSubscriptionOut(BaseModel):
