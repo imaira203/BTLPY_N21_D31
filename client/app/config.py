@@ -4,7 +4,7 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _CLIENT_ROOT = Path(__file__).resolve().parent.parent
@@ -28,12 +28,6 @@ class ClientSettings(BaseSettings):
     ui_theme: str = Field(
         default="light",
         description="light hoặc dark — mặc định khi chưa có jobhub_data/ui_theme.json",
-    )
-
-    use_mock_data: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("USE_MOCK_DATA", "JOBHUB_USE_MOCK_DATA"),
-        description="True = demo offline: API trả dữ liệu mẫu, không gọi máy chủ.",
     )
 
 @lru_cache(maxsize=1)
@@ -65,5 +59,3 @@ def log_client_startup() -> None:
     else:
         logger.info("API gốc dùng cho request=%s", eff)
     logger.debug("UI_THEME env default (when ui_theme.json missing)=%s", s.ui_theme)
-    if s.use_mock_data:
-        logger.info("JOBHUB_USE_MOCK_DATA=1 — chế độ demo, không gọi API thật")

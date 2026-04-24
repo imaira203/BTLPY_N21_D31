@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
 
 from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
-from .. import mock_data
 from ..paths import resource_icon, resource_ui
 from ..session_store import clear_session
 from ..theme import ADMIN_ACCENT
@@ -43,6 +42,12 @@ from .quanly_enhanced import (
 
 
 class AdminDashboard:
+    @staticmethod
+    def _fmt_date(raw: str) -> str:
+        if "T" in raw:
+            return raw.split("T", 1)[0]
+        return raw
+
     """Admin panel that loads QuanLyUser/HR/Jobs .ui and fills tables from Python mock data."""
 
     def __init__(self, on_logout: Callable[[], None]) -> None:
@@ -285,7 +290,11 @@ class AdminDashboard:
         table = self.table_users
         if not table:
             return
-        users = list(mock_data.MOCK_USERS)
+        try:
+            users = list(jobhub_api.admin_candidate_overview())
+        except ApiError as e:
+            QMessageBox.warning(self.win, "Lỗi", str(e))
+            return
         table.setRowCount(0)
         table.setRowCount(len(users))
         table.setColumnCount(8)
@@ -299,7 +308,7 @@ class AdminDashboard:
             table.setItem(row, 1, name_item)
             table.setItem(row, 2, QTableWidgetItem(f"✉ {u.get('email', '')}"))
             table.setItem(row, 3, QTableWidgetItem(u.get("phone", "")))
-            table.setItem(row, 4, QTableWidgetItem(f"📅 {u.get('created_at', '')}"))
+            table.setItem(row, 4, QTableWidgetItem(f"📅 {self._fmt_date(str(u.get('created_at', '')))}"))
             table.setItem(row, 5, QTableWidgetItem(str(u.get("applications_count", 0))))
             status = "Hoạt động" if u.get("is_active", True) else "Bị khóa"
             table.setItem(row, 6, QTableWidgetItem(status))
@@ -312,7 +321,11 @@ class AdminDashboard:
         table = self.table_hr
         if not table:
             return
-        hrs = list(mock_data.MOCK_HR_LIST)
+        try:
+            hrs = list(jobhub_api.admin_hr_overview())
+        except ApiError as e:
+            QMessageBox.warning(self.win, "Lỗi", str(e))
+            return
         table.setRowCount(0)
         table.setRowCount(len(hrs))
         table.setColumnCount(8)
@@ -326,7 +339,7 @@ class AdminDashboard:
             table.setItem(row, 1, name_item)
             table.setItem(row, 2, QTableWidgetItem(f"✉ {h.get('email', '')}"))
             table.setItem(row, 3, QTableWidgetItem(h.get("phone", "")))
-            table.setItem(row, 4, QTableWidgetItem(f"📅 {h.get('created_at', '')}"))
+            table.setItem(row, 4, QTableWidgetItem(f"📅 {self._fmt_date(str(h.get('created_at', '')))}"))
             table.setItem(row, 5, QTableWidgetItem(f"📋 {h.get('jobs_count', 0)}"))
             status = "Hoạt động" if h.get("is_active", True) else "Bị khóa"
             table.setItem(row, 6, QTableWidgetItem(status))
@@ -334,18 +347,24 @@ class AdminDashboard:
 
         enhance_table(table, status_col=6, action_col=7, stretch_cols=[1, 2], show_lock_btn=True)
 
-    # ── Fill Jobs table from mock data ─────────────────────────────
+    _ADMIN_JOB_STATUS_MAP = {
+        "published":        "Đang tuyển",
+        "draft":            "Bản nháp",
+        "closed":           "Đã đóng",
+        "rejected":         "Vi phạm",
+        "pending_approval": "Chờ duyệt",
+    }
+
+    # ── Fill Jobs table from shared JOB_STORE ──────────────────────
     def _fill_jobs_table(self) -> None:
         table = self.table_jobs
         if not table:
             return
-        jobs = list(mock_data.MOCK_ADMIN_JOBS)
-        status_map = {
-            "published": "Đang tuyển",
-            "draft": "Đã đóng",
-            "rejected": "Vi phạm",
-            "pending_approval": "Chờ duyệt",
-        }
+        try:
+            jobs = list(jobhub_api.admin_all_jobs())
+        except ApiError as e:
+            QMessageBox.warning(self.win, "Lỗi", str(e))
+            return
         table.setRowCount(0)
         table.setRowCount(len(jobs))
         table.setColumnCount(10)
@@ -363,12 +382,85 @@ class AdminDashboard:
             table.setItem(row, 4, QTableWidgetItem(j.get("salary_text", "")))
             table.setItem(row, 5, QTableWidgetItem(j.get("job_type", "")))
             table.setItem(row, 6, QTableWidgetItem(f"👥 {j.get('applicants_count', 0)}"))
-            table.setItem(row, 7, QTableWidgetItem(f"📅 {j.get('created_at', '')}"))
-            status = status_map.get(j.get("status", ""), j.get("status", ""))
-            table.setItem(row, 8, QTableWidgetItem(status))
+            table.setItem(row, 7, QTableWidgetItem(f"📅 {self._fmt_date(str(j.get('created_at', '')))}"))
+            status_vi = self._ADMIN_JOB_STATUS_MAP.get(j.get("status", ""), j.get("status", ""))
+            table.setItem(row, 8, QTableWidgetItem(status_vi))
             table.setItem(row, 9, QTableWidgetItem(""))
 
         enhance_table(table, status_col=8, action_col=9, stretch_cols=[1, 2], show_lock_btn=False)
+
+        # Override action column with context-aware admin buttons
+        for row, j in enumerate(jobs):
+            table.setCellWidget(row, 9, self._make_admin_job_actions(j["id"], j.get("status", "")))
+
+    def _make_admin_job_actions(self, job_id: int, status: str) -> QWidget:
+        """Action buttons cho admin: duyệt/từ chối (chờ duyệt) hoặc xoá."""
+        wrap = QWidget()
+        wrap.setStyleSheet("background:transparent;")
+        lo = QHBoxLayout(wrap)
+        lo.setContentsMargins(6, 0, 6, 0)
+        lo.setSpacing(4)
+        lo.setAlignment(Qt.AlignVCenter)
+
+        def _btn(label: str, bg: str, hover: str) -> QPushButton:
+            b = QPushButton(label)
+            b.setFixedHeight(28)
+            b.setMinimumWidth(60)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet(
+                f"QPushButton{{background:{bg};color:#fff;"
+                "font-size:11px;font-weight:700;border:none;"
+                "border-radius:6px;padding:0 8px;}}"
+                f"QPushButton:hover{{background:{hover};}}"
+            )
+            return b
+
+        if status == "pending_approval":
+            btn_approve = _btn("✓ Duyệt",  "#059669", "#047857")
+            btn_reject  = _btn("✗ Từ chối", "#dc2626", "#b91c1c")
+
+            def _approve(_jid=job_id):
+                try:
+                    jobhub_api.admin_approve_job(_jid)
+                except ApiError as e:
+                    QMessageBox.warning(self.win, "Lỗi", str(e))
+                    return
+                self._fill_jobs_table()
+
+            def _reject(_jid=job_id):
+                try:
+                    jobhub_api.admin_reject_job(_jid)
+                except ApiError as e:
+                    QMessageBox.warning(self.win, "Lỗi", str(e))
+                    return
+                self._fill_jobs_table()
+
+            btn_approve.clicked.connect(_approve)
+            btn_reject.clicked.connect(_reject)
+            lo.addWidget(btn_approve)
+            lo.addWidget(btn_reject)
+        else:
+            btn_del = _btn("🗑 Xoá", "#ef4444", "#dc2626")
+
+            def _delete(_jid=job_id):
+                ret = QMessageBox.question(
+                    self.win, "Xác nhận xoá",
+                    f"Xoá tin #{_jid}?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if ret == QMessageBox.Yes:
+                    try:
+                        jobhub_api.admin_delete_job(_jid)
+                    except ApiError as e:
+                        QMessageBox.warning(self.win, "Lỗi", str(e))
+                        return
+                    self._fill_jobs_table()
+
+            btn_del.clicked.connect(_delete)
+            lo.addWidget(btn_del)
+
+        lo.addStretch()
+        return wrap
 
     def show(self) -> None:
         if self.win:
