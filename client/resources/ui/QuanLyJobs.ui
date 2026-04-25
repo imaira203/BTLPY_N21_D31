@@ -55,10 +55,28 @@
       </property>
       <property name="styleSheet">
        <string notr="true">
-        QFrame#sidebar { background-color: #FFFFFF; border-right: 1px solid #EEF2FF; }
-        QPushButton { background-color: transparent; color: #8F9BBA; border: none; border-radius: 10px; padding: 12px 16px; text-align: left; font-size: 14px; font-family: 'Segoe UI', sans-serif; font-weight: 500; margin: 2px 12px; }
-        QPushButton:hover { background-color: #F4F7FE; color: #2B3674; }
-        QPushButton:checked { background-color: #EEF2FF; color: #7B2FBE; font-weight: 700; border-left: 3px solid #7B2FBE; padding-left: 13px; }
+         QFrame#sidebar { background-color: #FFFFFF; border-right: 1px solid #E5E7EB; }
+         QPushButton { 
+             background-color: transparent; 
+             color: #64748B; 
+             border: none; 
+             border-radius: 10px; 
+             padding: 12px 16px; 
+             text-align: left; 
+             font-size: 14px; 
+             font-family: 'Inter', 'Segoe UI', sans-serif; 
+             font-weight: 500; 
+             margin: 2px 12px; 
+         }
+         QPushButton:hover { 
+             background-color: #F1F5F9; 
+             color: #111827; 
+         }
+         QPushButton:checked { 
+             background-color: #EEF2FF; 
+             color: #6366F1; 
+             font-weight: 600; 
+         }
        </string>
       </property>
       <layout class="QVBoxLayout" name="sidebarLayout">
@@ -94,7 +112,7 @@
          <item>
           <widget class="QLabel" name="brandLabel">
            <property name="styleSheet">
-            <string notr="true">font-size: 24px; font-weight: 800; color: #7B2FBE; font-family: 'Segoe UI', sans-serif; letter-spacing: -0.5px;</string>
+            <string notr="true">font-size: 24px; font-weight: 800; color: #6366F1; font-family: 'Inter', 'Segoe UI', sans-serif; letter-spacing: -0.5px;</string>
            </property>
            <property name="text">
             <string>⚡ JobHub</string>
@@ -238,7 +256,7 @@
     <item>
      <widget class="QWidget" name="mainArea" native="true">
       <property name="styleSheet">
-       <string notr="true">QWidget#mainArea { background-color: #F4F7FE; }</string>
+       <string notr="true">QWidget#mainArea { background-color: #F8FAFC; }</string>
       </property>
       <layout class="QVBoxLayout" name="mainAreaLayout">
        <property name="spacing">
