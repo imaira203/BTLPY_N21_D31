@@ -15,143 +15,154 @@
   </property>
   <property name="styleSheet">
    <string notr="true">
-/* Admin Dashboard Main Shell Styles */
-QMainWindow { background-color: #F8FAFC; }
+/* Modern Premium SaaS Design System */
+QMainWindow { 
+    background-color: #F3F4F6; /* Neutral Gray Background */
+    font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+}
 
-/* Sidebar Styling */
+/* Glassmorphism Sidebar */
 #sidebar {
-    background-color: #0F172A;
-    border: none;
-}
-#brandLabel {
-    color: #FFFFFF;
-    font-size: 24px;
-    font-weight: 800;
-    padding: 28px 24px 5px 24px;
-}
-#adminPanelLabel {
-    color: #64748B;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 0px 24px 30px 24px;
+    background-color: rgba(255, 255, 255, 0.7);
+    border-right: 1px solid rgba(229, 231, 235, 0.5);
 }
 
+#brandLabel {
+    color: #4F46E5; /* Primary Blue */
+    font-size: 26px;
+    font-weight: 900;
+    padding: 35px 24px 10px 24px;
+    letter-spacing: -0.5px;
+}
+
+#adminPanelLabel {
+    color: #94A3B8;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 0px 24px 24px 24px;
+}
+
+/* Navigation Buttons with Glassmorphism / Neumorphism hover */
 QPushButton.navBtn {
     background-color: transparent;
-    color: #94A3B8;
+    color: #64748B;
     border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
+    border-radius: 12px;
+    padding: 14px 20px;
     text-align: left;
     font-size: 14px;
-    font-weight: 500;
-    margin: 4px 15px;
+    font-weight: 600;
+    margin: 4px 16px;
 }
+
 QPushButton.navBtn:hover {
-    background-color: #1E293B;
-    color: #F1F5F9;
+    background-color: rgba(79, 70, 229, 0.05);
+    color: #4F46E5;
 }
+
 QPushButton.navBtn:checked {
-    background-color: #6366F1;
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4F46E5, stop:1 #7C3AED);
     color: #FFFFFF;
-    font-weight: 700;
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 #logoutButton {
-    color: #FB7185;
-    margin-bottom: 25px;
-}
-#logoutButton:hover {
-    background-color: #451a1a;
-}
-
-/* Header/TopBar */
-#topBar {
-    background-color: #FFFFFF;
-    border-bottom: 1px solid #E2E8F0;
-    min-height: 70px;
-    max-height: 70px;
-}
-#pageTitle {
-    font-size: 22px;
+    color: #EF4444;
+    margin-bottom: 32px;
     font-weight: 700;
-    color: #0F172A;
-}
-#pageSubTitle {
-    font-size: 13px;
-    color: #64748B;
+    background-color: rgba(239, 68, 68, 0.05);
 }
 
-#adminName { font-size: 14px; font-weight: 600; color: #1E293B; }
-#adminRole { font-size: 12px; color: #64748B; }
+#logoutButton:hover {
+    background-color: #EF4444;
+    color: #FFFFFF;
+}
+
+/* Header / TopBar with Glassmorphism */
+#topBar {
+    background-color: rgba(255, 255, 255, 0.8);
+    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
+    min-height: 80px;
+    max-height: 80px;
+}
+
+#pageTitle {
+    font-size: 28px;
+    font-weight: 800;
+    color: #111827;
+    letter-spacing: -0.5px;
+}
+
+#pageSubTitle {
+    font-size: 14px;
+    color: #6B7280;
+    font-weight: 500;
+}
+
+#adminName { 
+    font-size: 15px; 
+    font-weight: 700; 
+    color: #111827; 
+}
+
+#adminRole { 
+    font-size: 12px; 
+    color: #6366F1;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 #adminAvatar {
-    background-color: #6366F1;
-    color: white;
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4F46E5, stop:1 #7C3AED);
+    color: #FFFFFF;
     font-weight: 800;
     border-radius: 20px;
+    border: 2px solid #FFFFFF;
 }
 
-/* ── COMBOBOX DROPDOWN STYLING ────────────────────────────────── */
+/* Neumorphic Filter */
 #monthFilter {
     background-color: #FFFFFF;
-    border: 1.5px solid #E2E8F0;
-    border-radius: 10px;
-    padding: 6px 12px;
-    font-size: 13px;
-    font-weight: 500;
-    color: #1E293B;
-    height: 40px;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    height: 44px;
 }
 
 #monthFilter:hover {
-    border: 1.5px solid #CBD5E1;
-}
-
-#monthFilter:focus {
-    border: 2px solid #6366F1;
-    background-color: #FFFFFF;
-    outline: none;
+    border-color: #4F46E5;
+    background-color: #F9FAFB;
 }
 
 #monthFilter::drop-down {
     border: none;
     width: 32px;
-    background: transparent;
-}
-
-#monthFilter::down-arrow {
-    image: none;
-    width: 0px;
 }
 
 #monthFilter QAbstractItemView {
     background-color: #FFFFFF;
-    border: 1.5px solid #E2E8F0;
-    border-radius: 10px;
-    color: #1E293B;
-    margin-top: 4px;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    color: #111827;
     outline: none;
+    selection-background-color: #EEF2FF;
+    selection-color: #4F46E5;
+    padding: 8px;
 }
 
-#monthFilter QAbstractItemView::item {
-    padding: 10px 14px;
-    min-height: 36px;
-    color: #475569;
-    font-weight: 500;
+/* Chart Frame Neumorphism */
+QFrame#chartFrame { 
+    background-color: #FFFFFF; 
+    border-radius: 24px; 
+    border: 1px solid rgba(229, 231, 235, 0.5);
 }
 
-#monthFilter QAbstractItemView::item:hover {
-    background-color: #F1F5F9;
-    color: #6366F1;
-}
-
-#monthFilter QAbstractItemView::item:selected {
-    background-color: #EEF2FF;
-    color: #6366F1;
-    font-weight: 600;
-}
    </string>
   </property>
   <widget class="QWidget" name="centralwidget">

@@ -1,0 +1,9 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7C3AED;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <path d="M21 11.5C21 15.6421 17.1944 19 12.5 19C11.1396 19 9.85608 18.7061 8.71181 18.1824C7.45892 18.8474 5.48512 19.6465 3.32422 19.9814C4.8515 18.5772 5.52638 17.1594 5.7246 15.9352C4.03554 14.733 3 12.9669 3 11.0186C3 6.87647 6.80558 3.51855 11.5 3.51855C16.1944 3.51855 20 6.87647 20 11.0186L21 11.5Z" stroke="url(#grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

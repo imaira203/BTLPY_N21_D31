@@ -63,32 +63,32 @@
       </property>
       <property name="styleSheet">
        <string notr="true">
-        QFrame#sidebar { background-color: #0F172A; border: none; }
-        
-        QPushButton {
-            background-color: transparent;
-            color: #94A3B8;
-            border: none;
-            border-radius: 8px;
-            padding: 11px 16px;
-            text-align: left;
-            font-size: 14px;
-            font-weight: 500;
-            margin: 4px 12px;
-        }
-        QPushButton:hover {
-            background-color: #1E293B;
-            color: #F1F5F9;
-        }
-        QPushButton:checked {
-            background-color: #6366F1;
-            color: #FFFFFF;
-            font-weight: 600;
-        }
-        QPushButton#dangXuatButton:hover {
-            background-color: #FEF2F2;
-            color: #EF4444;
-        }
+         QFrame#sidebar { background-color: #FFFFFF; border-right: 1px solid #E5E7EB; }
+         
+         QPushButton {
+             background-color: transparent;
+             color: #64748B;
+             border: none;
+             border-radius: 10px;
+             padding: 11px 16px;
+             text-align: left;
+             font-size: 14px;
+             font-weight: 500;
+             margin: 2px 14px;
+         }
+         QPushButton:hover {
+             background-color: #F1F5F9;
+             color: #111827;
+         }
+         QPushButton:checked {
+             background-color: #EEF2FF;
+             color: #6366F1;
+             font-weight: 600;
+         }
+         QPushButton#dangXuatButton:hover {
+             background-color: #FEF2F2;
+             color: #EF4444;
+         }
        </string>
       </property>
       <layout class="QVBoxLayout" name="sidebarLayout">
@@ -124,7 +124,7 @@
          <item>
           <widget class="QLabel" name="brandLabel">
            <property name="styleSheet">
-            <string notr="true">font-size: 22px; font-weight: 800; color: #FFFFFF; letter-spacing: -0.5px;</string>
+            <string notr="true">font-size: 22px; font-weight: 800; color: #6366F1; letter-spacing: -0.5px;</string>
            </property>
            <property name="text">
             <string>⚡ JobHub</string>
@@ -388,7 +388,7 @@
        <item>
         <widget class="QFrame" name="tableCard">
          <property name="styleSheet">
-          <string notr="true">QFrame#tableCard { background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0; }</string>
+           <string notr="true">QFrame#tableCard { background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E5E7EB; }</string>
          </property>
          <layout class="QVBoxLayout" name="tableCardLayout">
           <property name="leftMargin">

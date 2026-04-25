@@ -15,125 +15,89 @@
   </property>
   <property name="styleSheet">
    <string notr="true">
-/* Reset &amp; Base */
+/* QuanLyUser - Premium Light Mode */
 QMainWindow { background-color: #F8FAFC; }
 * { font-family: 'Inter', 'Segoe UI', sans-serif; }
 
-/* Main Area Container */
 #mainArea { background-color: #F8FAFC; }
 
-/* Header Section */
-#headerWidget {
-    background-color: transparent;
-    margin-bottom: 10px;
-}
 #pageTitle {
     font-size: 26px;
-    font-weight: 800;
-    color: #0F172A;
-    letter-spacing: -0.5px;
-}
-#pageSubtitle {
-    font-size: 14px;
-    color: #64748B;
+    font-weight: 700;
+    color: #111827;
 }
 
-/* Stats Row */
-.StatCard {
-    background-color: #FFFFFF;
-    border: 1px solid #E2E8F0;
-    border-radius: 12px;
+#pageSubtitle {
+    font-size: 14px;
+    color: #6B7280;
 }
-.StatTitle { color: #64748B; font-size: 12px; font-weight: 600; text-transform: uppercase; }
-.StatValue { color: #0F172A; font-size: 20px; font-weight: 700; }
 
 /* Filter Bar */
 #filterBar {
     background-color: #FFFFFF;
-    border: 1px solid #E2E8F0;
+    border: 1px solid #E5E7EB;
     border-radius: 12px;
     padding: 10px;
 }
-QLineEdit#searchInput {
-    background-color: #F1F5F9;
-    border: 1px solid #E2E8F0;
-    border-radius: 8px;
-    padding: 10px 15px;
-    font-size: 14px;
-    color: #1E293B;
-}
-QLineEdit#searchInput:focus {
-    background-color: #FFFFFF;
-    border: 2px solid #6366F1;
-}
-QComboBox {
-    background-color: #F1F5F9;
-    border: 1px solid #E2E8F0;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 13px;
-    font-weight: 500;
-}
-QComboBox:hover { background-color: #E2E8F0; }
-QComboBox::drop-down { border: none; width: 30px; }
 
-/* Table Card */
+/* Table Card Container */
 #tableCard {
     background-color: #FFFFFF;
-    border: 1px solid #E2E8F0;
+    border: 1px solid #E5E7EB;
     border-radius: 16px;
 }
 
+/* Table Styling */
 QTableWidget {
     background-color: transparent;
     border: none;
     gridline-color: #F1F5F9;
     outline: none;
 }
+
 QTableWidget::item {
-    padding: 15px;
-    color: #334155;
+    padding: 12px;
+    color: #374151;
     border-bottom: 1px solid #F1F5F9;
-}
-QTableWidget::item:selected {
-    background-color: #F8FAFC;
-    color: #6366F1;
-    font-weight: 600;
 }
 
 QHeaderView::section {
-    background-color: #F8FAFC;
-    color: #64748B;
-    font-size: 11px;
-    font-weight: 700;
+    background-color: #F9FAFB;
+    color: #6B7280;
+    font-size: 12px;
+    font-weight: 600;
     text-transform: uppercase;
-    padding: 15px;
+    padding: 12px;
     border: none;
-    border-bottom: 2px solid #EEF2FF;
+    border-bottom: 1px solid #E5E7EB;
 }
 
-/* Pagination */
+/* Pagination Styling */
 #paginationFrame {
     background-color: #FFFFFF;
     border-top: 1px solid #F1F5F9;
     border-bottom-left-radius: 16px;
     border-bottom-right-radius: 16px;
 }
-#pageInfo { color: #64748B; font-size: 13px; }
+
+#pageInfo { color: #6B7280; font-size: 13px; }
 
 QPushButton.pageBtn {
     background-color: #FFFFFF;
-    border: 1px solid #E2E8F0;
+    border: 1px solid #E5E7EB;
     border-radius: 8px;
     min-width: 36px;
     min-height: 36px;
     font-weight: 600;
-    color: #475569;
+    color: #4B5563;
 }
+
 QPushButton.pageBtn:hover {
-    background-color: #F1F5F9;
-    border-color: #CBD5E1;
+    background-color: #F9FAFB;
+    border-color: #D1D5DB;
+    color: #6366F1;
 }
+
    </string>
   </property>
   <widget class="QWidget" name="centralwidget">
