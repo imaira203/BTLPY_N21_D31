@@ -19,8 +19,9 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout, QWidget,
 )
 
+from ..client import jobhub_api
+from ..client.jobhub_api import ApiError
 from ..session_store import clear_session
-from .. import mock_data as _mock_data
 
 # ══════════════════════════════════════════════════════════════
 #  DESIGN TOKENS
@@ -1462,9 +1463,10 @@ class UserDashboard:
         self._on_logout = on_logout
 
         # ── Shared runtime state (must be first — used by build methods) ──
-        self._saved_job_keys: set[str] = set()   # "title||comp" keys of saved jobs
+        self._saved_job_ids: set[int] = set()   # job ids saved by current candidate
         self._applied_hist:   list     = []      # newly applied entries (prepended)
         self._search_query:   str      = ""      # current topbar search text
+        self._public_jobs_cache: list[dict] = []
 
         # ── Profile data (persisted in session) ──────────────
         self._profile_data: dict = {
@@ -1531,6 +1533,15 @@ class UserDashboard:
         self._poll_timer.setInterval(_POLL_INTERVAL_MS)
         self._poll_timer.timeout.connect(self._poll_application_statuses)
         self._poll_timer.start()
+        self._bootstrap_candidate_data()
+
+    def show(self) -> None:
+        """Expose main window show() for app bootstrap code."""
+        self.win.show()
+
+    def close(self) -> None:
+        """Expose main window close() for app bootstrap code."""
+        self.win.close()
 
     # ══════════════════════════════════════════════════════════
     #  SIDEBAR
@@ -1612,7 +1623,7 @@ class UserDashboard:
         lo.addSpacing(8)
 
         self._logout_btn = _NavBtn("ic_logout.svg", "Đăng xuất", logout=True)
-        self._logout_btn.on_click(self._logout)
+        self._logout_btn.on_click(self._on_logout)
         lo.addWidget(self._logout_btn)
 
         return sb
@@ -1715,7 +1726,8 @@ class UserDashboard:
             f"background:{_CARD_BG}; border:1.5px solid {_BORDER};"
             "border-radius:18px; padding:0 14px;}"
             "QPushButton:hover{"
-            f"border:1.5px solid {_INDIGO}; background:#f5f3ff;}}"
+            f"border:1.5px solid {_INDIGO}; background:#f5f3ff;"
+            "}"
         )
 
         # Since Qt doesn't support child widgets in QPushButton cleanly,
@@ -1748,6 +1760,16 @@ class UserDashboard:
                          sal: str, loc: str, idx: int = 0,
                          job: dict | None = None) -> None:
         """Replace page-4 widget with fresh job detail and navigate to it."""
+        if isinstance(job, dict):
+            try:
+                job_id = int(job.get("id", 0))
+            except Exception:
+                job_id = 0
+            if job_id > 0:
+                try:
+                    jobhub_api.candidate_track_job_view(job_id)
+                except Exception:
+                    pass
         self._prev_page = self._stack.currentIndex()
         new_page = self._build_job_detail_page(title, comp, jtype, sal, loc, idx, job=job)
         # swap out placeholder
@@ -2145,19 +2167,10 @@ class UserDashboard:
         def _open_apply_from_detail(checked=False, _t=title, _c=comp, _l=loc):
             dlg = _ApplyDialog(_t, self.win)
             if dlg.exec() == QDialog.Accepted:
-                now = datetime.now().strftime("%d/%m/%Y")
-                entry = _mock_data.add_candidate_application(
-                    title=_t, company=_c, location=_l or "Việt Nam", applied_at=now
-                )
-                self._applied_hist.insert(
-                    0, (_c, _l, _t, now, "Đang xử lý", entry["application_id"])
-                )
-                _Toast(
-                    self.win.centralWidget(),
-                    f"Đã gửi hồ sơ cho vị trí {_t} thành công!",
-                    title_text="Nộp hồ sơ thành công! ✅",
-                    icon_char="✓",
-                )
+                if job_id <= 0:
+                    _Toast(self.win.centralWidget(), "Khong tim thay ma tin tuyen dung.", accent="#ef4444")
+                    return
+                self._apply_to_job(job_id, _t, _c, _l or "Viet Nam")
 
         btn_apply_now.clicked.connect(_open_apply_from_detail)
         act_lo.addWidget(btn_apply_now)
@@ -2217,8 +2230,12 @@ class UserDashboard:
         right_col.addWidget(abt)
 
         # ── Related jobs (from JOB_STORE, same company or dept) ──
+        try:
+            public_jobs = jobhub_api.list_jobs_public()
+        except Exception:
+            public_jobs = []
         rel_jobs = [
-            j for j in _mock_data.get_public_jobs()
+            j for j in public_jobs
             if j["id"] != job_id
             and (j["company_name"] == comp or j.get("department") == dept)
         ][:3]
@@ -2313,14 +2330,27 @@ class UserDashboard:
     def _build_home_page(self) -> QWidget:
         scroll, lo = self._page_scroll_wrapper()
 
+        jobs = self._get_public_jobs(refresh=True)
+        open_jobs = len(jobs)
+        companies = {
+            str(j.get("company_name", "")).strip().lower()
+            for j in jobs
+            if str(j.get("company_name", "")).strip()
+        }
+        fields = {
+            str((j.get("department") or j.get("job_type") or "")).strip().lower()
+            for j in jobs
+            if str((j.get("department") or j.get("job_type") or "")).strip()
+        }
+
         # Stats strip
         stats_row = QHBoxLayout()
         stats_row.setSpacing(14)
         stats_row.addStretch()
         for label, val, solid_color, icon_svg in [
-            ("Tin đang mở", "124", "#10b981", "ic_jobs.svg"),
-            ("Lĩnh vực",    "18",  "#3b82f6", "ic_folder.svg"),
-            ("Công ty",     "56",  "#ef4444", "ic_building.svg"),
+            ("Tin đang mở", str(open_jobs),       "#10b981", "ic_jobs.svg"),
+            ("Lĩnh vực",    str(len(fields)),     "#3b82f6", "ic_folder.svg"),
+            ("Công ty",     str(len(companies)),  "#ef4444", "ic_building.svg"),
         ]:
             stats_row.addWidget(
                 self._stat_card(label, val, solid_color, icon_svg)
@@ -2554,7 +2584,7 @@ class UserDashboard:
         self._hist_page       = 0
         self._hist_sort_key   = "date"
         self._hist_sort_asc   = False
-        self._hist_filtered   = list(_HIST_DATA)
+        self._hist_filtered   = list(self._applied_hist)
         self._render_hist_page()
         return page
 
@@ -2562,8 +2592,7 @@ class UserDashboard:
     def _apply_hist_filters(self) -> None:
         q      = self._hist_search.text().lower().strip()
         status = self._hist_filter.currentText()
-        # Merge newly applied entries (prepended) with baseline mock data
-        data   = self._applied_hist + _HIST_DATA
+        data   = list(self._applied_hist)
         if q:
             data = [r for r in data if q in r[0].lower() or q in r[2].lower()]
         if status != "Tất cả":
@@ -3252,6 +3281,90 @@ class UserDashboard:
 
         return scroll
 
+    def _change_avatar(self) -> None:
+        """Pick a local image file and set it as profile avatar."""
+        path, _ = QFileDialog.getOpenFileName(
+            self.win,
+            "Chon anh dai dien",
+            "",
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.webp)",
+        )
+        if not path:
+            return
+
+        pm = QPixmap(path)
+        if pm.isNull():
+            _Toast(
+                self.win.centralWidget(),
+                "Khong mo duoc tep anh. Vui long thu lai.",
+                accent="#ef4444",
+                duration_ms=2500,
+                title_text="Tep khong hop le",
+                icon_char="!",
+            )
+            return
+
+        self._av_lbl.setPixmap(
+            pm.scaled(
+                self._av_lbl.size(),
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation,
+            )
+        )
+        self._av_lbl.setText("")
+
+    def _open_profile_edit(self) -> None:
+        """Open full profile edit dialog and sync values back to dashboard."""
+        dlg = _ProfileEditDialog(self._profile_data, self.win)
+        if dlg.exec() == QDialog.Accepted:
+            self._profile_data = dlg.get_data()
+            self._stack.removeWidget(self._stack.widget(3))
+            self._stack.insertWidget(3, self._build_profile_page())
+            self._stack.setCurrentIndex(3)
+
+    def _open_cv_preview(self) -> None:
+        """Open CV preview/upload dialog and store selected CV path."""
+        dlg = _CVPreviewDialog(self._profile_data.get("cv_path"), self.win)
+        if dlg.exec() == QDialog.Accepted:
+            self._profile_data["cv_path"] = dlg.get_cv_path()
+            self._update_profile_save_status()
+
+    def _download_cv(self) -> None:
+        """Open current CV file using the system default application."""
+        cv_path = self._profile_data.get("cv_path")
+        if not cv_path:
+            _Toast(
+                self.win.centralWidget(),
+                "Ban chua tai len CV de mo/luu.",
+                accent="#f59e0b",
+                duration_ms=2200,
+                title_text="Chua co CV",
+                icon_char="!",
+            )
+            return
+
+        path = Path(cv_path)
+        if not path.exists():
+            _Toast(
+                self.win.centralWidget(),
+                "Khong tim thay tep CV tren may.",
+                accent="#ef4444",
+                duration_ms=2500,
+                title_text="Tep khong ton tai",
+                icon_char="!",
+            )
+            return
+
+        import os as _os
+        import subprocess as _sub
+        import sys as _sys
+        if _sys.platform.startswith("win"):
+            _os.startfile(str(path))
+        elif _sys.platform == "darwin":
+            _sub.Popen(["open", str(path)])
+        else:
+            _sub.Popen(["xdg-open", str(path)])
+
     # ── Editable card: icon header + stacked or grid fields ───
     def _prof_editable_card(self, icon_svg: str, accent: str,
                             title: str, fields: list,
@@ -3826,6 +3939,16 @@ class UserDashboard:
     # ══════════════════════════════════════════════════════════
     #  JOB CARDS
     # ══════════════════════════════════════════════════════════
+    def _get_public_jobs(self, refresh: bool = False) -> list[dict]:
+        if not refresh and self._public_jobs_cache:
+            return list(self._public_jobs_cache)
+        try:
+            rows = jobhub_api.list_jobs_public() or []
+        except Exception:
+            rows = []
+        self._public_jobs_cache = list(rows)
+        return list(self._public_jobs_cache)
+
     def _load_jobs_grid(self, grid: QGridLayout, is_saved: bool = False) -> None:
         while grid.count():
             item = grid.takeAt(0)
@@ -3833,7 +3956,7 @@ class UserDashboard:
                 item.widget().deleteLater()
 
         # Build list of (tuple, job_dict) from live JOB_STORE (published only)
-        _live_dicts = _mock_data.get_public_jobs()
+        _live_dicts = self._get_public_jobs()
         if _live_dicts:
             _pairs = [
                 (
@@ -3850,7 +3973,7 @@ class UserDashboard:
         if is_saved:
             pairs = [
                 p for p in _pairs
-                if self._job_key(p[0][0], p[0][1]) in self._saved_job_keys
+                if isinstance(p[1], dict) and int(p[1].get("id", 0)) in self._saved_job_ids
             ]
         else:
             q = self._search_query.strip().lower()
@@ -3887,15 +4010,10 @@ class UserDashboard:
             return
 
         for i, ((title, comp, jtype, sal, loc), jdata) in enumerate(pairs):
-            saved = self._job_key(title, comp) in self._saved_job_keys
+            saved = isinstance(jdata, dict) and int(jdata.get("id", 0)) in self._saved_job_ids
             card = self._job_card(title, comp, jtype, sal, loc, saved, i,
                                   is_saved_page=is_saved, job_data=jdata)
             grid.addWidget(card, i // 2, i % 2)
-
-    @staticmethod
-    def _job_key(title: str, comp: str) -> str:
-        """Stable string key identifying a job."""
-        return f"{title}||{comp}"
 
     def _job_card(self, title: str, comp: str, jtype: str,
                   sal: str, loc: str, is_saved: bool, idx: int = 0,
@@ -3958,11 +4076,19 @@ class UserDashboard:
         btn_save.setIconSize(QSize(17, 17))
 
         def _toggle_save(checked=False, _t=title, _c=comp, _b=btn_save,
-                         _is_saved_page=is_saved_page):
-            key = self._job_key(_t, _c)
-            if key in self._saved_job_keys:
+                         _is_saved_page=is_saved_page, _job=job_data):
+            job_id = int(_job.get("id", 0)) if isinstance(_job, dict) else 0
+            if job_id <= 0:
+                _Toast(self.win.centralWidget(), "Khong tim thay ma tin de luu.", accent="#ef4444")
+                return
+            if job_id in self._saved_job_ids:
                 # ── Unsave ────────────────────────────────────
-                self._saved_job_keys.discard(key)
+                try:
+                    jobhub_api.candidate_unsave_job(job_id)
+                except ApiError as e:
+                    _Toast(self.win.centralWidget(), str(e), accent="#ef4444", title_text="Khong the bo luu")
+                    return
+                self._saved_job_ids.discard(job_id)
                 _b.setIcon(QIcon(_svg_pm("bookmark_outline.svg", 17, "#94a3b8")))
                 _Toast(
                     self.win.centralWidget(),
@@ -3974,7 +4100,12 @@ class UserDashboard:
                 )
             else:
                 # ── Save ──────────────────────────────────────
-                self._saved_job_keys.add(key)
+                try:
+                    jobhub_api.candidate_save_job(job_id)
+                except ApiError as e:
+                    _Toast(self.win.centralWidget(), str(e), accent="#ef4444", title_text="Khong the luu viec")
+                    return
+                self._saved_job_ids.add(job_id)
                 _b.setIcon(QIcon(_svg_pm("bookmark_filled.svg", 17, _INDIGO)))
                 _Toast(
                     self.win.centralWidget(),
@@ -4053,34 +4184,9 @@ class UserDashboard:
         )
         _btn_shadow(btn_apply, _INDIGO, 50)
 
-        def _open_apply(checked=False, _title=title, _comp=comp, _loc=loc):
-            dlg = _ApplyDialog(_title, self.win)
-            if dlg.exec() == QDialog.Accepted:
-                # Ghi vào shared store (HR sẽ thấy ngay)
-                now = datetime.now().strftime("%d/%m/%Y")
-                entry = _mock_data.add_candidate_application(
-                    title=_title, company=_comp,
-                    location=_loc or "Việt Nam",
-                    applied_at=now,
-                )
-                # Lưu vào lịch sử local: tuple 6 phần tử, app_id ở [5]
-                self._applied_hist.insert(0, (
-                    _comp,
-                    _loc or "Việt Nam",
-                    _title,
-                    datetime.now().strftime("%b %d, %Y"),
-                    "Đang xử lý",
-                    entry["application_id"],   # ← track để polling
-                ))
-                self._refresh_history_page()
-                _Toast(
-                    self.win.centralWidget(),
-                    f"{_title} · {_comp}",
-                    accent="#10b981",
-                    duration_ms=3500,
-                    title_text="Nộp hồ sơ thành công! ✅",
-                    icon_char="✓",
-                )
+        def _open_apply(checked=False, _title=title, _comp=comp, _jt=jtype, _sal=sal, _loc=loc, _i=idx, _job=job_data):
+            # Force detail-first flow: open job detail before applying so view_count is recorded.
+            self._open_job_detail(_title, _comp, _jt, _sal, _loc, _i, job=_job)
 
         btn_apply.clicked.connect(_open_apply)
         h_bottom.addWidget(btn_apply)
@@ -4111,6 +4217,88 @@ class UserDashboard:
         """Prepend newly applied jobs and re-render history table."""
         # _apply_hist_filters reads self._applied_hist + _HIST_DATA
         self._apply_hist_filters()
+
+    def _bootstrap_candidate_data(self) -> None:
+        """Initial load from server for saved jobs and application history."""
+        self._sync_saved_jobs()
+        self._sync_application_history()
+
+    def _sync_saved_jobs(self) -> None:
+        try:
+            rows = jobhub_api.candidate_saved_jobs()
+        except Exception:
+            return
+        ids: set[int] = set()
+        for row in rows or []:
+            try:
+                rid = int(row.get("id", 0))
+            except Exception:
+                rid = 0
+            if rid > 0:
+                ids.add(rid)
+        self._saved_job_ids = ids
+        if hasattr(self, "saved_jobs_grid"):
+            self._refresh_saved_page()
+
+    def _sync_application_history(self) -> None:
+        try:
+            rows = jobhub_api.list_my_applications()
+        except Exception:
+            return
+        mapped: list[tuple[str, str, str, str, str]] = []
+        for row in rows or []:
+            status_en = str(row.get("status", "pending")).lower()
+            status_vi = _HR_STATUS_VI.get(status_en, "Đang xử lý")
+            comp = str(row.get("company_name") or "Nha tuyen dung")
+            loc = str(row.get("location") or "Viet Nam")
+            title = str(row.get("title") or "")
+            applied_at = str(row.get("applied_at") or "")
+            try:
+                dt = datetime.fromisoformat(applied_at.replace("Z", "+00:00"))
+                date_txt = dt.strftime("%b %d, %Y")
+            except Exception:
+                date_txt = applied_at[:10] if applied_at else datetime.now().strftime("%b %d, %Y")
+            mapped.append((comp, loc, title, date_txt, status_vi))
+        self._applied_hist = mapped
+        if hasattr(self, "_hist_search") and hasattr(self, "_hist_filter"):
+            self._apply_hist_filters()
+
+    def _apply_to_job(self, job_id: int, title: str, company: str, location: str) -> None:
+        try:
+            cvs = jobhub_api.list_my_cvs()
+            if not cvs:
+                _Toast(
+                    self.win.centralWidget(),
+                    "Ban can tai len CV truoc khi ung tuyen.",
+                    accent="#f59e0b",
+                    title_text="Thieu CV",
+                    icon_char="!",
+                )
+                return
+            cv_id = int(cvs[0]["id"])
+            jobhub_api.apply_job(job_id, cv_id)
+            self._sync_application_history()
+            _Toast(
+                self.win.centralWidget(),
+                f"{title} · {company}",
+                accent="#10b981",
+                duration_ms=3500,
+                title_text="Nop ho so thanh cong! ✓",
+                icon_char="✓",
+            )
+        except ApiError as e:
+            _Toast(
+                self.win.centralWidget(),
+                str(e),
+                accent="#ef4444",
+                duration_ms=3200,
+                title_text="Ung tuyen that bai",
+                icon_char="!",
+            )
+
+    def _poll_application_statuses(self) -> None:
+        """Periodic refresh for application statuses from backend."""
+        self._sync_application_history()
 
     def _rebuild_skill_chips(self) -> None:
         """Xóa và vẽ lại toàn bộ skill chips từ _profile_data['skills']."""
