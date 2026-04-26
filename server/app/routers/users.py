@@ -1,8 +1,10 @@
 import uuid
+import json
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,7 +13,15 @@ from ..db import get_db
 from ..deps import get_current_user
 from ..models import CandidateProfile, User, UserRole
 from ..runtime_cache import runtime_cache
-from ..schemas import CandidateProfileOut, CandidateProfileUpdateIn, HRProfileOut, UpdateEmailIn, UpdatePasswordIn, UserOut
+from ..schemas import (
+    CandidateProfileOut,
+    CandidateProfileUpdateIn,
+    HRProfileOut,
+    UpdateBasicProfileIn,
+    UpdateEmailIn,
+    UpdatePasswordIn,
+    UserOut,
+)
 from ..security import hash_password, verify_password
 from ..storage_paths import absolute_path, relative_key, resolve_existing_file
 
@@ -20,9 +30,36 @@ router = APIRouter(prefix="/users", tags=["users"])
 _AVATAR_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
 
+def _to_candidate_profile_out(profile: CandidateProfile) -> CandidateProfileOut:
+    skills_dict = profile.skills_as_dict()
+    return CandidateProfileOut(
+        id=profile.id,
+        user_id=profile.user_id,
+        tagline=profile.tagline,
+        phone=profile.phone,
+        address=profile.address,
+        professional_field=profile.professional_field,
+        degree=profile.degree,
+        experience_text=profile.experience_text,
+        language=profile.language,
+        skills_json=skills_dict,
+        updated_at=profile.updated_at,
+    )
+
+
 @router.get("/me", response_model=UserOut)
 def me(user: Annotated[User, Depends(get_current_user)]) -> User:
     return user
+
+
+@router.get("/me/avatar/view")
+def view_my_avatar(user: Annotated[User, Depends(get_current_user)]) -> FileResponse:
+    if not user.avatar_storage_key:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+    path = resolve_existing_file(settings, user.avatar_storage_key)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="Avatar file not found")
+    return FileResponse(path=str(path), media_type="image/*", filename=path.name)
 
 
 @router.get("/me/hr-profile", response_model=HRProfileOut | None)
@@ -80,11 +117,12 @@ def my_candidate_profile(
         return None
     cached = runtime_cache.candidate_profile_by_user_id.get(user.id)
     if cached:
-        return cached
+        return _to_candidate_profile_out(cached)
     row = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == user.id))
     if row:
         runtime_cache.upsert_candidate_profile(row)
-    return row
+        return _to_candidate_profile_out(row)
+    return None
 
 
 @router.put("/me/candidate-profile", response_model=CandidateProfileOut)
@@ -92,7 +130,7 @@ def upsert_my_candidate_profile(
     body: CandidateProfileUpdateIn,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> CandidateProfile:
+) -> CandidateProfileOut:
     if user.role != UserRole.candidate:
         raise HTTPException(status_code=403, detail="Candidate only")
     profile = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == user.id))
@@ -100,14 +138,19 @@ def upsert_my_candidate_profile(
         profile = CandidateProfile(user_id=user.id)
         db.add(profile)
         db.flush()
-    profile.headline = body.headline
-    profile.introduction = body.introduction
-    profile.skills = body.skills
-    profile.experience = body.experience
+    profile.tagline = body.tagline
+    profile.phone = body.phone
+    profile.address = body.address
+    profile.professional_field = body.professional_field
+    profile.degree = body.degree
+    profile.experience_text = body.experience_text
+    profile.language = body.language
+    if body.skills_json is not None:
+        profile.skills_json = json.dumps(body.skills_json, ensure_ascii=False)
     db.commit()
     db.refresh(profile)
     runtime_cache.upsert_candidate_profile(profile)
-    return profile
+    return _to_candidate_profile_out(profile)
 
 
 @router.put("/me/email", response_model=UserOut)
@@ -138,6 +181,26 @@ def update_me_password(
     user.password_hash = hash_password(body.new_password)
     db.commit()
     db.refresh(user)
+    return user
+
+
+@router.put("/me/basic", response_model=UserOut)
+def update_me_basic(
+    body: UpdateBasicProfileIn,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    if body.email is not None:
+        normalized_email = body.email.strip().lower()
+        exists = db.scalar(select(User).where(User.email == normalized_email, User.id != user.id))
+        if exists:
+            raise HTTPException(status_code=400, detail="Email đã được sử dụng")
+        user.email = normalized_email
+    if body.full_name is not None:
+        user.full_name = body.full_name.strip() or None
+    db.commit()
+    db.refresh(user)
+    runtime_cache.upsert_user(user)
     return user
 
 

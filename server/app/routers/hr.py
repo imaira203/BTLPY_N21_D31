@@ -301,10 +301,14 @@ def list_applications_for_hr(
                 "company": company_name or "",
                 "location": job.location or "",
                 "candidate_profile": {
-                    "headline": cprof.headline if cprof else None,
-                    "introduction": cprof.introduction if cprof else None,
-                    "skills": cprof.skills if cprof else None,
-                    "experience": cprof.experience if cprof else None,
+                    "tagline": cprof.tagline if cprof else None,
+                    "phone": cprof.phone if cprof else None,
+                    "address": cprof.address if cprof else None,
+                    "professional_field": cprof.professional_field if cprof else None,
+                    "degree": cprof.degree if cprof else None,
+                    "experience_text": cprof.experience_text if cprof else None,
+                    "language": cprof.language if cprof else None,
+                    "skills_json": cprof.skills_as_dict() if cprof else {},
                 },
             }
         )

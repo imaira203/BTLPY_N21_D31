@@ -48,6 +48,17 @@ def apply_mysql_schema_patches() -> None:
                 conn.execute(text(stmt))
             log.info("Đã thêm cột %s.%s (DB cũ).", table, column)
 
+        def drop_column_if_exists(table: str, column: str) -> None:
+            if not insp.has_table(table):
+                return
+            names = {c["name"] for c in insp.get_columns(table)}
+            if column not in names:
+                return
+            stmt = f"ALTER TABLE {table} DROP COLUMN {column}"
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+            log.info("Đã xóa cột %s.%s (dọn schema cũ).", table, column)
+
         add_column_if_missing("users", "avatar_storage_key", "VARCHAR(512) NULL", after="full_name")
         add_column_if_missing("hr_profiles", "avatar_storage_key", "VARCHAR(512) NULL", after="company_name")
         add_column_if_missing("jobs", "department", "VARCHAR(128) NULL", after="description")
@@ -59,15 +70,31 @@ def apply_mysql_schema_patches() -> None:
         add_column_if_missing("jobs", "view_count", "INT NOT NULL DEFAULT 0", after="deadline_text")
         add_column_if_missing("job_applications", "accepted_at", "DATETIME NULL", after="status")
         add_column_if_missing("job_applications", "contact_unlocked_at", "DATETIME NULL", after="accepted_at")
+        add_column_if_missing("candidate_profiles", "tagline", "VARCHAR(255) NULL", after="user_id")
+        add_column_if_missing("candidate_profiles", "phone", "VARCHAR(64) NULL", after="tagline")
+        add_column_if_missing("candidate_profiles", "address", "VARCHAR(255) NULL", after="phone")
+        add_column_if_missing("candidate_profiles", "professional_field", "VARCHAR(255) NULL", after="address")
+        add_column_if_missing("candidate_profiles", "degree", "VARCHAR(255) NULL", after="professional_field")
+        add_column_if_missing("candidate_profiles", "experience_text", "VARCHAR(255) NULL", after="degree")
+        add_column_if_missing("candidate_profiles", "language", "VARCHAR(255) NULL", after="experience_text")
+        add_column_if_missing("candidate_profiles", "skills_json", "TEXT NULL", after="language")
+        drop_column_if_exists("candidate_profiles", "headline")
+        drop_column_if_exists("candidate_profiles", "introduction")
+        drop_column_if_exists("candidate_profiles", "skills")
+        drop_column_if_exists("candidate_profiles", "experience")
         if not insp.has_table("candidate_profiles"):
             stmt = (
                 "CREATE TABLE candidate_profiles ("
                 "id INT AUTO_INCREMENT PRIMARY KEY, "
                 "user_id INT NOT NULL UNIQUE, "
-                "headline VARCHAR(255) NULL, "
-                "introduction TEXT NULL, "
-                "skills TEXT NULL, "
-                "experience TEXT NULL, "
+                "tagline VARCHAR(255) NULL, "
+                "phone VARCHAR(64) NULL, "
+                "address VARCHAR(255) NULL, "
+                "professional_field VARCHAR(255) NULL, "
+                "degree VARCHAR(255) NULL, "
+                "experience_text VARCHAR(255) NULL, "
+                "language VARCHAR(255) NULL, "
+                "skills_json TEXT NULL, "
                 "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, "
                 "INDEX idx_candidate_profile_user (user_id), "
                 "CONSTRAINT fk_candidate_profiles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
@@ -113,5 +140,15 @@ def apply_mysql_schema_patches() -> None:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             log.info("Đã tạo bảng candidate_subscription_payments (DB cũ).")
+        if insp.has_table("users") and insp.has_table("candidate_profiles"):
+            stmt = (
+                "INSERT INTO candidate_profiles (user_id) "
+                "SELECT u.id "
+                "FROM users u "
+                "LEFT JOIN candidate_profiles cp ON cp.user_id = u.id "
+                "WHERE u.role = 'candidate' AND cp.user_id IS NULL"
+            )
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
     except Exception as e:
         log.warning("Không áp dụng được patch schema: %s", e)
