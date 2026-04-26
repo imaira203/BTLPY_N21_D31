@@ -26,12 +26,12 @@ from ..session_store import clear_session
 # ══════════════════════════════════════════════════════════════
 #  DESIGN TOKENS
 # ══════════════════════════════════════════════════════════════
-_SIDEBAR_BG   = "#0f172a"
+_SIDEBAR_BG   = "#ffffff"
 _SIDEBAR_W    = 210
 _NAV_ACTIVE   = "#6366f1"
-_NAV_HOVER_BG = "#1e293b"
-_NAV_INACT_IC = "#94a3b8"
-_NAV_INACT_TX = "#94a3b8"
+_NAV_HOVER_BG = "#f1f5f9"
+_NAV_INACT_IC = "#64748b"
+_NAV_INACT_TX = "#64748b"
 _CONTENT_BG   = "#f8fafc"
 _TOPBAR_BG    = "#ffffff"
 _TOPBAR_H     = 72
@@ -218,7 +218,7 @@ class _NavBtn(QWidget):
     _SS_HOV    = f"background:{_NAV_HOVER_BG}; border-radius:10px;"
 
     _LOGOUT_IC_INACT = "#fca5a5"
-    _LOGOUT_TX_INACT = "#94a3b8"
+    _LOGOUT_TX_INACT = "#64748b"
     _LOGOUT_IC_HOV   = "#ef4444"
     _LOGOUT_TX_HOV   = "#ef4444"
 
@@ -285,9 +285,9 @@ class _NavBtn(QWidget):
                 "font-size:13px; font-weight:500;"
             )
         else:
-            self._icon_lbl.setPixmap(_svg_pm(self._icon_svg, 18, "#cbd5e1"))
+            self._icon_lbl.setPixmap(_svg_pm(self._icon_svg, 18, "#1e293b"))
             self._txt.setStyleSheet(
-                "background:transparent; border:none; color:#cbd5e1;"
+                "background:transparent; border:none; color:#1e293b;"
                 "font-size:13px; font-weight:500;"
             )
 
@@ -1603,7 +1603,7 @@ class UserDashboard:
     def _build_sidebar(self) -> QWidget:
         sb = QWidget()
         sb.setFixedWidth(_SIDEBAR_W)
-        sb.setStyleSheet(f"background:{_SIDEBAR_BG};")
+        sb.setStyleSheet(f"background:{_SIDEBAR_BG}; border-right: 1px solid {_BORDER};")
 
         lo = QVBoxLayout(sb)
         lo.setContentsMargins(10, 0, 10, 20)
@@ -1627,7 +1627,7 @@ class UserDashboard:
         )
         lbl_brand = QLabel("JobHub")
         lbl_brand.setStyleSheet(
-            "color:#f1f5f9; font-size:16px; font-weight:700;"
+            "color:#0f172a; font-size:16px; font-weight:700;"
             "letter-spacing:1.5px; background:transparent; border:none;"
         )
         b_lo.addWidget(logo_circle)
@@ -1638,7 +1638,7 @@ class UserDashboard:
         # Separator
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
-        sep.setStyleSheet("background:#1e293b;")
+        sep.setStyleSheet(f"background:{_BORDER};")
         sep.setFixedHeight(1)
         lo.addWidget(sep)
         lo.addSpacing(10)
@@ -1646,7 +1646,7 @@ class UserDashboard:
         # Section label
         sec_lbl = QLabel("MENU")
         sec_lbl.setStyleSheet(
-            "color:#475569; font-size:9px; font-weight:700;"
+            "color:#94a3b8; font-size:9px; font-weight:700;"
             "letter-spacing:1.8px; background:transparent;"
         )
         sec_lbl.setContentsMargins(6, 0, 0, 0)

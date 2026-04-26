@@ -6,24 +6,26 @@
    <string notr="true">
     QFrame#statCard {
         background-color: #FFFFFF;
-        border-radius: 20px;
+        border: 1px solid #E5E7EB;
+        border-radius: 16px;
     }
     QLabel#labelStatTitle {
-        color: #A3AED0;
-        font-size: 12px;
-        font-weight: 700;
-        font-family: 'Segoe UI';
+        color: #6B7280;
+        font-size: 14px;
+        font-weight: 500;
+        font-family: 'Inter', 'Segoe UI';
     }
     QLabel#labelStatValue {
-        font-size: 28px;
-        font-weight: 800;
-        color: #1B2559;
-        font-family: 'Segoe UI';
+        font-size: 24px;
+        font-weight: 700;
+        color: #111827;
+        font-family: 'Inter', 'Segoe UI';
     }
     QLabel#labelStatHint {
         font-size: 12px;
-        color: #05CD99;
-        font-family: 'Segoe UI';
+        font-weight: 600;
+        color: #10B981;
+        font-family: 'Inter', 'Segoe UI';
     }
    </string>
   </property>
@@ -45,8 +47,9 @@
          <property name="styleSheet">
           <string notr="true">
            QFrame#statIconFrame {
-               background-color: #F4F7FE;
+               background-color: #EEF2FF;
                border-radius: 12px;
+               border: 1px solid #E0E7FF;
            }
           </string>
          </property>
