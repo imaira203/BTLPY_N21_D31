@@ -8,7 +8,7 @@ from typing import Callable
 
 from PySide6.QtCore import QByteArray, QPropertyAnimation, QRect, QSize, Qt, QTimer
 from PySide6.QtGui import (
-    QColor, QIcon, QPainter, QPixmap,
+    QColor, QIcon, QPainter, QPainterPath, QPixmap,
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -190,6 +190,24 @@ def _btn_shadow(w: QWidget, color_hex: str, alpha: int = 55) -> None:
     w.setGraphicsEffect(fx)
 
 
+def _circular_fill_pixmap(src: QPixmap, size: QSize) -> QPixmap:
+    """Center-crop and clip pixmap into a perfect circle."""
+    if src.isNull():
+        return QPixmap()
+    side = max(1, min(size.width(), size.height()))
+    scaled = src.scaled(side, side, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    out = QPixmap(side, side)
+    out.fill(Qt.transparent)
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    path = QPainterPath()
+    path.addEllipse(0, 0, side, side)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, scaled)
+    painter.end()
+    return out
+
+
 # ══════════════════════════════════════════════════════════════
 #  NAV BUTTON
 # ══════════════════════════════════════════════════════════════
@@ -348,12 +366,14 @@ class _Toast(QWidget):
                  icon_char: str = "✓"):
         super().__init__(parent)
         self.setAttribute(Qt.WA_DeleteOnClose)
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedSize(self._W, self._H)
 
         # ── Card styling ──────────────────────────────────────
         self.setStyleSheet(
-            "background:white; border-radius:16px;"
-            "border:1px solid #e5e7eb;"
+            "background-color: rgba(255, 255, 255, 252);"
+            "border-radius:16px;"
+            "border:1px solid #dbe3ee;"
         )
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(24)
@@ -1085,18 +1105,19 @@ class _ProfileEditDialog(QDialog):
 class _CVPreviewDialog(QDialog):
     """Lightweight CV preview / upload modal."""
 
-    def __init__(self, cv_path: str | None, parent=None):
+    def __init__(self, cv_name: str | None, cv_id: int | None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Xem CV")
         self.setModal(True)
         self.setFixedSize(580, 480)
         self.setStyleSheet("QDialog{background:white;}")
-        self._cv_path  = cv_path
+        self._cv_name = cv_name
+        self._cv_id = cv_id
         self._new_path: str | None = None
         self._build()
 
-    def get_cv_path(self) -> str | None:
-        return self._new_path or self._cv_path
+    def get_new_path(self) -> str | None:
+        return self._new_path
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -1125,9 +1146,8 @@ class _CVPreviewDialog(QDialog):
         body.setContentsMargins(32, 28, 32, 20)
         body.setSpacing(16)
 
-        if self._cv_path:
-            from pathlib import Path as _Path
-            fname = _Path(self._cv_path).name
+        if self._cv_name:
+            fname = self._cv_name
             # File info chip
             fchip = QFrame()
             fchip.setStyleSheet(
@@ -1221,7 +1241,7 @@ class _CVPreviewDialog(QDialog):
         fl.addWidget(btn_upload)
         fl.addStretch()
 
-        if self._cv_path:
+        if self._cv_id:
             btn_open = QPushButton("🔗  Mở file")
             btn_open.setFixedHeight(40)
             btn_open.setCursor(Qt.PointingHandCursor)
@@ -1231,7 +1251,7 @@ class _CVPreviewDialog(QDialog):
                 "font-size:12px; font-weight:700; padding:0 20px;}"
                 "QPushButton:hover{background:#1d4ed8;}"
             )
-            btn_open.clicked.connect(self._open_file)
+            btn_open.clicked.connect(self._open_stream_file)
             fl.addWidget(btn_open)
 
         btn_close = QPushButton("Đóng")
@@ -1258,16 +1278,51 @@ class _CVPreviewDialog(QDialog):
             self._new_path = path
             self.accept()
 
-    def _open_file(self):
-        if self._cv_path:
-            import os as _os, subprocess as _sub, sys as _sys
-            path = self._cv_path
-            if _sys.platform.startswith("win"):
-                _os.startfile(path)
-            elif _sys.platform == "darwin":
-                _sub.Popen(["open", path])
-            else:
-                _sub.Popen(["xdg-open", path])
+    def _open_stream_file(self):
+        if not self._cv_id:
+            return
+        try:
+            cv_bytes, suggested_name = jobhub_api.candidate_view_cv(int(self._cv_id))
+        except ApiError as e:
+            _Toast(
+                self.parentWidget() or self,
+                str(e),
+                accent="#ef4444",
+                duration_ms=3000,
+                title_text="Không thể mở CV",
+                icon_char="!",
+            )
+            return
+        except Exception:
+            _Toast(
+                self.parentWidget() or self,
+                "Không thể kết nối API để mở CV.",
+                accent="#ef4444",
+                duration_ms=3000,
+                title_text="Lỗi kết nối",
+                icon_char="!",
+            )
+            return
+
+        import tempfile
+        import os as _os
+        import subprocess as _sub
+        import sys as _sys
+
+        fname = suggested_name or self._cv_name or "cv.pdf"
+        suffix = Path(fname).suffix or ".pdf"
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp.write(cv_bytes)
+        tmp.flush()
+        tmp.close()
+        path = Path(tmp.name)
+
+        if _sys.platform.startswith("win"):
+            _os.startfile(str(path))
+        elif _sys.platform == "darwin":
+            _sub.Popen(["open", str(path)])
+        else:
+            _sub.Popen(["xdg-open", str(path)])
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1467,6 +1522,7 @@ class UserDashboard:
         self._applied_hist:   list     = []      # newly applied entries (prepended)
         self._search_query:   str      = ""      # current topbar search text
         self._public_jobs_cache: list[dict] = []
+        self._avatar_pixmap: QPixmap | None = None
 
         # ── Profile data (persisted in session) ──────────────
         self._profile_data: dict = {
@@ -1479,12 +1535,10 @@ class UserDashboard:
             "degree":  "Cử nhân CNTT",
             "exp":     "5 năm kinh nghiệm",
             "lang":    "Tiếng Anh (IELTS 7.5)",
-            "cv_path": None,     # path to uploaded CV file
-            "skills": {          # danh mục → danh sách kỹ năng
-                "Frontend":       ["React", "TypeScript", "HTML/CSS"],
-                "Backend":        ["Python", "Node.js", "FastAPI"],
-                "Cloud / DevOps": ["Docker", "AWS", "CI/CD"],
-            },
+            "avatar_storage_key": None,
+            "cv_id": None,
+            "cv_name": None,
+            "skills": {},
         }
 
         self.win = QMainWindow()
@@ -1678,20 +1732,22 @@ class UserDashboard:
         lo.addStretch()
 
         # ── Avatar + name ─────────────────────────────────────
-        avatar = QLabel("UV")
-        avatar.setFixedSize(38, 38)
-        avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet(
+        self._topbar_avatar_lbl = QLabel()
+        self._topbar_avatar_lbl.setFixedSize(38, 38)
+        self._topbar_avatar_lbl.setAlignment(Qt.AlignCenter)
+        self._topbar_avatar_lbl.setStyleSheet(
             f"background:{_INDIGO}; color:white; border-radius:19px;"
             "font-size:13px; font-weight:800;"
         )
-        name_lbl = QLabel("Ứng viên")
-        name_lbl.setStyleSheet(
-            f"color:{_TXT_H}; font-size:13px; font-weight:600;"
+        self._topbar_name_lbl = QLabel("Ứng viên")
+        self._topbar_name_lbl.setStyleSheet(
+            f"color:{_TXT_H}; font-size:13px; font-weight:700;"
         )
-        lo.addWidget(avatar)
+        lo.addWidget(self._topbar_avatar_lbl)
         lo.addSpacing(8)
-        lo.addWidget(name_lbl)
+        lo.addWidget(self._topbar_name_lbl)
+
+        self._refresh_identity_widgets()
 
         return bar
 
@@ -3014,15 +3070,21 @@ class UserDashboard:
         def _save_name():
             v = self._name_inp.text().strip()
             if v:
+                old_name = str(self._profile_data.get("name", "")).strip()
                 self._profile_data["name"] = v
-                self._prof_name_lbl.setText(v)
-                # Update topbar avatar text
-                initials = "".join(p[0].upper() for p in v.split()[:2]) or "UV"
-                self._av_lbl.setText(initials)
-                _Toast(self.win.centralWidget(),
-                       f"Tên đã cập nhật: {v}",
-                       accent=_INDIGO, duration_ms=2500,
-                       title_text="Đã lưu tên mới ✓", icon_char="✓")
+                self._refresh_identity_widgets()
+                if self._save_basic_profile(show_error_toast=True):
+                    _Toast(
+                        self.win.centralWidget(),
+                        f"Tên đã cập nhật: {v}",
+                        accent=_INDIGO,
+                        duration_ms=2500,
+                        title_text="Đã lưu tên mới ✓",
+                        icon_char="✓",
+                    )
+                else:
+                    self._profile_data["name"] = old_name
+                    self._refresh_identity_widgets()
             name_stack.setCurrentIndex(0)
 
         def _cancel_name():
@@ -3036,6 +3098,7 @@ class UserDashboard:
 
         id_lo.addWidget(name_stack)
         id_lo.addSpacing(4)
+        self._refresh_identity_widgets()
 
         # tagline
         self._prof_tag_lbl = QLabel(self._profile_data["tagline"])
@@ -3282,7 +3345,7 @@ class UserDashboard:
         return scroll
 
     def _change_avatar(self) -> None:
-        """Pick a local image file and set it as profile avatar."""
+        """Pick avatar image, upload to API, then refresh UI."""
         path, _ = QFileDialog.getOpenFileName(
             self.win,
             "Chon anh dai dien",
@@ -3304,35 +3367,95 @@ class UserDashboard:
             )
             return
 
-        self._av_lbl.setPixmap(
-            pm.scaled(
-                self._av_lbl.size(),
-                Qt.KeepAspectRatioByExpanding,
-                Qt.SmoothTransformation,
+        try:
+            user_data = jobhub_api.upload_avatar(path)
+        except ApiError as e:
+            _Toast(
+                self.win.centralWidget(),
+                str(e),
+                accent="#ef4444",
+                duration_ms=2800,
+                title_text="Đổi avatar thất bại",
+                icon_char="!",
             )
+            return
+        except Exception:
+            _Toast(
+                self.win.centralWidget(),
+                "Không thể kết nối API để lưu avatar.",
+                accent="#ef4444",
+                duration_ms=2800,
+                title_text="Lỗi kết nối",
+                icon_char="!",
+            )
+            return
+
+        if isinstance(user_data, dict):
+            self._profile_data["avatar_storage_key"] = user_data.get("avatar_storage_key")
+        self._apply_avatar_pixmap(pm)
+        _Toast(
+            self.win.centralWidget(),
+            "Ảnh đại diện đã được cập nhật.",
+            accent="#10b981",
+            duration_ms=2200,
+            title_text="Lưu avatar thành công",
+            icon_char="✓",
         )
-        self._av_lbl.setText("")
 
     def _open_profile_edit(self) -> None:
         """Open full profile edit dialog and sync values back to dashboard."""
         dlg = _ProfileEditDialog(self._profile_data, self.win)
         if dlg.exec() == QDialog.Accepted:
             self._profile_data = dlg.get_data()
-            self._stack.removeWidget(self._stack.widget(3))
+            old_page = self._stack.widget(3)
+            self._prof_name_lbl = None
+            self._av_lbl = None
+            if old_page is not None:
+                self._stack.removeWidget(old_page)
+                old_page.deleteLater()
             self._stack.insertWidget(3, self._build_profile_page())
             self._stack.setCurrentIndex(3)
+            self._save_basic_profile(show_error_toast=True)
+            self._save_candidate_profile(show_toast=True)
 
     def _open_cv_preview(self) -> None:
-        """Open CV preview/upload dialog and store selected CV path."""
-        dlg = _CVPreviewDialog(self._profile_data.get("cv_path"), self.win)
+        """Open CV dialog, upload selected file to API."""
+        dlg = _CVPreviewDialog(
+            self._profile_data.get("cv_name"),
+            self._profile_data.get("cv_id"),
+            self.win,
+        )
         if dlg.exec() == QDialog.Accepted:
-            self._profile_data["cv_path"] = dlg.get_cv_path()
-            self._update_profile_save_status()
+            new_path = dlg.get_new_path()
+            if not new_path:
+                return
+            try:
+                uploaded = jobhub_api.upload_cv(new_path)
+                self._profile_data["cv_id"] = uploaded.get("id")
+                self._profile_data["cv_name"] = uploaded.get("original_name")
+                self._update_profile_save_status()
+                _Toast(
+                    self.win.centralWidget(),
+                    "CV đã được tải lên máy chủ.",
+                    accent="#10b981",
+                    duration_ms=2200,
+                    title_text="Tải CV thành công",
+                    icon_char="✓",
+                )
+            except ApiError as e:
+                _Toast(
+                    self.win.centralWidget(),
+                    str(e),
+                    accent="#ef4444",
+                    duration_ms=3000,
+                    title_text="Tải CV thất bại",
+                    icon_char="!",
+                )
 
     def _download_cv(self) -> None:
-        """Open current CV file using the system default application."""
-        cv_path = self._profile_data.get("cv_path")
-        if not cv_path:
+        """Download CV stream from API then open local temp file."""
+        cv_id = self._profile_data.get("cv_id")
+        if not cv_id:
             _Toast(
                 self.win.centralWidget(),
                 "Ban chua tai len CV de mo/luu.",
@@ -3343,21 +3466,40 @@ class UserDashboard:
             )
             return
 
-        path = Path(cv_path)
-        if not path.exists():
+        try:
+            cv_bytes, suggested_name = jobhub_api.candidate_download_cv(int(cv_id))
+        except ApiError as e:
             _Toast(
                 self.win.centralWidget(),
-                "Khong tim thay tep CV tren may.",
+                str(e),
                 accent="#ef4444",
-                duration_ms=2500,
-                title_text="Tep khong ton tai",
+                duration_ms=3000,
+                title_text="Không thể tải CV",
+                icon_char="!",
+            )
+            return
+        except Exception:
+            _Toast(
+                self.win.centralWidget(),
+                "Không thể kết nối API để tải CV.",
+                accent="#ef4444",
+                duration_ms=3000,
+                title_text="Lỗi kết nối",
                 icon_char="!",
             )
             return
 
+        import tempfile
         import os as _os
         import subprocess as _sub
         import sys as _sys
+        name = suggested_name or self._profile_data.get("cv_name") or "cv.pdf"
+        suffix = Path(name).suffix or ".pdf"
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp.write(cv_bytes)
+        tmp.flush()
+        tmp.close()
+        path = Path(tmp.name)
         if _sys.platform.startswith("win"):
             _os.startfile(str(path))
         elif _sys.platform == "darwin":
@@ -3432,8 +3574,22 @@ class UserDashboard:
 
     # ── Callbacks ─────────────────────────────────────────────
     def _on_profile_field_saved(self, label: str, value: str) -> None:
+        label_to_key = {
+            "HỌ VÀ TÊN": "name",
+            "EMAIL": "email",
+            "SỐ ĐIỆN THOẠI": "phone",
+            "ĐỊA CHỈ HIỆN TẠI": "address",
+            "NGÀNH NGHỀ": "field",
+            "BẰNG CẤP": "degree",
+            "SỐ NĂM KINH NGHIỆM": "exp",
+            "NGÔN NGỮ": "lang",
+        }
+        key = label_to_key.get(label)
+        if key:
+            self._profile_data[key] = value
         self._update_profile_progress()
         self._update_profile_save_status()
+        self._save_candidate_profile()
 
     def _update_profile_progress(self) -> None:
         if not hasattr(self, "_prof_field_refs"):
@@ -3655,8 +3811,26 @@ class UserDashboard:
 
     # ── Callbacks ─────────────────────────────────────────────
     def _on_profile_field_saved(self, label: str, value: str) -> None:
+        label_to_key = {
+            "HỌ VÀ TÊN": "name",
+            "EMAIL": "email",
+            "SỐ ĐIỆN THOẠI": "phone",
+            "ĐỊA CHỈ HIỆN TẠI": "address",
+            "NGÀNH NGHỀ": "field",
+            "BẰNG CẤP": "degree",
+            "SỐ NĂM KINH NGHIỆM": "exp",
+            "NGÔN NGỮ": "lang",
+        }
+        key = label_to_key.get(label)
+        if key:
+            self._profile_data[key] = value
+        self._refresh_identity_widgets()
         self._update_profile_progress()
         self._update_profile_save_status()
+        if key in {"name", "email"}:
+            self._save_basic_profile(show_error_toast=True)
+        else:
+            self._save_candidate_profile()
 
     def _update_profile_progress(self) -> None:
         if not hasattr(self, "_prof_field_refs"):
@@ -4218,10 +4392,225 @@ class UserDashboard:
         # _apply_hist_filters reads self._applied_hist + _HIST_DATA
         self._apply_hist_filters()
 
+    def _name_initials(self) -> str:
+        name = str(self._profile_data.get("name") or "").strip()
+        if not name:
+            return "UV"
+        parts = [part for part in name.split() if part]
+        if not parts:
+            return "UV"
+        return "".join(part[0].upper() for part in parts[:2]) or "UV"
+
+    def _apply_avatar_pixmap(self, pixmap: QPixmap | None) -> None:
+        self._avatar_pixmap = pixmap if pixmap and not pixmap.isNull() else None
+        labels: list[QLabel] = []
+        if hasattr(self, "_av_lbl") and self._av_lbl is not None:
+            labels.append(self._av_lbl)
+        if hasattr(self, "_topbar_avatar_lbl") and self._topbar_avatar_lbl is not None:
+            labels.append(self._topbar_avatar_lbl)
+        initials = self._name_initials()
+        for lbl in labels:
+            try:
+                if self._avatar_pixmap and not self._avatar_pixmap.isNull():
+                    lbl.setPixmap(_circular_fill_pixmap(self._avatar_pixmap, lbl.size()))
+                    lbl.setText("")
+                    radius = "19px" if lbl is getattr(self, "_topbar_avatar_lbl", None) else "42px"
+                    lbl.setStyleSheet(f"background:transparent; border:none; border-radius:{radius};")
+                else:
+                    is_topbar = lbl is getattr(self, "_topbar_avatar_lbl", None)
+                    radius = "19px" if is_topbar else "42px"
+                    font_size = "13px" if is_topbar else "22px"
+                    lbl.setPixmap(QPixmap())
+                    lbl.setText(initials)
+                    lbl.setStyleSheet(
+                        "background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                        "stop:0 #0f172a,stop:0.5 #1e3a8a,stop:1 #2563eb);"
+                        f"border-radius:{radius}; color:white; font-size:{font_size};"
+                        "font-weight:800; border:none;"
+                    )
+            except RuntimeError:
+                continue
+
+    def _refresh_identity_widgets(self) -> None:
+        name = str(self._profile_data.get("name") or "").strip() or "Ứng viên"
+        if hasattr(self, "_prof_name_lbl"):
+            try:
+                self._prof_name_lbl.setText(name)
+            except RuntimeError:
+                self._prof_name_lbl = None
+        if hasattr(self, "_topbar_name_lbl"):
+            try:
+                self._topbar_name_lbl.setText(name)
+            except RuntimeError:
+                self._topbar_name_lbl = None
+        try:
+            self._apply_avatar_pixmap(self._avatar_pixmap)
+        except RuntimeError:
+            self._avatar_pixmap = None
+
     def _bootstrap_candidate_data(self) -> None:
         """Initial load from server for saved jobs and application history."""
+        self._sync_candidate_profile()
         self._sync_saved_jobs()
         self._sync_application_history()
+
+    def _sync_candidate_profile(self) -> None:
+        try:
+            me_data = jobhub_api.me()
+        except ApiError:
+            me_data = None
+        except Exception:
+            me_data = None
+        if isinstance(me_data, dict):
+            full_name = str(me_data.get("full_name") or "").strip()
+            email = str(me_data.get("email") or "").strip()
+            if full_name:
+                self._profile_data["name"] = full_name
+            if email:
+                self._profile_data["email"] = email
+            self._profile_data["avatar_storage_key"] = me_data.get("avatar_storage_key")
+
+        try:
+            profile_data = jobhub_api.my_candidate_profile()
+        except ApiError:
+            profile_data = None
+        except Exception:
+            profile_data = None
+        if isinstance(profile_data, dict):
+            self._profile_data["tagline"] = str(
+                profile_data.get("tagline") or self._profile_data.get("tagline", "")
+            ).strip()
+            self._profile_data["phone"] = str(profile_data.get("phone") or "").strip()
+            self._profile_data["address"] = str(profile_data.get("address") or "").strip()
+            self._profile_data["field"] = str(profile_data.get("professional_field") or "").strip()
+            self._profile_data["degree"] = str(profile_data.get("degree") or "").strip()
+            self._profile_data["exp"] = str(profile_data.get("experience_text") or "").strip()
+            self._profile_data["lang"] = str(profile_data.get("language") or "").strip()
+            skills_json = profile_data.get("skills_json")
+            mapped_skills: dict[str, list[str]] = {}
+            if isinstance(skills_json, dict):
+                for cat, tags in skills_json.items():
+                    cat_name = str(cat).strip()
+                    if not cat_name or not isinstance(tags, list):
+                        continue
+                    cleaned_tags = [str(tag).strip() for tag in tags if str(tag).strip()]
+                    if cleaned_tags:
+                        mapped_skills[cat_name] = cleaned_tags
+            self._profile_data["skills"] = mapped_skills
+
+        try:
+            cvs = jobhub_api.list_my_cvs()
+        except Exception:
+            cvs = []
+        if cvs:
+            latest = cvs[0]
+            self._profile_data["cv_id"] = latest.get("id")
+            self._profile_data["cv_name"] = latest.get("original_name")
+        else:
+            self._profile_data["cv_id"] = None
+            self._profile_data["cv_name"] = None
+
+        avatar_key = str(self._profile_data.get("avatar_storage_key") or "").strip()
+        if avatar_key:
+            try:
+                avatar_bytes, _ = jobhub_api.my_avatar_view()
+                pm = QPixmap()
+                if pm.loadFromData(avatar_bytes):
+                    self._apply_avatar_pixmap(pm)
+                else:
+                    self._apply_avatar_pixmap(None)
+            except Exception:
+                self._apply_avatar_pixmap(None)
+        else:
+            self._apply_avatar_pixmap(None)
+
+        current_idx = self._stack.currentIndex()
+        old_page = self._stack.widget(3)
+        self._prof_name_lbl = None
+        self._av_lbl = None
+        if old_page is not None:
+            self._stack.removeWidget(old_page)
+            old_page.deleteLater()
+        self._stack.insertWidget(3, self._build_profile_page())
+        self._stack.setCurrentIndex(current_idx)
+        self._refresh_identity_widgets()
+
+    def _profile_payload(self) -> dict:
+        skills = self._profile_data.get("skills", {})
+        clean_skills: dict[str, list[str]] = {}
+        if isinstance(skills, dict):
+            for cat, tags in skills.items():
+                cat_name = str(cat).strip()
+                if not cat_name or not isinstance(tags, list):
+                    continue
+                clean_tags = [str(tag).strip() for tag in tags if str(tag).strip()]
+                if clean_tags:
+                    clean_skills[cat_name] = clean_tags
+        return {
+            "tagline": str(self._profile_data.get("tagline", "")).strip() or None,
+            "phone": str(self._profile_data.get("phone", "")).strip() or None,
+            "address": str(self._profile_data.get("address", "")).strip() or None,
+            "professional_field": str(self._profile_data.get("field", "")).strip() or None,
+            "degree": str(self._profile_data.get("degree", "")).strip() or None,
+            "experience_text": str(self._profile_data.get("exp", "")).strip() or None,
+            "language": str(self._profile_data.get("lang", "")).strip() or None,
+            "skills_json": clean_skills,
+        }
+
+    def _save_candidate_profile(self, *, show_toast: bool = False) -> bool:
+        payload = self._profile_payload()
+        try:
+            jobhub_api.update_my_candidate_profile(payload)
+            if show_toast:
+                _Toast(
+                    self.win.centralWidget(),
+                    "Thông tin hồ sơ đã được cập nhật.",
+                    accent="#10b981",
+                    duration_ms=2200,
+                    title_text="Lưu thành công",
+                    icon_char="✓",
+                )
+            return True
+        except ApiError as e:
+            _Toast(
+                self.win.centralWidget(),
+                str(e),
+                accent="#ef4444",
+                duration_ms=3000,
+                title_text="Không thể lưu hồ sơ",
+                icon_char="!",
+            )
+            return False
+
+    def _save_basic_profile(self, *, show_error_toast: bool = False) -> bool:
+        try:
+            jobhub_api.update_my_basic_profile(
+                full_name=str(self._profile_data.get("name", "")).strip() or None,
+                email=str(self._profile_data.get("email", "")).strip() or None,
+            )
+            return True
+        except ApiError as e:
+            if show_error_toast:
+                _Toast(
+                    self.win.centralWidget(),
+                    str(e),
+                    accent="#ef4444",
+                    duration_ms=3000,
+                    title_text="Không thể lưu thông tin cá nhân",
+                    icon_char="!",
+                )
+            return False
+        except Exception:
+            if show_error_toast:
+                _Toast(
+                    self.win.centralWidget(),
+                    "Không thể kết nối API thông tin cá nhân.",
+                    accent="#ef4444",
+                    duration_ms=3000,
+                    title_text="Lỗi kết nối",
+                    icon_char="!",
+                )
+            return False
 
     def _sync_saved_jobs(self) -> None:
         try:

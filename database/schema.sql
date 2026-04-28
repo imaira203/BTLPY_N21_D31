@@ -99,10 +99,14 @@ CREATE TABLE IF NOT EXISTS candidate_saved_jobs (
 CREATE TABLE IF NOT EXISTS candidate_profiles (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL UNIQUE,
-  headline VARCHAR(255) NULL,
-  introduction TEXT NULL,
-  skills TEXT NULL,
-  experience TEXT NULL,
+  tagline VARCHAR(255) NULL,
+  phone VARCHAR(64) NULL,
+  address VARCHAR(255) NULL,
+  professional_field VARCHAR(255) NULL,
+  degree VARCHAR(255) NULL,
+  experience_text VARCHAR(255) NULL,
+  language VARCHAR(255) NULL,
+  skills_json TEXT NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_candidate_profile_user (user_id)

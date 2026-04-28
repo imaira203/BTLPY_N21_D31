@@ -60,6 +60,11 @@ class UpdatePasswordIn(BaseModel):
     new_password: str = Field(min_length=6)
 
 
+class UpdateBasicProfileIn(BaseModel):
+    full_name: str | None = Field(default=None, max_length=255)
+    email: EmailStr | None = None
+
+
 class HRProfileOut(BaseModel):
     id: int
     company_name: str
@@ -73,19 +78,27 @@ class HRProfileOut(BaseModel):
 
 
 class CandidateProfileUpdateIn(BaseModel):
-    headline: str | None = Field(default=None, max_length=255)
-    introduction: str | None = None
-    skills: str | None = None
-    experience: str | None = None
+    tagline: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=64)
+    address: str | None = Field(default=None, max_length=255)
+    professional_field: str | None = Field(default=None, max_length=255)
+    degree: str | None = Field(default=None, max_length=255)
+    experience_text: str | None = Field(default=None, max_length=255)
+    language: str | None = Field(default=None, max_length=255)
+    skills_json: dict[str, list[str]] | None = None
 
 
 class CandidateProfileOut(BaseModel):
     id: int
     user_id: int
-    headline: str | None
-    introduction: str | None
-    skills: str | None
-    experience: str | None
+    tagline: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    professional_field: str | None = None
+    degree: str | None = None
+    experience_text: str | None = None
+    language: str | None = None
+    skills_json: dict[str, list[str]] = Field(default_factory=dict)
     updated_at: datetime
 
     model_config = {"from_attributes": True}

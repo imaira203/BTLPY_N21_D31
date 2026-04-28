@@ -139,14 +139,31 @@ def update_my_password(current_password: str, new_password: str) -> dict:
     return _request("PUT", "/users/me/password", json={"current_password": current_password, "new_password": new_password})
 
 
+def update_my_basic_profile(full_name: str | None = None, email: str | None = None) -> dict:
+    return _request("PUT", "/users/me/basic", json={"full_name": full_name, "email": email})
+
+
 def upload_avatar(file_path: str) -> dict:
     name = Path(file_path).name
     with open(file_path, "rb") as f:
         return _request("POST", "/users/me/avatar", files={"file": (name, f)})
 
 
+def my_avatar_view() -> tuple[bytes, str | None]:
+    r = _request_raw("GET", "/users/me/avatar/view")
+    return r.content, _filename_from_cd(r.headers.get("Content-Disposition"))
+
+
 def hr_profile() -> dict | None:
     return _request("GET", "/users/me/hr-profile")
+
+
+def my_candidate_profile() -> dict | None:
+    return _request("GET", "/users/me/candidate-profile")
+
+
+def update_my_candidate_profile(payload: dict) -> dict:
+    return _request("PUT", "/users/me/candidate-profile", json=payload)
 
 
 def list_jobs_public() -> list:

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import HRProfile, HRApprovalStatus, User, UserRole
+from ..models import CandidateProfile, HRProfile, HRApprovalStatus, User, UserRole
 from ..schemas import LoginIn, RegisterCandidate, RegisterHR, TokenResponse, UserOut
 from ..security import create_access_token, hash_password, verify_password
 
@@ -29,6 +29,9 @@ def register_candidate(body: RegisterCandidate, db: Annotated[Session, Depends(g
         role=UserRole.candidate,
     )
     db.add(user)
+    db.flush()
+    profile = CandidateProfile(user_id=user.id)
+    db.add(profile)
     db.commit()
     db.refresh(user)
     return _issue_token(user)
