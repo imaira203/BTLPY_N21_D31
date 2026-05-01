@@ -7,165 +7,16 @@
     <x>0</x>
     <y>0</y>
     <width>1280</width>
-    <height>850</height>
+    <height>860</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Bảng điều khiển Admin - JobHub</string>
-  </property>
-  <property name="styleSheet">
-   <string notr="true">
-/* Modern Premium SaaS Design System */
-QMainWindow { 
-    background-color: #F3F4F6; /* Neutral Gray Background */
-    font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
-}
-
-/* Glassmorphism Sidebar */
-#sidebar {
-    background-color: rgba(255, 255, 255, 0.7);
-    border-right: 1px solid rgba(229, 231, 235, 0.5);
-}
-
-#brandLabel {
-    color: #4F46E5; /* Primary Blue */
-    font-size: 26px;
-    font-weight: 900;
-    padding: 35px 24px 10px 24px;
-    letter-spacing: -0.5px;
-}
-
-#adminPanelLabel {
-    color: #94A3B8;
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    padding: 0px 24px 24px 24px;
-}
-
-/* Navigation Buttons with Glassmorphism / Neumorphism hover */
-QPushButton.navBtn {
-    background-color: transparent;
-    color: #64748B;
-    border: none;
-    border-radius: 12px;
-    padding: 14px 20px;
-    text-align: left;
-    font-size: 14px;
-    font-weight: 600;
-    margin: 4px 16px;
-}
-
-QPushButton.navBtn:hover {
-    background-color: rgba(79, 70, 229, 0.05);
-    color: #4F46E5;
-}
-
-QPushButton.navBtn:checked {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4F46E5, stop:1 #7C3AED);
-    color: #FFFFFF;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-#logoutButton {
-    color: #EF4444;
-    margin-bottom: 32px;
-    font-weight: 700;
-    background-color: rgba(239, 68, 68, 0.05);
-}
-
-#logoutButton:hover {
-    background-color: #EF4444;
-    color: #FFFFFF;
-}
-
-/* Header / TopBar with Glassmorphism */
-#topBar {
-    background-color: rgba(255, 255, 255, 0.8);
-    border-bottom: 1px solid rgba(229, 231, 235, 0.5);
-    min-height: 80px;
-    max-height: 80px;
-}
-
-#pageTitle {
-    font-size: 28px;
-    font-weight: 800;
-    color: #111827;
-    letter-spacing: -0.5px;
-}
-
-#pageSubTitle {
-    font-size: 14px;
-    color: #6B7280;
-    font-weight: 500;
-}
-
-#adminName { 
-    font-size: 15px; 
-    font-weight: 700; 
-    color: #111827; 
-}
-
-#adminRole { 
-    font-size: 12px; 
-    color: #6366F1;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-#adminAvatar {
-    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4F46E5, stop:1 #7C3AED);
-    color: #FFFFFF;
-    font-weight: 800;
-    border-radius: 20px;
-    border: 2px solid #FFFFFF;
-}
-
-/* Neumorphic Filter */
-#monthFilter {
-    background-color: #FFFFFF;
-    border: 1px solid #E5E7EB;
-    border-radius: 12px;
-    padding: 8px 16px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #374151;
-    height: 44px;
-}
-
-#monthFilter:hover {
-    border-color: #4F46E5;
-    background-color: #F9FAFB;
-}
-
-#monthFilter::drop-down {
-    border: none;
-    width: 32px;
-}
-
-#monthFilter QAbstractItemView {
-    background-color: #FFFFFF;
-    border: 1px solid #E5E7EB;
-    border-radius: 12px;
-    color: #111827;
-    outline: none;
-    selection-background-color: #EEF2FF;
-    selection-color: #4F46E5;
-    padding: 8px;
-}
-
-/* Chart Frame Neumorphism */
-QFrame#chartFrame { 
-    background-color: #FFFFFF; 
-    border-radius: 24px; 
-    border: 1px solid rgba(229, 231, 235, 0.5);
-}
-
-   </string>
+   <string>JobHub Admin</string>
   </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="styleSheet">
+    <string notr="true">* { font-family: &apos;Inter&apos;, &apos;Segoe UI&apos;, Roboto, sans-serif; }</string>
+   </property>
    <layout class="QHBoxLayout" name="mainLayout">
     <property name="spacing">
      <number>0</number>
@@ -196,9 +47,12 @@ QFrame#chartFrame {
         <height>16777215</height>
        </size>
       </property>
+      <property name="styleSheet">
+       <string notr="true">QFrame#sidebar { background-color: #1a1f2e; }</string>
+      </property>
       <layout class="QVBoxLayout" name="sidebarLayout">
        <property name="spacing">
-        <number>4</number>
+        <number>2</number>
        </property>
        <property name="leftMargin">
         <number>0</number>
@@ -213,72 +67,215 @@ QFrame#chartFrame {
         <number>0</number>
        </property>
        <item>
-        <widget class="QLabel" name="brandLabel">
-         <property name="text">
-          <string>⚡ JobHub</string>
+        <widget class="QFrame" name="logoSection">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>72</height>
+          </size>
          </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>72</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QFrame#logoSection { background-color: transparent; border-bottom: 1px solid rgba(255,255,255,0.08); }</string>
+         </property>
+         <layout class="QHBoxLayout" name="logoLayout">
+          <property name="leftMargin">
+           <number>20</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>20</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <property name="spacing">
+           <number>12</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="logoIconLabel">
+            <property name="minimumSize">
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>40</width>
+              <height>40</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QLabel { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2563EB,stop:1 #3B82F6); border-radius: 10px; border: none; }</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="brandLabel">
+            <property name="styleSheet">
+             <string notr="true">QLabel { color: #FFFFFF; font-size: 20px; font-weight: 800; letter-spacing: -0.3px; background: transparent; border: none; }</string>
+            </property>
+            <property name="text">
+             <string>JobHub</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="adminPanelLabel">
-         <property name="text">
-          <string/>
+        <widget class="QFrame" name="navArea">
+         <property name="styleSheet">
+          <string notr="true">QFrame#navArea { background: transparent; }</string>
          </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="navDashboard">
-         <property name="text">
-          <string>   Bảng điều khiển</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="checked">
-          <bool>true</bool>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="navUserMgmt">
-         <property name="text">
-          <string>   Người dùng</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="navHRMgmt">
-         <property name="text">
-          <string>   Nhà tuyển dụng</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="navJobMgmt">
-         <property name="text">
-          <string>   Công việc</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
-         </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
-         </property>
+         <layout class="QVBoxLayout" name="navAreaLayout">
+          <property name="spacing">
+           <number>2</number>
+          </property>
+          <property name="leftMargin">
+           <number>12</number>
+          </property>
+          <property name="topMargin">
+           <number>16</number>
+          </property>
+          <property name="rightMargin">
+           <number>12</number>
+          </property>
+          <property name="bottomMargin">
+           <number>8</number>
+          </property>
+          <item>
+           <widget class="QPushButton" name="navDashboard">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>44</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: transparent; color: rgba(255,255,255,0.65); border: none; border-radius: 8px; padding: 0px 14px; text-align: left; font-size: 14px; font-weight: 500; } QPushButton:hover { background-color: rgba(255,255,255,0.08); color: #FFFFFF; } QPushButton:checked { background-color: #2563EB; color: #FFFFFF; font-weight: 600; }</string>
+            </property>
+            <property name="text">
+             <string>  Bảng điều khiển</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="navUserMgmt">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>44</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: transparent; color: rgba(255,255,255,0.65); border: none; border-radius: 8px; padding: 0px 14px; text-align: left; font-size: 14px; font-weight: 500; } QPushButton:hover { background-color: rgba(255,255,255,0.08); color: #FFFFFF; } QPushButton:checked { background-color: #2563EB; color: #FFFFFF; font-weight: 600; }</string>
+            </property>
+            <property name="text">
+             <string>  Người dùng</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="navJobMgmt">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>44</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: transparent; color: rgba(255,255,255,0.65); border: none; border-radius: 8px; padding: 0px 14px; text-align: left; font-size: 14px; font-weight: 500; } QPushButton:hover { background-color: rgba(255,255,255,0.08); color: #FFFFFF; } QPushButton:checked { background-color: #2563EB; color: #FFFFFF; font-weight: 600; }</string>
+            </property>
+            <property name="text">
+             <string>  Việc làm</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="navHRMgmt">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>44</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: transparent; color: rgba(255,255,255,0.65); border: none; border-radius: 8px; padding: 0px 14px; text-align: left; font-size: 14px; font-weight: 500; } QPushButton:hover { background-color: rgba(255,255,255,0.08); color: #FFFFFF; } QPushButton:checked { background-color: #2563EB; color: #FFFFFF; font-weight: 600; }</string>
+            </property>
+            <property name="text">
+             <string>  Quản lý HR</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="navReports">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>44</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: transparent; color: rgba(255,255,255,0.65); border: none; border-radius: 8px; padding: 0px 14px; text-align: left; font-size: 14px; font-weight: 500; } QPushButton:hover { background-color: rgba(255,255,255,0.08); color: #FFFFFF; } QPushButton:checked { background-color: #2563EB; color: #FFFFFF; font-weight: 600; }</string>
+            </property>
+            <property name="text">
+             <string>  Báo cáo</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="navSettings">
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>44</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: transparent; color: rgba(255,255,255,0.65); border: none; border-radius: 8px; padding: 0px 14px; text-align: left; font-size: 14px; font-weight: 500; } QPushButton:hover { background-color: rgba(255,255,255,0.08); color: #FFFFFF; } QPushButton:checked { background-color: #2563EB; color: #FFFFFF; font-weight: 600; }</string>
+            </property>
+            <property name="text">
+             <string>  Cài đặt</string>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </widget>
        </item>
        <item>
@@ -295,13 +292,135 @@ QFrame#chartFrame {
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="logoutButton">
-         <property name="text">
-          <string>   Đăng xuất</string>
+        <widget class="QFrame" name="sidebarDivider">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>1</height>
+          </size>
          </property>
-         <property name="class" stdset="0">
-          <string>navBtn</string>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>1</height>
+          </size>
          </property>
+         <property name="styleSheet">
+          <string notr="true">QFrame { background-color: rgba(255,255,255,0.1); border: none; }</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QFrame" name="adminSection">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>68</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>68</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QFrame#adminSection { background: transparent; }</string>
+         </property>
+         <layout class="QHBoxLayout" name="adminSectionLayout">
+          <property name="leftMargin">
+           <number>16</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="rightMargin">
+           <number>16</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <property name="spacing">
+           <number>12</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="sidebarAdminAvatar">
+            <property name="minimumSize">
+             <size>
+              <width>36</width>
+              <height>36</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>36</width>
+              <height>36</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QLabel { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2563EB,stop:1 #3B82F6); color: #FFFFFF; font-size: 13px; font-weight: 800; border-radius: 18px; border: none; }</string>
+            </property>
+            <property name="text">
+             <string>A</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QVBoxLayout" name="adminInfoLayout">
+            <property name="spacing">
+             <number>1</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="sidebarAdminName">
+              <property name="styleSheet">
+               <string notr="true">QLabel { color: #FFFFFF; font-size: 13px; font-weight: 700; background: transparent; border: none; }</string>
+              </property>
+              <property name="text">
+               <string>Quản trị viên</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="sidebarAdminEmail">
+              <property name="styleSheet">
+               <string notr="true">QLabel { color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 400; background: transparent; border: none; }</string>
+              </property>
+              <property name="text">
+               <string>admin@jobhub.com</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QPushButton" name="logoutButton">
+            <property name="minimumSize">
+             <size>
+              <width>28</width>
+              <height>28</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>28</width>
+              <height>28</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: rgba(239,68,68,0.15); border: none; border-radius: 6px; } QPushButton:hover { background-color: #EF4444; }</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="toolTip">
+             <string>Đăng xuất</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </widget>
        </item>
       </layout>
@@ -309,7 +428,10 @@ QFrame#chartFrame {
     </item>
     <item>
      <widget class="QWidget" name="mainContentArea" native="true">
-      <layout class="QVBoxLayout" name="verticalLayout">
+      <property name="styleSheet">
+       <string notr="true">QWidget#mainContentArea { background-color: #F8F9FA; }</string>
+      </property>
+      <layout class="QVBoxLayout" name="contentVLayout">
        <property name="spacing">
         <number>0</number>
        </property>
@@ -327,36 +449,66 @@ QFrame#chartFrame {
        </property>
        <item>
         <widget class="QFrame" name="topBar">
-         <layout class="QHBoxLayout" name="horizontalLayout">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>72</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>16777215</width>
+           <height>72</height>
+          </size>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">QFrame#topBar { background-color: #FFFFFF; border-bottom: 1px solid #E5E7EB; }</string>
+         </property>
+         <layout class="QHBoxLayout" name="topBarLayout">
           <property name="leftMargin">
-           <number>32</number>
+           <number>28</number>
           </property>
           <property name="rightMargin">
-           <number>32</number>
+           <number>24</number>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>0</number>
+          </property>
+          <property name="spacing">
+           <number>12</number>
           </property>
           <item>
            <layout class="QVBoxLayout" name="titleBlock">
             <property name="spacing">
-             <number>2</number>
+             <number>1</number>
             </property>
             <item>
              <widget class="QLabel" name="pageTitle">
+              <property name="styleSheet">
+               <string notr="true">QLabel { font-size: 22px; font-weight: 700; color: #111827; background: transparent; border: none; }</string>
+              </property>
               <property name="text">
-               <string>Bảng điều khiển Admin</string>
+               <string>Bảng điều khiển</string>
               </property>
              </widget>
             </item>
             <item>
              <widget class="QLabel" name="pageSubTitle">
+              <property name="styleSheet">
+               <string notr="true">QLabel { font-size: 13px; color: #6B7280; font-weight: 400; background: transparent; border: none; }</string>
+              </property>
               <property name="text">
-               <string>Tổng quan về hiệu suất và hoạt động của hệ thống</string>
+               <string>Chào mừng trở lại, Admin</string>
               </property>
              </widget>
             </item>
            </layout>
           </item>
           <item>
-           <spacer name="horizontalSpacer">
+           <spacer name="topBarSpacer">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
             </property>
@@ -369,64 +521,114 @@ QFrame#chartFrame {
            </spacer>
           </item>
           <item>
-           <widget class="QPushButton" name="btnNotify">
+           <widget class="QFrame" name="searchBoxFrame">
             <property name="minimumSize">
              <size>
-              <width>40</width>
-              <height>40</height>
-             </size>
-            </property>
-            <property name="styleSheet">
-             <string notr="true">QPushButton { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 20px; font-size: 16px; }</string>
-            </property>
-            <property name="text">
-             <string>🔔</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <layout class="QVBoxLayout" name="adminInfo">
-            <property name="spacing">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QLabel" name="adminName">
-              <property name="text">
-               <string>Admin Sarah</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="adminRole">
-              <property name="text">
-               <string>Quản trị viên cao cấp</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <widget class="QLabel" name="adminAvatar">
-            <property name="minimumSize">
-             <size>
-              <width>40</width>
-              <height>40</height>
+              <width>260</width>
+              <height>38</height>
              </size>
             </property>
             <property name="maximumSize">
              <size>
-              <width>40</width>
-              <height>40</height>
+              <width>300</width>
+              <height>38</height>
              </size>
             </property>
+            <property name="styleSheet">
+             <string notr="true">QFrame#searchBoxFrame { background-color: #F3F4F6; border: 1px solid #E5E7EB; border-radius: 8px; } QFrame#searchBoxFrame:focus-within { border-color: #2563EB; background: #FFFFFF; }</string>
+            </property>
+            <layout class="QHBoxLayout" name="searchInnerLayout">
+             <property name="leftMargin">
+              <number>10</number>
+             </property>
+             <property name="rightMargin">
+              <number>10</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <property name="spacing">
+              <number>6</number>
+             </property>
+             <item>
+              <widget class="QLabel" name="searchIconLabel">
+               <property name="minimumSize">
+                <size>
+                 <width>16</width>
+                 <height>16</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>16</width>
+                 <height>16</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">QLabel { background: transparent; border: none; }</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="searchInput">
+               <property name="styleSheet">
+                <string notr="true">QLineEdit { background: transparent; border: none; font-size: 13px; color: #374151; }</string>
+               </property>
+               <property name="placeholderText">
+                <string>Tìm kiếm...</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnNotify">
+            <property name="minimumSize">
+             <size>
+              <width>38</width>
+              <height>38</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>38</width>
+              <height>38</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QPushButton { background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 19px; } QPushButton:hover { background-color: #EFF6FF; border-color: #BFDBFE; }</string>
+            </property>
             <property name="text">
-             <string>AS</string>
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="topBarAvatar">
+            <property name="minimumSize">
+             <size>
+              <width>38</width>
+              <height>38</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>38</width>
+              <height>38</height>
+             </size>
+            </property>
+            <property name="styleSheet">
+             <string notr="true">QLabel { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #2563EB,stop:1 #3B82F6); color: #FFFFFF; font-size: 14px; font-weight: 800; border-radius: 19px; border: none; }</string>
+            </property>
+            <property name="text">
+             <string>A</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
@@ -438,170 +640,258 @@ QFrame#chartFrame {
        </item>
        <item>
         <widget class="QStackedWidget" name="stackedPages">
+         <property name="styleSheet">
+          <string notr="true">QStackedWidget { background-color: #F8F9FA; border: none; }</string>
+         </property>
          <widget class="QWidget" name="pageDashboard">
+          <property name="styleSheet">
+           <string notr="true">QWidget#pageDashboard { background-color: #F8F9FA; }</string>
+          </property>
           <layout class="QVBoxLayout" name="dashLayout">
            <property name="spacing">
-            <number>24</number>
+            <number>20</number>
            </property>
            <property name="leftMargin">
-            <number>32</number>
+            <number>28</number>
            </property>
            <property name="topMargin">
-            <number>32</number>
+            <number>24</number>
            </property>
            <property name="rightMargin">
-            <number>32</number>
+            <number>28</number>
            </property>
            <property name="bottomMargin">
-            <number>32</number>
+            <number>24</number>
            </property>
            <item>
             <layout class="QHBoxLayout" name="horizontalLayout_cards">
              <property name="spacing">
-              <number>20</number>
+              <number>16</number>
              </property>
             </layout>
            </item>
            <item>
-            <widget class="QFrame" name="chartFrame">
-             <property name="styleSheet">
-              <string notr="true">QFrame#chartFrame { background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 20px; }</string>
+            <layout class="QHBoxLayout" name="chartsRowLayout">
+             <property name="spacing">
+              <number>20</number>
              </property>
-             <layout class="QVBoxLayout" name="chartLayout">
-              <property name="spacing">
-               <number>20</number>
-              </property>
-              <property name="leftMargin">
-               <number>24</number>
-              </property>
-              <property name="topMargin">
-               <number>24</number>
-              </property>
-              <property name="rightMargin">
-               <number>24</number>
-              </property>
-              <property name="bottomMargin">
-               <number>24</number>
-              </property>
-              <item>
-               <layout class="QHBoxLayout" name="chartHeaderLayout">
+             <item>
+              <widget class="QFrame" name="chartFrame">
+               <property name="styleSheet">
+                <string notr="true">QFrame#chartFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; }</string>
+               </property>
+               <layout class="QVBoxLayout" name="chartFrameLayout">
                 <property name="spacing">
-                 <number>16</number>
+                 <number>12</number>
+                </property>
+                <property name="leftMargin">
+                 <number>20</number>
+                </property>
+                <property name="topMargin">
+                 <number>18</number>
+                </property>
+                <property name="rightMargin">
+                 <number>20</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>14</number>
                 </property>
                 <item>
-                 <widget class="QLabel" name="chartTitle">
-                  <property name="styleSheet">
-                   <string notr="true">font-size: 18px; font-weight: 700; color: #0F172A;</string>
+                 <layout class="QHBoxLayout" name="chartHeaderLayout">
+                  <property name="spacing">
+                   <number>8</number>
                   </property>
-                  <property name="text">
-                   <string>Báo cáo tổng thu nhập</string>
-                  </property>
-                 </widget>
+                  <item>
+                   <layout class="QVBoxLayout" name="chartTitleBlock">
+                    <property name="spacing">
+                     <number>2</number>
+                    </property>
+                    <item>
+                     <widget class="QLabel" name="chartTitle">
+                      <property name="styleSheet">
+                       <string notr="true">QLabel { font-size: 16px; font-weight: 700; color: #111827; background: transparent; border: none; }</string>
+                      </property>
+                      <property name="text">
+                       <string>Xu Hướng Tuyển Dụng</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLabel" name="chartSubTitle">
+                      <property name="styleSheet">
+                       <string notr="true">QLabel { font-size: 12px; color: #6B7280; background: transparent; border: none; }</string>
+                      </property>
+                      <property name="text">
+                       <string>Đơn ứng tuyển và tuyển dụng theo thời gian</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                 </layout>
                 </item>
                 <item>
-                 <spacer name="horizontalSpacer_chart">
-                  <property name="orientation">
-                   <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="sizeHint" stdset="0">
-                   <size>
-                    <width>40</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                 </spacer>
-                </item>
-                <item>
-                 <widget class="QComboBox" name="monthFilter">
+                 <widget class="QLabel" name="chartPlaceholder">
                   <property name="minimumSize">
                    <size>
-                    <width>150</width>
-                    <height>40</height>
+                    <width>0</width>
+                    <height>220</height>
                    </size>
                   </property>
-                  <property name="maximumSize">
-                   <size>
-                    <width>200</width>
-                    <height>40</height>
-                   </size>
+                  <property name="styleSheet">
+                   <string notr="true">QLabel { background-color: #F9FAFB; border-radius: 8px; color: #9CA3AF; font-size: 13px; border: 1px dashed #E5E7EB; }</string>
                   </property>
-                  <item>
-                   <property name="text">
-                    <string>Tất cả tháng</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 1</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 2</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 3</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 4</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 5</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 6</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 7</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 8</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 9</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 10</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 11</string>
-                   </property>
-                  </item>
-                  <item>
-                   <property name="text">
-                    <string>Tháng 12</string>
-                   </property>
-                  </item>
+                  <property name="text">
+                   <string>Đang tải biểu đồ...</string>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
                  </widget>
                 </item>
                </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QFrame" name="donutFrame">
+               <property name="minimumSize">
+                <size>
+                 <width>270</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>340</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">QFrame#donutFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; }</string>
+               </property>
+               <layout class="QVBoxLayout" name="donutFrameLayout">
+                <property name="spacing">
+                 <number>6</number>
+                </property>
+                <property name="leftMargin">
+                 <number>12</number>
+                </property>
+                <property name="topMargin">
+                 <number>16</number>
+                </property>
+                <property name="rightMargin">
+                 <number>12</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>8</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="donutTitle">
+                  <property name="styleSheet">
+                   <string notr="true">QLabel { font-size: 16px; font-weight: 700; color: #111827; background: transparent; border: none; }</string>
+                  </property>
+                  <property name="text">
+                   <string>Trạng thái ứng viên</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="donutSubTitle">
+                  <property name="styleSheet">
+                   <string notr="true">QLabel { font-size: 12px; color: #6B7280; background: transparent; border: none; }</string>
+                  </property>
+                  <property name="text">
+                   <string>Phân bổ pipeline hiện tại</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="donutPlaceholder">
+                  <property name="minimumSize">
+                   <size>
+                    <width>0</width>
+                    <height>210</height>
+                   </size>
+                  </property>
+                  <property name="styleSheet">
+                   <string notr="true">QLabel { background: transparent; border: none; color: #9CA3AF; }</string>
+                  </property>
+                  <property name="text">
+                   <string/>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QFrame" name="recentFrame">
+             <property name="styleSheet">
+              <string notr="true">QFrame#recentFrame { background-color: #FFFFFF; border-radius: 12px; border: 1px solid #E5E7EB; }</string>
+             </property>
+             <layout class="QVBoxLayout" name="recentFrameLayout">
+              <property name="spacing">
+               <number>0</number>
+              </property>
+              <property name="leftMargin">
+               <number>20</number>
+              </property>
+              <property name="topMargin">
+               <number>18</number>
+              </property>
+              <property name="rightMargin">
+               <number>20</number>
+              </property>
+              <property name="bottomMargin">
+               <number>14</number>
+              </property>
+              <item>
+               <widget class="QLabel" name="recentTitle">
+                <property name="styleSheet">
+                 <string notr="true">QLabel { font-size: 16px; font-weight: 700; color: #111827; background: transparent; border: none; }</string>
+                </property>
+                <property name="text">
+                 <string>Hoạt động gần đây</string>
+                </property>
+               </widget>
               </item>
               <item>
-               <widget class="QLabel" name="chartPlaceholder">
+               <widget class="QLabel" name="recentSubTitle">
+                <property name="styleSheet">
+                 <string notr="true">QLabel { font-size: 12px; color: #6B7280; background: transparent; border: none; padding-bottom: 10px; }</string>
+                </property>
                 <property name="text">
-                 <string>Khu vực hiển thị biểu đồ tương tác</string>
+                 <string>Tương tác ứng viên mới nhất</string>
                 </property>
-                <property name="alignment">
-                 <set>Qt::AlignCenter</set>
+               </widget>
+              </item>
+              <item>
+               <widget class="QFrame" name="activitiesContainer">
+                <property name="styleSheet">
+                 <string notr="true">QFrame { background: transparent; border: none; }</string>
                 </property>
+                <layout class="QVBoxLayout" name="activitiesLayout">
+                 <property name="spacing">
+                  <number>0</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                </layout>
                </widget>
               </item>
              </layout>
