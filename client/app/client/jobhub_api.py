@@ -202,8 +202,37 @@ def apply_job(job_id: int, cv_id: int) -> dict:
     return _request("POST", f"/candidate/jobs/{job_id}/apply", json={"cv_id": cv_id})
 
 
+def apply_job_with_cv(job_id: int, cv_id: int | None = None, cv_file_path: str | None = None) -> dict:
+    data: dict[str, str] = {}
+    files = None
+    if cv_id is not None:
+        data["cv_id"] = str(cv_id)
+    if cv_file_path:
+        name = Path(cv_file_path).name
+        with open(cv_file_path, "rb") as f:
+            files = {"cv_file": (name, f)}
+            return _request("POST", f"/candidate/jobs/{job_id}/apply-with-cv", data=data, files=files)
+    return _request("POST", f"/candidate/jobs/{job_id}/apply-with-cv", data=data)
+
+
 def list_my_applications() -> list:
     return _request("GET", "/candidate/applications")
+
+
+def candidate_my_subscription() -> dict:
+    return _request("GET", "/candidate/subscription")
+
+
+def candidate_create_pro_upgrade_invoice(months: int = 1) -> dict:
+    return _request("POST", "/candidate/subscription/pro/upgrade", json={"months": months})
+
+
+def candidate_mark_invoice_paid(invoice_id: int) -> dict:
+    return _request("POST", f"/candidate/invoices/{invoice_id}/mark-paid")
+
+
+def candidate_list_subscription_payments() -> list:
+    return _request("GET", "/candidate/subscription/payments")
 
 
 def candidate_save_job(job_id: int) -> dict:

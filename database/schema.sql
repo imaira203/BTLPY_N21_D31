@@ -129,8 +129,10 @@ CREATE TABLE IF NOT EXISTS invoices (
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE SET NULL,
   INDEX idx_invoice_owner (owner_user_id),
+  INDEX idx_invoice_type (invoice_type),
   INDEX idx_invoice_application (application_id),
-  INDEX idx_invoice_status (status)
+  INDEX idx_invoice_status (status),
+  INDEX idx_invoice_owner_type_status (owner_user_id, invoice_type, status)
 );
 
 CREATE TABLE IF NOT EXISTS candidate_subscription_payments (

@@ -150,7 +150,7 @@ class CVOut(BaseModel):
 
 
 class ApplyIn(BaseModel):
-    cv_id: int
+    cv_id: int | None = None
 
 
 class AdminDecision(BaseModel):
@@ -194,6 +194,9 @@ class CandidateApplicationHistoryOut(BaseModel):
 class CandidateSubscriptionOut(BaseModel):
     status: SubscriptionStatus
     pro_expires_at: datetime | None
+    is_pro_active: bool = False
+    tier: str = "basic"
+    days_remaining: int = 0
 
 
 class ProUpgradeIn(BaseModel):

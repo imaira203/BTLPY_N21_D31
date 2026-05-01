@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -478,7 +479,15 @@ class _Toast(QWidget):
 class _ApplyDialog(QDialog):
     """Job application form dialog matching the reference UI."""
 
-    def __init__(self, job_title: str, parent=None):
+    def __init__(
+        self,
+        job_title: str,
+        existing_cvs: list[dict] | None = None,
+        default_name: str = "",
+        default_email: str = "",
+        default_phone: str = "",
+        parent=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("Ứng tuyển")
         self.setModal(True)
@@ -488,6 +497,12 @@ class _ApplyDialog(QDialog):
             "QDialog{background:white; border-radius:16px;}"
         )
         self._selected_cv = 0   # 0 = existing CV, 1 = upload new
+        self._existing_cvs = list(existing_cvs or [])
+        self._selected_existing_cv_id: int | None = None
+        self._new_cv_path: str | None = None
+        self._default_name = default_name
+        self._default_email = default_email
+        self._default_phone = default_phone
         self._build(job_title)
 
     def _build(self, job_title: str):
@@ -539,8 +554,8 @@ class _ApplyDialog(QDialog):
         ne_row.addWidget(_sec("HỌ VÀ TÊN"), 0, 0)
         ne_row.addWidget(_sec("EMAIL"), 0, 1)
 
-        self._name_edit = QLineEdit("Nguyễn Văn A")
-        self._email_edit = QLineEdit()
+        self._name_edit = QLineEdit(self._default_name or "Nguyễn Văn A")
+        self._email_edit = QLineEdit(self._default_email)
         self._email_edit.setPlaceholderText("example@email.com")
         for e in (self._name_edit, self._email_edit):
             e.setFixedHeight(44)
@@ -558,7 +573,7 @@ class _ApplyDialog(QDialog):
         ph_lo.setSpacing(6)
         ph_lo.setContentsMargins(0, 0, 0, 0)
         ph_lo.addWidget(_sec("SỐ ĐIỆN THOẠI"))
-        self._phone_edit = QLineEdit()
+        self._phone_edit = QLineEdit(self._default_phone)
         self._phone_edit.setPlaceholderText("+84 000 000 000")
         self._phone_edit.setFixedHeight(44)
         self._phone_edit.setStyleSheet(
@@ -572,11 +587,24 @@ class _ApplyDialog(QDialog):
         # ── CV options ────────────────────────────────────────
         body_lo.addWidget(_sec("HỒ SƠ ỨNG TUYỂN"))
 
+        latest_name = "Chưa có CV trong hệ thống"
+        latest_detail = "Hãy tải CV mới để ứng tuyển"
+        if self._existing_cvs:
+            latest = self._existing_cvs[0]
+            latest_name = str(latest.get("original_name") or "CV gần nhất")
+            latest_id = latest.get("id")
+            try:
+                self._selected_existing_cv_id = int(latest_id) if latest_id is not None else None
+            except Exception:
+                self._selected_existing_cv_id = None
+            created_text = str(latest.get("created_at") or "").replace("T", " ")
+            latest_detail = f"Cập nhật {created_text[:16]}" if created_text else "CV có sẵn trong hệ thống"
+
         self._cv_opt1 = self._cv_option(
             selected=True,
             title="SỬ DỤNG CV ĐÃ CÓ",
-            subtitle="CV_Nguyen_Van_A.pdf",
-            detail="Cập nhật 2 ngày trước",
+            subtitle=latest_name,
+            detail=latest_detail,
             icon="ic_doc.svg",
             accent="#6366f1",
         )
@@ -659,6 +687,16 @@ class _ApplyDialog(QDialog):
         f_lo.addWidget(btn_cancel)
         f_lo.addWidget(btn_submit)
         root.addWidget(footer)
+
+    def get_selected_cv_id(self) -> int | None:
+        if self._selected_cv == 0:
+            return self._selected_existing_cv_id
+        return None
+
+    def get_new_cv_path(self) -> str | None:
+        if self._selected_cv == 1:
+            return self._new_cv_path
+        return None
 
     def _cv_option(self, selected: bool, title: str, subtitle: str,
                    detail: str, icon: str, accent: str,
@@ -755,11 +793,14 @@ class _ApplyDialog(QDialog):
                 return  # user cancelled — keep current selection
             # Update opt2 label to show filename
             fname = Path(path).name
+            self._new_cv_path = path
             for lbl in self._cv_opt2.findChildren(QLabel):
                 if lbl.styleSheet() and "font-weight:700" in lbl.styleSheet() \
                         and "color:#111827" in lbl.styleSheet():
                     lbl.setText(fname)
                     break
+        else:
+            self._new_cv_path = None
 
         self._selected_cv = idx
         for i, (frame, sel) in enumerate([
@@ -1541,6 +1582,15 @@ class UserDashboard:
         self._search_query:   str      = ""      # current topbar search text
         self._public_jobs_cache: list[dict] = []
         self._avatar_pixmap: QPixmap | None = None
+        self._subscription: dict = {
+            "tier": "basic",
+            "status": "inactive",
+            "is_pro_active": False,
+            "pro_expires_at": None,
+            "days_remaining": 0,
+        }
+        self._pending_pro_invoice: dict | None = None
+        self._subscription_poll_timer: QTimer | None = None
 
         # ── Profile data (persisted in session) ──────────────
         self._profile_data: dict = {
@@ -1687,13 +1737,6 @@ class UserDashboard:
             lo.addWidget(btn)
         lo.addStretch()
 
-        sep2 = QFrame()
-        sep2.setFrameShape(QFrame.HLine)
-        sep2.setStyleSheet("background:#1e293b;")
-        sep2.setFixedHeight(1)
-        lo.addWidget(sep2)
-        lo.addSpacing(10)
-
         pro_card = QFrame()
         pro_card.setCursor(Qt.PointingHandCursor)
         pro_card.setFixedHeight(110)
@@ -1712,17 +1755,20 @@ class UserDashboard:
         pro_lo.setContentsMargins(12, 12, 12, 10)
         pro_lo.setSpacing(6)
 
-        pro_badge = QLabel("TRUY CẬP PRO")
+        self._sidebar_pro_badge = QLabel("TRUY CẬP PRO")
+        pro_badge = self._sidebar_pro_badge
         pro_badge.setStyleSheet(
             "color:#c7d2fe; font-size:10px; font-weight:800; letter-spacing:0.7px;"
             "background:transparent; border:none;"
         )
-        pro_title = QLabel("Nâng cấp Pro")
+        self._sidebar_pro_title = QLabel("Nâng cấp Pro")
+        pro_title = self._sidebar_pro_title
         pro_title.setStyleSheet(
             "color:white; font-size:18px; font-weight:900;"
             "background:transparent; border:none;"
         )
-        pro_btn = QLabel("Bắt đầu")
+        self._sidebar_pro_btn = QLabel("Bắt đầu")
+        pro_btn = self._sidebar_pro_btn
         pro_btn.setAlignment(Qt.AlignCenter)
         pro_btn.setFixedHeight(30)
         pro_btn.setStyleSheet(
@@ -1737,6 +1783,13 @@ class UserDashboard:
         pro_card.mousePressEvent = lambda e: self._go(4)
         lo.addWidget(pro_card)
         lo.addSpacing(8)
+
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.HLine)
+        sep2.setStyleSheet("background:#cbd5e1;")
+        sep2.setFixedHeight(1)
+        lo.addWidget(sep2)
+        lo.addSpacing(10)
 
         self._logout_btn = _NavBtn("ic_logout.svg", "Đăng xuất", logout=True)
         self._logout_btn.on_click(self._on_logout)
@@ -2305,12 +2358,30 @@ class UserDashboard:
         btn_apply_now = _act_btn("Ứng tuyển ngay", _BLUE, "white", "ic_edit.svg")
 
         def _open_apply_from_detail(checked=False, _t=title, _c=comp, _l=loc):
-            dlg = _ApplyDialog(_t, self.win)
+            try:
+                cvs = jobhub_api.list_my_cvs() or []
+            except Exception:
+                cvs = []
+            dlg = _ApplyDialog(
+                _t,
+                existing_cvs=cvs,
+                default_name=str(self._profile_data.get("name") or ""),
+                default_email=str(self._profile_data.get("email") or ""),
+                default_phone=str(self._profile_data.get("phone") or ""),
+                parent=self.win,
+            )
             if dlg.exec() == QDialog.Accepted:
                 if job_id <= 0:
                     _Toast(self.win.centralWidget(), "Khong tim thay ma tin tuyen dung.", accent="#ef4444")
                     return
-                self._apply_to_job(job_id, _t, _c, _l or "Viet Nam")
+                self._apply_to_job(
+                    job_id,
+                    _t,
+                    _c,
+                    _l or "Viet Nam",
+                    selected_cv_id=dlg.get_selected_cv_id(),
+                    new_cv_path=dlg.get_new_cv_path(),
+                )
 
         btn_apply_now.clicked.connect(_open_apply_from_detail)
         act_lo.addWidget(btn_apply_now)
@@ -3071,8 +3142,8 @@ class UserDashboard:
         tier.setFixedSize(364, 62)
         tier.setStyleSheet(
             "QFrame#tierSwitch{"
-            "background:#f8faff;"
-            "border:2px solid #d5ddea;"
+            "background:#e0e7ff;"
+            "border:1px solid #c7d2fe;"
             "border-radius:31px;"
             "}"
         )
@@ -3080,33 +3151,39 @@ class UserDashboard:
         tier_lo.setContentsMargins(0, 0, 0, 0)
         tier_lo.setSpacing(0)
 
-        basic = QLabel("Cơ bản")
-        basic.setAlignment(Qt.AlignCenter)
-        basic.setStyleSheet(
-            "background:transparent; color:#24324a; border:none;"
-            "font-size:11px; font-weight:800;"
+        self._tier_basic_lbl = QLabel("Cơ bản")
+        self._tier_basic_lbl.setAlignment(Qt.AlignCenter)
+        self._tier_basic_lbl.setStyleSheet(
+            "background:#4f46e5; color:white; border:none;"
+            "font-size:12px; font-weight:900;"
+            "border-top-left-radius:24px; border-bottom-left-radius:24px;"
+            "border-top-right-radius:0px; border-bottom-right-radius:0px;"
         )
 
-        pro = QFrame()
-        pro.setObjectName("proSegment")
-        pro.setStyleSheet(
+        self._tier_pro_frame = QFrame()
+        self._tier_pro_frame.setObjectName("proSegment")
+        self._tier_pro_frame.setStyleSheet(
             "QFrame#proSegment{"
-            "background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #5b62ef, stop:1 #4b4fe1);"
-            "border:none; border-top-right-radius:31px; border-bottom-right-radius:31px;"
+            "background:transparent;"
+            "border:none;"
+            "border-top-left-radius:0px; border-bottom-left-radius:0px;"
+            "border-top-right-radius:24px; border-bottom-right-radius:24px;"
             "}"
         )
-        pro_lo = QHBoxLayout(pro)
+        pro_lo = QHBoxLayout(self._tier_pro_frame)
         pro_lo.setContentsMargins(0, 0, 0, 0)
-        pro_label = QLabel("Pro")
-        pro_label.setAlignment(Qt.AlignCenter)
-        pro_label.setStyleSheet(
-            "background:transparent; color:white;"
-            "font-size:11px; font-weight:800; border-radius:10px;"
+        self._tier_pro_lbl = QLabel("Pro")
+        self._tier_pro_lbl.setAlignment(Qt.AlignCenter)
+        self._tier_pro_lbl.setStyleSheet(
+            "background:#c7d2fe; color:#334155;"
+            "font-size:12px; font-weight:800;"
+            "border-top-left-radius:0px; border-bottom-left-radius:0px;"
+            "border-top-right-radius:24px; border-bottom-right-radius:24px;"
         )
-        pro_lo.addWidget(pro_label)
+        pro_lo.addWidget(self._tier_pro_lbl)
 
-        tier_lo.addWidget(basic, 1)
-        tier_lo.addWidget(pro, 1)
+        tier_lo.addWidget(self._tier_basic_lbl, 1)
+        tier_lo.addWidget(self._tier_pro_frame, 1)
         header.addWidget(tier, 0, Qt.AlignVCenter)
         lo.addLayout(header)
 
@@ -3130,36 +3207,34 @@ class UserDashboard:
         badge_icon = QLabel()
         badge_icon.setFixedSize(14, 14)
         badge_icon.setPixmap(_svg_pm("ic_sparkle.svg", 14, "#ffffff"))
-        badge_text = QLabel("THÀNH VIÊN ĐANG HOẠT ĐỘNG")
-        badge_text.setStyleSheet("color:white; font-size:9px; font-weight:900; background:transparent;")
+        self._pro_hero_badge_text = QLabel("THÀNH VIÊN CƠ BẢN")
+        self._pro_hero_badge_text.setStyleSheet("color:white; font-size:9px; font-weight:900; background:transparent;")
         badge_lo.addWidget(badge_icon)
-        badge_lo.addWidget(badge_text)
+        badge_lo.addWidget(self._pro_hero_badge_text)
         hero_text.addWidget(badge, 0, Qt.AlignLeft)
 
-        hero_title = QLabel("Bạn đang là ứng viên Pro")
-        hero_title.setWordWrap(True)
-        hero_title.setStyleSheet("color:white; font-size:27px; font-weight:900; background:transparent;")
-        hero_desc = QLabel(
-            "Quyền truy cập Pro còn hiệu lực đến ngày 24/10/2024. "
-            "Cảm ơn bạn đã đồng hành cùng cộng đồng ứng viên chất lượng cao."
-        )
-        hero_desc.setWordWrap(True)
-        hero_desc.setStyleSheet("color:white; font-size:14px; font-weight:600; background:transparent;")
-        hero_text.addWidget(hero_title)
-        hero_text.addWidget(hero_desc)
+        self._pro_hero_title = QLabel("Bạn đang dùng gói Cơ bản")
+        self._pro_hero_title.setWordWrap(True)
+        self._pro_hero_title.setStyleSheet("color:white; font-size:27px; font-weight:900; background:transparent;")
+        self._pro_hero_desc = QLabel("Nâng cấp Pro để mở khóa thêm quyền lợi và tăng độ nổi bật hồ sơ.")
+        self._pro_hero_desc.setWordWrap(True)
+        self._pro_hero_desc.setStyleSheet("color:white; font-size:14px; font-weight:600; background:transparent;")
+        hero_text.addWidget(self._pro_hero_title)
+        hero_text.addWidget(self._pro_hero_desc)
         hero_lo.addLayout(hero_text, 1)
 
-        billing = QPushButton("Quản lý thanh toán")
-        billing.setCursor(Qt.PointingHandCursor)
-        billing.setFixedSize(180, 52)
-        billing.setIcon(QIcon(_svg_pm("ic_card.svg", 18, _INDIGO)))
-        billing.setIconSize(QSize(18, 18))
-        billing.setStyleSheet(
+        self._pro_action_btn = QPushButton("Đăng ký ngay")
+        self._pro_action_btn.setCursor(Qt.PointingHandCursor)
+        self._pro_action_btn.setFixedSize(190, 52)
+        self._pro_action_btn.setIcon(QIcon(_svg_pm("ic_card.svg", 18, _INDIGO)))
+        self._pro_action_btn.setIconSize(QSize(18, 18))
+        self._pro_action_btn.setStyleSheet(
             f"QPushButton{{background:white; color:{_INDIGO}; border:none;"
             "border-radius:10px; font-size:13px; font-weight:800;}}"
             "QPushButton:hover{background:#f8fafc;}"
         )
-        hero_lo.addWidget(billing, 0, Qt.AlignCenter)
+        self._pro_action_btn.clicked.connect(self._handle_pro_subscription_action)
+        hero_lo.addWidget(self._pro_action_btn, 0, Qt.AlignCenter)
         lo.addWidget(hero)
 
         benefit_head = QHBoxLayout()
@@ -3196,6 +3271,7 @@ class UserDashboard:
 
         lo.addLayout(grid)
         lo.addStretch()
+        self._refresh_subscription_ui()
         return scroll
 
     def _build_profile_page(self) -> QWidget:
@@ -4728,8 +4804,164 @@ class UserDashboard:
     def _bootstrap_candidate_data(self) -> None:
         """Initial load from server for saved jobs and application history."""
         self._sync_candidate_profile()
+        self._sync_subscription()
         self._sync_saved_jobs()
         self._sync_application_history()
+
+    def _sync_subscription(self) -> None:
+        try:
+            sub = jobhub_api.candidate_my_subscription() or {}
+        except Exception:
+            sub = {}
+        tier = str(sub.get("tier") or "basic").lower()
+        self._subscription = {
+            "tier": "pro" if tier == "pro" else "basic",
+            "status": str(sub.get("status") or "inactive").lower(),
+            "is_pro_active": bool(sub.get("is_pro_active")),
+            "pro_expires_at": sub.get("pro_expires_at"),
+            "days_remaining": int(sub.get("days_remaining") or 0),
+        }
+        self._refresh_subscription_ui()
+
+    def _refresh_subscription_ui(self) -> None:
+        is_pro = bool(self._subscription.get("is_pro_active"))
+        if hasattr(self, "_sidebar_pro_badge"):
+            self._sidebar_pro_badge.setText("THÀNH VIÊN PRO" if is_pro else "TRUY CẬP PRO")
+        if hasattr(self, "_sidebar_pro_title"):
+            self._sidebar_pro_title.setText("Gia hạn Pro" if is_pro else "Nâng cấp Pro")
+        if hasattr(self, "_sidebar_pro_btn"):
+            self._sidebar_pro_btn.setText("Gia hạn" if is_pro else "Đăng ký ngay")
+        if hasattr(self, "_tier_basic_lbl") and hasattr(self, "_tier_pro_frame"):
+            if is_pro:
+                self._tier_basic_lbl.setStyleSheet(
+                    "background:#c7d2fe; color:#334155; border:none;"
+                    "font-size:12px; font-weight:800;"
+                    "border-top-left-radius:24px; border-bottom-left-radius:24px;"
+                    "border-top-right-radius:0px; border-bottom-right-radius:0px;"
+                )
+                self._tier_pro_frame.setStyleSheet(
+                    "QFrame#proSegment{"
+                    "background:#4f46e5;"
+                    "border:none;"
+                    "border-top-left-radius:0px; border-bottom-left-radius:0px;"
+                    "border-top-right-radius:24px; border-bottom-right-radius:24px;}"
+                )
+            else:
+                self._tier_basic_lbl.setStyleSheet(
+                    "background:#4f46e5; color:white; border:none;"
+                    "font-size:12px; font-weight:900;"
+                    "border-top-left-radius:24px; border-bottom-left-radius:24px;"
+                    "border-top-right-radius:0px; border-bottom-right-radius:0px;"
+                )
+                self._tier_pro_frame.setStyleSheet(
+                    "QFrame#proSegment{"
+                    "background:transparent; border:none;"
+                    "border-top-left-radius:0px; border-bottom-left-radius:0px;"
+                    "border-top-right-radius:24px; border-bottom-right-radius:24px;}"
+                )
+        if hasattr(self, "_tier_pro_lbl"):
+            self._tier_pro_lbl.setStyleSheet(
+                f"background:{'#4f46e5' if is_pro else '#c7d2fe'}; color:{'white' if is_pro else '#334155'};"
+                "font-size:12px; font-weight:900;"
+                "border-top-left-radius:0px; border-bottom-left-radius:0px;"
+                "border-top-right-radius:24px; border-bottom-right-radius:24px;"
+            )
+        if hasattr(self, "_pro_hero_badge_text"):
+            self._pro_hero_badge_text.setText("THÀNH VIÊN PRO" if is_pro else "THÀNH VIÊN CƠ BẢN")
+        if hasattr(self, "_pro_hero_title"):
+            self._pro_hero_title.setText("Bạn đang là ứng viên Pro" if is_pro else "Bạn đang dùng gói Cơ bản")
+        if hasattr(self, "_pro_hero_desc"):
+            expires_at = str(self._subscription.get("pro_expires_at") or "")
+            days_left = int(self._subscription.get("days_remaining") or 0)
+            if is_pro:
+                expiry_text = expires_at.replace("T", " ")[:16] if expires_at else "chưa xác định"
+                self._pro_hero_desc.setText(
+                    f"Hạn Pro đến <b>{expiry_text}</b> • còn <b>{days_left} ngày</b>. "
+                    "Bạn có thể gia hạn ngay để không gián đoạn quyền lợi."
+                )
+            else:
+                self._pro_hero_desc.setText("Đăng ký Pro để mở khóa huy hiệu xác thực và analytics hồ sơ.")
+        if hasattr(self, "_pro_action_btn"):
+            self._pro_action_btn.setText("Gia hạn ngay" if is_pro else "Đăng ký ngay")
+
+    def _handle_pro_subscription_action(self) -> None:
+        is_pro = bool(self._subscription.get("is_pro_active"))
+        try:
+            invoice = jobhub_api.candidate_create_pro_upgrade_invoice(months=1)
+        except ApiError as e:
+            _Toast(
+                self.win.centralWidget(),
+                str(e),
+                accent="#ef4444",
+                duration_ms=3000,
+                title_text="Không tạo được hóa đơn",
+                icon_char="!",
+            )
+            return
+        except Exception:
+            _Toast(
+                self.win.centralWidget(),
+                "Không thể kết nối máy chủ thanh toán.",
+                accent="#ef4444",
+                duration_ms=3000,
+                title_text="Lỗi kết nối",
+                icon_char="!",
+            )
+            return
+
+        self._pending_pro_invoice = invoice
+        pay_url = str(invoice.get("sepay_payment_url") or "").strip()
+        if pay_url:
+            try:
+                webbrowser.open(pay_url)
+            except Exception:
+                pass
+        _Toast(
+            self.win.centralWidget(),
+            "Đã tạo liên kết SePay. Sau khi thanh toán, hệ thống sẽ cập nhật tự động.",
+            accent=_INDIGO,
+            duration_ms=3300,
+            title_text="Mở thanh toán SePay",
+            icon_char="💳",
+        )
+        self._sync_subscription()
+        self._start_subscription_refresh_poll()
+        if not is_pro:
+            _Toast(
+                self.win.centralWidget(),
+                "Nếu đã thanh toán nhưng chưa thấy Pro, vui lòng tải lại để đồng bộ.",
+                accent="#f59e0b",
+                duration_ms=2800,
+                title_text="Đang chờ xác nhận",
+                icon_char="!",
+            )
+
+    def _start_subscription_refresh_poll(self) -> None:
+        # Poll ngắn sau khi mở trang thanh toán để tự cập nhật UI ngay khi webhook xử lý xong.
+        if self._subscription_poll_timer is None:
+            self._subscription_poll_timer = QTimer(self.win)
+            self._subscription_poll_timer.setInterval(4000)
+            self._subscription_poll_timer.timeout.connect(self._poll_subscription_after_payment)
+        if self._subscription_poll_timer.isActive():
+            self._subscription_poll_timer.stop()
+        self._subscription_poll_timer.start()
+
+    def _poll_subscription_after_payment(self) -> None:
+        was_pro = bool(self._subscription.get("is_pro_active"))
+        self._sync_subscription()
+        now_pro = bool(self._subscription.get("is_pro_active"))
+        if not was_pro and now_pro:
+            if self._subscription_poll_timer and self._subscription_poll_timer.isActive():
+                self._subscription_poll_timer.stop()
+            _Toast(
+                self.win.centralWidget(),
+                "Thanh toán thành công, tài khoản đã chuyển sang Pro.",
+                accent="#10b981",
+                duration_ms=2600,
+                title_text="Kích hoạt Pro thành công",
+                icon_char="✓",
+            )
+            return
 
     def _sync_candidate_profile(self) -> None:
         try:
@@ -4929,21 +5161,33 @@ class UserDashboard:
         if hasattr(self, "_hist_search") and hasattr(self, "_hist_filter"):
             self._apply_hist_filters()
 
-    def _apply_to_job(self, job_id: int, title: str, company: str, location: str) -> None:
+    def _apply_to_job(
+        self,
+        job_id: int,
+        title: str,
+        company: str,
+        location: str,
+        selected_cv_id: int | None = None,
+        new_cv_path: str | None = None,
+    ) -> None:
         try:
-            cvs = jobhub_api.list_my_cvs()
-            if not cvs:
+            if selected_cv_id is None and not new_cv_path:
+                cvs = jobhub_api.list_my_cvs()
+                if cvs:
+                    selected_cv_id = int(cvs[0]["id"])
+            if selected_cv_id is None and not new_cv_path:
                 _Toast(
                     self.win.centralWidget(),
-                    "Ban can tai len CV truoc khi ung tuyen.",
+                    "Bạn chưa có CV. Hãy chọn CV có sẵn hoặc tải CV mới.",
                     accent="#f59e0b",
-                    title_text="Thieu CV",
+                    title_text="Thiếu CV",
                     icon_char="!",
                 )
                 return
-            cv_id = int(cvs[0]["id"])
-            jobhub_api.apply_job(job_id, cv_id)
+            jobhub_api.apply_job_with_cv(job_id, cv_id=selected_cv_id, cv_file_path=new_cv_path)
             self._sync_application_history()
+            if new_cv_path:
+                self._sync_candidate_profile()
             _Toast(
                 self.win.centralWidget(),
                 f"{title} · {company}",

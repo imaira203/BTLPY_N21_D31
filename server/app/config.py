@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 from urllib.parse import quote_plus
 
 from pydantic import Field
@@ -35,8 +36,23 @@ class Settings(BaseSettings):
     pro_monthly_price_vnd: int = Field(default=199000, description="Giá Pro cho ứng viên / tháng")
     invoice_due_days: int = Field(default=7, description="Số ngày đến hạn invoice")
     sepay_checkout_base_url: str = Field(
-        default="https://my.sepay.vn/checkout",
-        description="URL checkout Sepay (dựng pay link theo order code)",
+        default="https://pay-sandbox.sepay.vn/v1/checkout/init",
+        description="Endpoint checkout SePay (sandbox/prod)",
+    )
+    public_api_base_url: str = Field(
+        default="http://127.0.0.1:8000",
+        description="Base URL public cua API de tao payment link",
+    )
+    sepay_merchant_id: str = Field(default="", description="SePay merchant id")
+    sepay_secret_key: str = Field(default="", description="SePay secret key")
+    sepay_payment_method: str = Field(default="BANK_TRANSFER", description="SePay payment method")
+    sepay_operation: str = Field(default="PURCHASE", description="SePay operation")
+    sepay_success_url: Optional[str] = Field(default=None, description="Callback URL khi thanh toan thanh cong")
+    sepay_error_url: Optional[str] = Field(default=None, description="Callback URL khi thanh toan loi")
+    sepay_cancel_url: Optional[str] = Field(default=None, description="Callback URL khi nguoi dung huy")
+    sepay_webhook_secret: str = Field(
+        default="",
+        description="Webhook secret để xác thực callback từ SePay",
     )
 
     def subdir_for(self, kind: str) -> str:

@@ -34,8 +34,11 @@ async def lifespan(_app: FastAPI):
     apply_mysql_schema_patches()
     for kind in ("cvs", "avatars", "hr_assets"):
         upload_dir_for_kind(settings, kind)
-    with SessionLocal() as db:
-        runtime_cache.load_all(db)
+    try:
+        with SessionLocal() as db:
+            runtime_cache.load_all(db)
+    except Exception as exc:
+        log.warning("JobHub: bỏ qua preload runtime cache do lỗi DB lúc startup: %s", exc)
     _log_registered_paths(_app)
     yield
 

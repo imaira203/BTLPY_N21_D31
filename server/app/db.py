@@ -70,6 +70,7 @@ def apply_mysql_schema_patches() -> None:
         add_column_if_missing("jobs", "view_count", "INT NOT NULL DEFAULT 0", after="deadline_text")
         add_column_if_missing("job_applications", "accepted_at", "DATETIME NULL", after="status")
         add_column_if_missing("job_applications", "contact_unlocked_at", "DATETIME NULL", after="accepted_at")
+        add_column_if_missing("job_applications", "cv_id", "INT NULL", after="candidate_id")
         add_column_if_missing("candidate_profiles", "tagline", "VARCHAR(255) NULL", after="user_id")
         add_column_if_missing("candidate_profiles", "phone", "VARCHAR(64) NULL", after="tagline")
         add_column_if_missing("candidate_profiles", "address", "VARCHAR(255) NULL", after="phone")
@@ -78,6 +79,12 @@ def apply_mysql_schema_patches() -> None:
         add_column_if_missing("candidate_profiles", "experience_text", "VARCHAR(255) NULL", after="degree")
         add_column_if_missing("candidate_profiles", "language", "VARCHAR(255) NULL", after="experience_text")
         add_column_if_missing("candidate_profiles", "skills_json", "TEXT NULL", after="language")
+        add_column_if_missing("candidate_subscriptions", "status", "VARCHAR(16) NOT NULL DEFAULT 'inactive'", after="candidate_id")
+        add_column_if_missing("candidate_subscriptions", "pro_expires_at", "DATETIME NULL", after="status")
+        add_column_if_missing("candidate_subscriptions", "updated_at", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP", after="pro_expires_at")
+        add_column_if_missing("invoices", "sepay_order_code", "VARCHAR(64) NULL", after="due_at")
+        add_column_if_missing("invoices", "sepay_payment_url", "VARCHAR(1024) NULL", after="sepay_order_code")
+        add_column_if_missing("invoices", "application_id", "INT NULL", after="paid_at")
         drop_column_if_exists("candidate_profiles", "headline")
         drop_column_if_exists("candidate_profiles", "introduction")
         drop_column_if_exists("candidate_profiles", "skills")
@@ -120,6 +127,21 @@ def apply_mysql_schema_patches() -> None:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             log.info("Đã tạo bảng candidate_saved_jobs (DB cũ).")
+        if not insp.has_table("candidate_subscriptions"):
+            stmt = (
+                "CREATE TABLE candidate_subscriptions ("
+                "id INT AUTO_INCREMENT PRIMARY KEY, "
+                "candidate_id INT NOT NULL UNIQUE, "
+                "status VARCHAR(16) NOT NULL DEFAULT 'inactive', "
+                "pro_expires_at DATETIME NULL, "
+                "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, "
+                "INDEX idx_candidate_subscription_candidate (candidate_id), "
+                "CONSTRAINT fk_candidate_subscription_candidate FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE"
+                ")"
+            )
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+            log.info("Đã tạo bảng candidate_subscriptions (DB cũ).")
         if not insp.has_table("candidate_subscription_payments"):
             stmt = (
                 "CREATE TABLE candidate_subscription_payments ("
@@ -140,6 +162,18 @@ def apply_mysql_schema_patches() -> None:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             log.info("Đã tạo bảng candidate_subscription_payments (DB cũ).")
+        if insp.has_table("invoices"):
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "UPDATE invoices SET sepay_order_code = CONCAT('INV-', owner_user_id, '-', id) "
+                        "WHERE sepay_order_code IS NULL OR sepay_order_code = ''"
+                    )
+                )
+            if dialect == "mysql":
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE invoices MODIFY COLUMN sepay_order_code VARCHAR(64) NOT NULL"))
+            log.info("Đã chuẩn hóa invoices.sepay_order_code cho DB cũ.")
         if insp.has_table("users") and insp.has_table("candidate_profiles"):
             stmt = (
                 "INSERT INTO candidate_profiles (user_id) "
@@ -147,6 +181,16 @@ def apply_mysql_schema_patches() -> None:
                 "FROM users u "
                 "LEFT JOIN candidate_profiles cp ON cp.user_id = u.id "
                 "WHERE u.role = 'candidate' AND cp.user_id IS NULL"
+            )
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+        if insp.has_table("users") and insp.has_table("candidate_subscriptions"):
+            stmt = (
+                "INSERT INTO candidate_subscriptions (candidate_id, status) "
+                "SELECT u.id, 'inactive' "
+                "FROM users u "
+                "LEFT JOIN candidate_subscriptions cs ON cs.candidate_id = u.id "
+                "WHERE u.role = 'candidate' AND cs.candidate_id IS NULL"
             )
             with engine.begin() as conn:
                 conn.execute(text(stmt))
