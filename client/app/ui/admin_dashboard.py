@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Callable
 
 from PySide6.QtCore import QPropertyAnimation, QRect, QSize, Qt, QTimer
@@ -42,6 +43,40 @@ from .charts import (
 )
 from .ui_loader import load_ui
 from .quanly_enhanced import apply_search_icon, enhance_table
+
+_DESC_MARKER = "__JH_V1__"
+
+
+def _decode_job_desc(raw: str | None) -> dict:
+    raw = (raw or "").strip()
+    if raw.startswith(_DESC_MARKER):
+        try:
+            return json.loads(raw[len(_DESC_MARKER):])
+        except Exception:
+            pass
+    if raw.startswith("JH_V1") or raw.startswith("{"):
+        try:
+            json_start = raw.find("{")
+            if json_start >= 0:
+                data = json.loads(raw[json_start:])
+                if isinstance(data, dict):
+                    return {
+                        "desc": data.get("desc", ""),
+                        "duties": data.get("duties", []),
+                        "requirements": data.get("requirements", []),
+                        "soft_skills": data.get("soft_skills", []),
+                        "benefits": data.get("benefits", []),
+                    }
+        except Exception:
+            pass
+    return {"desc": raw, "duties": [], "requirements": [], "soft_skills": [], "benefits": []}
+
+
+def _fmt_vnd_admin(value) -> str:
+    try:
+        return f"{int(value):,}".replace(",", ".") + " VND"
+    except Exception:
+        return str(value or "")
 
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -1520,15 +1555,20 @@ class AdminDashboard:
         location   = j.get("location")    or "—"
         count      = str(j.get("count") or "—")
         deadline   = j.get("deadline")    or "—"
-        desc_raw   = (j.get("description") or "").strip()
+        desc_data  = _decode_job_desc(j.get("description"))
+        desc_raw   = (desc_data.get("desc") or "").strip()
+        duties     = [x for x in desc_data.get("duties", []) if str(x).strip()]
+        reqs       = [x for x in desc_data.get("requirements", []) if str(x).strip()]
+        softs      = [x for x in desc_data.get("soft_skills", []) if str(x).strip()]
+        benefits   = [x for x in desc_data.get("benefits", []) if str(x).strip()]
         applicants = j.get("applicants_count", 0)
         created_at = str(j.get("created_at",""))[:10]
         admin_note = j.get("admin_note") or ""
         mn, mx, st_txt = j.get("min_salary"), j.get("max_salary"), j.get("salary_text")
         if st_txt:  sal = st_txt
-        elif mn and mx: sal = f"${mn:,} – ${mx:,}"
-        elif mn:        sal = f"Từ ${mn:,}"
-        elif mx:        sal = f"Đến ${mx:,}"
+        elif mn and mx: sal = f"{_fmt_vnd_admin(mn)} - {_fmt_vnd_admin(mx)}"
+        elif mn:        sal = f"Từ {_fmt_vnd_admin(mn)}"
+        elif mx:        sal = f"Đến {_fmt_vnd_admin(mx)}"
         else:           sal = "Thỏa thuận"
 
         logo_bg, logo_fg = LOGO_PALETTE[job_id % len(LOGO_PALETTE)]
@@ -1793,7 +1833,7 @@ class AdminDashboard:
         right_lo = QVBoxLayout(); right_lo.setSpacing(14)
         right_lo.setAlignment(Qt.AlignTop)
 
-        # ── LEFT: Description ──────────────────────────────────────────
+        # LEFT: Description
         _, desc_clo = _card_frame(left_lo)
         _section_hdr(desc_clo, "ic_doc.svg", "Mô tả công việc")
         if desc_raw:
@@ -1805,45 +1845,31 @@ class AdminDashboard:
                     else:
                         desc_clo.addWidget(_body_lbl(para))
         else:
-            desc_clo.addWidget(_body_lbl(
-                f"{company} đang tuyển dụng vị trí {title}. "
-                "Vui lòng liên hệ nhà tuyển dụng để biết thêm thông tin chi tiết."
-            ))
+            desc_clo.addWidget(_body_lbl("HR chưa nhập mô tả công việc."))
 
-        kw_row = QHBoxLayout(); kw_row.setSpacing(8)
-        kw_row.setContentsMargins(0,6,0,0)
-        kw_row.addWidget(_svg_ic("ic_jobs.svg", 14))
-        kw = QLabel("Nhiệm vụ chính:")
-        kw.setStyleSheet(
-            f"color:{TXT_H}; font-size:13px; font-weight:700;"
-            " border:none; background:transparent;"
-        )
-        kw_row.addWidget(kw); kw_row.addStretch()
-        desc_clo.addLayout(kw_row)
-        for b in [
-            f"Đảm nhận công việc chuyên môn với cấp bậc {level}.",
-            f"Làm việc tại {location} theo hình thức {job_type}.",
-            "Phối hợp chặt chẽ với các team liên quan.",
-            "Chủ động cải tiến và đảm bảo chất lượng công việc.",
-        ]:
-            desc_clo.addLayout(_bullet(b))
+        if duties:
+            kw_row = QHBoxLayout(); kw_row.setSpacing(8)
+            kw_row.setContentsMargins(0,6,0,0)
+            kw_row.addWidget(_svg_ic("ic_jobs.svg", 14))
+            kw = QLabel("Nhiệm vụ chính:")
+            kw.setStyleSheet(
+                f"color:{TXT_H}; font-size:13px; font-weight:700;"
+                " border:none; background:transparent;"
+            )
+            kw_row.addWidget(kw); kw_row.addStretch()
+            desc_clo.addLayout(kw_row)
+            for b in duties:
+                desc_clo.addLayout(_bullet(str(b)))
 
-        # ── LEFT: Requirements ─────────────────────────────────────────
+        # LEFT: Requirements
         _, req_clo = _card_frame(left_lo)
         _section_hdr(req_clo, "ic_folder.svg", "Yêu cầu")
         req_row = QHBoxLayout(); req_row.setSpacing(20)
-        for col_title, items in [
-            ("Yêu cầu chuyên môn", [
-                f"Phù hợp với cấp bậc: {level}.",
-                "Có kinh nghiệm thực tế trong lĩnh vực liên quan.",
-                "Thành thạo công cụ và quy trình hiện đại.",
-            ]),
-            ("Kỹ năng mềm", [
-                "Giao tiếp và trình bày hiệu quả.",
-                "Tư duy phân tích và giải quyết vấn đề.",
-                "Làm việc nhóm và hỗ trợ đồng nghiệp.",
-            ]),
-        ]:
+        req_blocks = [
+            ("Yêu cầu chuyên môn", reqs or ["HR chưa nhập yêu cầu chuyên môn."]),
+            ("Kỹ năng mềm", softs or ["HR chưa nhập kỹ năng mềm."]),
+        ]
+        for col_title, items in req_blocks:
             sub = QVBoxLayout(); sub.setSpacing(8)
             sub_hdr = QHBoxLayout(); sub_hdr.setSpacing(8)
             sub_hdr.addWidget(_svg_ic("ic_jobs.svg", 14))
@@ -1857,7 +1883,7 @@ class AdminDashboard:
             for item in items:
                 row = QHBoxLayout(); row.setSpacing(8)
                 chk_ic = _svg_ic("ic_check.svg", 14)
-                t = QLabel(item); t.setWordWrap(True)
+                t = QLabel(str(item)); t.setWordWrap(True)
                 t.setStyleSheet(
                     f"color:{TXT_S}; font-size:12px; border:none; background:transparent;"
                 )
@@ -1867,42 +1893,14 @@ class AdminDashboard:
             req_row.addLayout(sub, 1)
         req_clo.addLayout(req_row)
 
-        # ── LEFT: Perks ────────────────────────────────────────────────
+        # LEFT: Perks
         _, perks_clo = _card_frame(left_lo)
         _section_hdr(perks_clo, "ic_hr_stat.svg", "Quyền lợi & Phúc lợi")
-        perks_grid = QGridLayout(); perks_grid.setSpacing(10)
-        perks_data = [
-            ("ic_trend.svg",   "Lương cạnh tranh",    sal,              "#DBEAFE","#1D4ED8"),
-            ("ic_check.svg",   "Bảo hiểm toàn diện",  "Y tế & Nha khoa","#DCFCE7","#16A34A"),
-            ("ic_jobs.svg",    "Trang thiết bị",       "Đầy đủ thiết bị","#F3E8FF","#9333EA"),
-            ("ic_clock.svg",   "Giờ làm linh hoạt",   job_type,         "#FEF3C7","#D97706"),
-        ]
-        for i, (ic_svg, name, desc_txt, pbg, pfg) in enumerate(perks_data):
-            pf = QFrame()
-            pf.setStyleSheet(f"QFrame{{background:{pbg}; border-radius:12px; border:none;}}")
-            pf_lo = QHBoxLayout(pf)
-            pf_lo.setContentsMargins(14,12,14,12); pf_lo.setSpacing(12)
-            ic_box = QFrame()
-            ic_box.setFixedSize(36,36)
-            ic_box.setStyleSheet("QFrame{background:white; border-radius:9px; border:none;}")
-            ic_box_lo = QHBoxLayout(ic_box)
-            ic_box_lo.setContentsMargins(0,0,0,0)
-            ic_inner = _svg_ic(ic_svg, 18)
-            ic_box_lo.addWidget(ic_inner, 0, Qt.AlignCenter)
-            txt_col = QVBoxLayout(); txt_col.setSpacing(2)
-            n = QLabel(name)
-            n.setStyleSheet(
-                f"color:{TXT_H}; font-size:12px; font-weight:700; border:none; background:transparent;"
-            )
-            d = QLabel(desc_txt)
-            d.setStyleSheet(
-                f"color:{TXT_M}; font-size:11px; border:none; background:transparent;"
-            )
-            txt_col.addWidget(n); txt_col.addWidget(d)
-            pf_lo.addWidget(ic_box)
-            pf_lo.addLayout(txt_col, 1)
-            perks_grid.addWidget(pf, i//2, i%2)
-        perks_clo.addLayout(perks_grid)
+        if benefits:
+            for item in benefits:
+                perks_clo.addLayout(_bullet(str(item)))
+        else:
+            perks_clo.addWidget(_body_lbl("HR chưa nhập quyền lợi/phúc lợi."))
 
         # Admin note
         if admin_note:
