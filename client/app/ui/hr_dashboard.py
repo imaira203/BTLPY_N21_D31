@@ -1,20 +1,21 @@
-"""HR Dashboard — pure Python, không dùng .ui file."""
+﻿"""HR Dashboard — pure Python, không dùng .ui file."""
 from __future__ import annotations
 
+import json
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable
 
 from PySide6.QtCore import (Qt, QSize, QPropertyAnimation,
                               QEasingCurve, QPoint, QByteArray,
-                              QEvent, QObject, QTimer, QRect)
+                              QEvent, QObject, QTimer, QRect, QDate)
 from PySide6.QtGui import (QIcon, QFont, QColor, QPainter, QPixmap,
                             QPainterPath, QLinearGradient, QPen)
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
     QFrame, QGraphicsDropShadowEffect,
-    QGridLayout, QGroupBox,
+    QDateEdit, QGridLayout, QGroupBox,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
     QSizePolicy, QSpacerItem, QStackedWidget, QTableWidget, QTableWidgetItem,
@@ -27,6 +28,33 @@ from ..client.jobhub_api import ApiError
 from ..paths import resource_icon
 from ..session_store import clear_session
 from .charts import make_bar_chart
+
+_DESC_MARKER = "__JH_V1__"
+
+
+def _encode_desc(desc: str, duties: str, requirements: str,
+                 soft_skills: str, benefits: str = "") -> str:
+    """Pack all job-detail sections into a single JSON blob stored as description."""
+    def _lines(txt: str) -> list[str]:
+        return [l.strip() for l in txt.splitlines() if l.strip()]
+    return _DESC_MARKER + json.dumps({
+        "desc":         desc,
+        "duties":       _lines(duties),
+        "requirements": _lines(requirements),
+        "soft_skills":  _lines(soft_skills),
+        "benefits":     _lines(benefits),
+    }, ensure_ascii=False)
+
+
+def _decode_desc(raw: str | None) -> dict:
+    """Return structured dict; falls back gracefully for old plain-text descriptions."""
+    raw = (raw or "").strip()
+    if raw.startswith(_DESC_MARKER):
+        try:
+            return json.loads(raw[len(_DESC_MARKER):])
+        except Exception:
+            pass
+    return {"desc": raw, "duties": [], "requirements": [], "soft_skills": [], "benefits": []}
 
 # ══════════════════════════════════════════════════════════════
 #  TOKENS
@@ -54,6 +82,7 @@ _CARD_TOP    = "#ffffff"
 _CARD_BOT    = "#f8fafc"
 
 _PAGE_SIZE = 5          # rows per table page
+_HR_ACCEPT_FEE_RATE = 0.02
 
 _ICONS = Path(__file__).resolve().parent.parent.parent / "resources" / "icons"
 _CANDS_PER_PAGE = 5   # số ứng viên mỗi trang
@@ -102,6 +131,19 @@ def _svg_pm(name: str, size: int, color: str,
 
 def _svg_icon(name: str, size: int = 20, color: str = NAV_INACT_T) -> QIcon:
     return QIcon(_svg_pm(name, size, color))
+
+
+def _fmt_vnd(amount: int | float) -> str:
+    return f"{int(amount):,}".replace(",", ".") + " đ"
+
+
+def _to_int(value) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    return int(digits) if digits else 0
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1097,6 +1139,7 @@ class HRDashboard:
             ("ic_edit.svg",      "Đăng tin mới"),
             ("ic_jobs.svg",      "Quản lý tin đăng"),
             ("ic_users.svg",     "Danh sách ứng viên"),
+            ("ic_card.svg",      "Hóa đơn"),
         ]
         for i, (icon, label) in enumerate(nav_items):
             btn = _NavBtn(icon, label)
@@ -1273,6 +1316,7 @@ class HRDashboard:
         self._stack.addWidget(self._build_post_page())    # 1
         self._stack.addWidget(self._build_jobs_page())    # 2
         self._stack.addWidget(self._build_cands_page())   # 3
+        self._stack.addWidget(self._build_billing_page()) # 4
         return self._stack
 
     # ── PAGE 0: DASHBOARD ─────────────────────────────────────
@@ -1802,6 +1846,11 @@ class HRDashboard:
         self.line_title.setMinimumHeight(46)
         s1lo.addWidget(self.line_title)
 
+        s1lo.addWidget(_lbl("Phòng ban / Bộ phận", 13, bold=True))
+        self.line_dept = _input("Ví dụ: Kỹ thuật & Công nghệ, Marketing, Kinh doanh…")
+        self.line_dept.setMinimumHeight(46)
+        s1lo.addWidget(self.line_dept)
+
         row1 = QHBoxLayout()
         row1.setSpacing(16)
         col_a = QVBoxLayout(); col_a.setSpacing(8)
@@ -1857,8 +1906,16 @@ class HRDashboard:
         col_e.addWidget(self.line_count)
         col_f = QVBoxLayout(); col_f.setSpacing(8)
         col_f.addWidget(_lbl("Hạn nộp hồ sơ", 13, bold=True))
-        self.line_deadline = _input("Ví dụ: 31/12/2025")
+        self.line_deadline = QDateEdit()
+        self.line_deadline.setDisplayFormat("dd/MM/yyyy")
+        self.line_deadline.setCalendarPopup(True)
+        self.line_deadline.setDate(QDate.currentDate().addMonths(1))
         self.line_deadline.setMinimumHeight(46)
+        self.line_deadline.setStyleSheet(
+            "QDateEdit{border:1.5px solid #e5e7eb; border-radius:10px; padding:0 12px;"
+            " font-size:13px; background:#fff;}"
+            "QDateEdit::drop-down{border:none; width:28px;}"
+        )
         col_f.addWidget(self.line_deadline)
         row3.addLayout(col_loc)
         row3.addLayout(col_e)
@@ -1918,11 +1975,92 @@ class HRDashboard:
         s3lo.addWidget(tip_box)
         outer.addWidget(s3)
 
+        # ── SECTION 4: Nhiệm vụ & Yêu cầu ──────────────────────
+        s4, s4lo = _card_frame()
+        s4lo.setSpacing(16)
+        s4lo.addWidget(
+            _section_header("ic_user.svg", "Nhiệm vụ & Yêu cầu",
+                            "#10b981", "#d1fae5")
+        )
+
+        def _ta(ph: str, h: int = 110) -> QPlainTextEdit:
+            e = QPlainTextEdit()
+            e.setPlaceholderText(ph)
+            e.setFixedHeight(h)
+            e.setStyleSheet(
+                f"QPlainTextEdit{{background:#f8fafc;border:1.5px solid {BORDER};"
+                "border-radius:10px;padding:8px 12px;font-size:13px;"
+                f"color:{TXT_H};}}"
+                f"QPlainTextEdit:focus{{border-color:{P};}}"
+            )
+            return e
+
+        s4lo.addWidget(_lbl("Nhiệm vụ chính", 13, bold=True))
+        s4lo.addWidget(_lbl(
+            "Mỗi dòng = 1 nhiệm vụ. Ví dụ:\n"
+            "Phát triển tính năng mới theo yêu cầu sản phẩm.\n"
+            "Review code và hỗ trợ đồng đội.",
+            11, color="#9ca3af"
+        ))
+        self.plain_duties = _ta(
+            "Mỗi dòng là một nhiệm vụ chính...\n"
+            "Ví dụ: Phát triển và duy trì hệ thống backend.\n"
+            "Ví dụ: Phối hợp với team frontend và QA.",
+            110
+        )
+        s4lo.addWidget(self.plain_duties)
+
+        row_reqs = QHBoxLayout()
+        row_reqs.setSpacing(16)
+
+        col_req = QVBoxLayout(); col_req.setSpacing(6)
+        col_req.addWidget(_lbl("Yêu cầu chuyên môn", 13, bold=True))
+        self.plain_requirements = _ta(
+            "Mỗi dòng là một yêu cầu...\n"
+            "Ví dụ: Tốt nghiệp CNTT hoặc liên quan.\n"
+            "Ví dụ: Có kinh nghiệm với Python / Java.",
+            110
+        )
+        col_req.addWidget(self.plain_requirements)
+
+        col_soft = QVBoxLayout(); col_soft.setSpacing(6)
+        col_soft.addWidget(_lbl("Kỹ năng mềm", 13, bold=True))
+        self.plain_soft_skills = _ta(
+            "Mỗi dòng là một kỹ năng...\n"
+            "Ví dụ: Giao tiếp và làm việc nhóm tốt.\n"
+            "Ví dụ: Tư duy phân tích và giải quyết vấn đề.",
+            110
+        )
+        col_soft.addWidget(self.plain_soft_skills)
+
+        row_reqs.addLayout(col_req, 1)
+        row_reqs.addLayout(col_soft, 1)
+        s4lo.addLayout(row_reqs)
+
+        s4lo.addWidget(_lbl("Quyền lợi & Phúc lợi", 13, bold=True))
+        s4lo.addWidget(_lbl(
+            "Mỗi dòng = 1 quyền lợi. Ví dụ: Bảo hiểm sức khỏe toàn diện.",
+            11, color="#9ca3af"
+        ))
+        self.plain_benefits = _ta(
+            "Mỗi dòng là một quyền lợi...\n"
+            "Ví dụ: Bảo hiểm y tế, nha khoa và thị lực.\n"
+            "Ví dụ: Thưởng hiệu suất hàng quý.\n"
+            "Ví dụ: Giờ làm việc linh hoạt.",
+            110
+        )
+        s4lo.addWidget(self.plain_benefits)
+        outer.addWidget(s4)
+
         # ── Action bar ──────────────────────────────────────────
         btn_lo = QHBoxLayout()
         btn_lo.setSpacing(12)
-        self.btn_draft  = _btn_secondary("💾  Lưu nháp")
-        self.btn_submit = _btn_primary("🚀  Đăng tin ngay")
+        self.btn_draft  = _btn_secondary("Lưu nháp")
+        self.btn_submit = _btn_primary("Đăng tin ngay")
+        self.btn_draft.setIcon(QIcon(_svg_pm("ic_doc.svg", 16, P)))
+        self.btn_draft.setIconSize(QSize(16, 16))
+        self.btn_submit.setIcon(QIcon(_svg_pm("ic_edit.svg", 16, "#ffffff")))
+        self.btn_submit.setIconSize(QSize(16, 16))
         self.btn_draft.setFixedHeight(50)
         self.btn_submit.setFixedHeight(50)
         self.btn_draft.setMinimumWidth(160)
@@ -2014,14 +2152,33 @@ class HRDashboard:
         )
         toolbar.addWidget(self._jobs_type_filter)
 
+        btn_jobs_reset = QPushButton("Xóa lọc")
+        btn_jobs_reset.setFixedHeight(42)
+        btn_jobs_reset.setCursor(Qt.PointingHandCursor)
+        btn_jobs_reset.setIcon(QIcon(_svg_pm("ic_x.svg", 14, TXT_M)))
+        btn_jobs_reset.setIconSize(QSize(14, 14))
+        btn_jobs_reset.setStyleSheet(
+            f"QPushButton{{background:#f1f5f9;color:{TXT_S};"
+            "border:none;border-radius:10px;padding:0 14px;font-size:13px;}}"
+            "QPushButton:hover{background:#e2e8f0;}"
+        )
+        def _reset_jobs():
+            self._jobs_search.clear()
+            self._jobs_status_filter.setCurrentIndex(0)
+            self._jobs_type_filter.setCurrentIndex(0)
+            self._filter_jobs("")
+        btn_jobs_reset.clicked.connect(_reset_jobs)
+        toolbar.addWidget(btn_jobs_reset)
+
         # "+ Đăng tin mới" button
         btn_new = _btn_primary("+ Đăng tin mới")
+        btn_new.setIcon(QIcon(_svg_pm("ic_edit.svg", 16, "#ffffff")))
+        btn_new.setIconSize(QSize(16, 16))
         btn_new.setFixedHeight(42)
         btn_new.setMinimumWidth(150)
         btn_new.clicked.connect(lambda: self._go(1))
         toolbar.addWidget(btn_new)
         outer.addLayout(toolbar)
-        outer.addStretch(1)        # đẩy card xuống một chút
 
         # ── Table card ────────────────────────────────────────
         frame, flo = _card_frame()
@@ -2097,9 +2254,9 @@ class HRDashboard:
         self._jobs_data: list = []
 
         # Proportional resizer: Title 58% — Dept 42% of flexible space
-        # Fixed cols: ID(60)+Date(112)+Count(90)+Status(136)+Actions(118) = 516
+        # Fixed cols: ID(60)+Date(112)+Count(90)+Status(136)+Actions(160) = 558
         self._jobs_resizer = _ColResizeFilter(
-            self.table_jobs, 1, 2, 0.58, 516
+            self.table_jobs, 1, 2, 0.58, 558
         )
 
         # Card wraps content — space distributed 1:2 above:below
@@ -2186,7 +2343,9 @@ class HRDashboard:
         toolbar.addWidget(self._cands_sort)
 
         # Reset all filters button
-        btn_reset = QPushButton("↺ Xoá bộ lọc")
+        btn_reset = QPushButton("Xóa lọc")
+        btn_reset.setIcon(QIcon(_svg_pm("ic_x.svg", 14, TXT_M)))
+        btn_reset.setIconSize(QSize(14, 14))
         btn_reset.setFixedHeight(42)
         btn_reset.setCursor(Qt.PointingHandCursor)
         btn_reset.setStyleSheet(
@@ -2202,7 +2361,6 @@ class HRDashboard:
         toolbar.addWidget(btn_reset)
 
         outer.addLayout(toolbar)
-        outer.addStretch(1)        # đẩy card xuống một chút
 
         # ── Table card ────────────────────────────────────────
         frame, flo = _card_frame()
@@ -2256,9 +2414,9 @@ class HRDashboard:
         flo.addWidget(self._cands_no_result_lbl)
 
         # Proportional resizer: Ứng viên 36% — Vị trí 64% of flexible space
-        # Fixed cols: Date(140)+Status(136)+Actions(120) = 396
+        # Fixed cols: Date(140)+Status(136)+Actions(168) = 444
         self._cands_resizer = _ColResizeFilter(
-            self.table_cands, 0, 1, 0.36, 396
+            self.table_cands, 0, 1, 0.36, 444
         )
 
         # ── Pagination bar ─────────────────────────────────────
@@ -2281,6 +2439,235 @@ class HRDashboard:
         return pg
 
     # ── navigation ────────────────────────────────────────────
+    def _build_billing_page(self) -> QWidget:
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea{background:transparent;border:none;}")
+
+        pg = QWidget()
+        pg.setStyleSheet(f"background:{CONTENT_BG};")
+        outer = QVBoxLayout(pg)
+        outer.setContentsMargins(40, 34, 40, 34)
+        outer.setSpacing(24)
+
+        summary_row = QHBoxLayout()
+        summary_row.setSpacing(24)
+        self._billing_labels: dict[str, QLabel] = {}
+
+        def _summary_card(key: str, title: str, icon: str, color: str, soft: str) -> QFrame:
+            card = QFrame()
+            card.setMinimumHeight(150)
+            card.setStyleSheet(f"QFrame{{background:{CARD_BG};border:1px solid {BORDER};border-radius:12px;}}")
+            _shadow(card, blur=16, dy=4, alpha=14)
+            lo = QHBoxLayout(card)
+            lo.setContentsMargins(28, 22, 28, 22)
+            lo.setSpacing(22)
+            ic = QLabel()
+            ic.setFixedSize(70, 70)
+            ic.setAlignment(Qt.AlignCenter)
+            ic.setPixmap(_svg_pm(icon, 34, color))
+            ic.setStyleSheet(f"background:{soft};border-radius:35px;border:none;")
+            copy = QVBoxLayout()
+            copy.setSpacing(6)
+            ttl = QLabel(title)
+            ttl.setStyleSheet(f"color:#1f2942;font-size:14px;font-weight:800;letter-spacing:1px;background:transparent;border:none;")
+            val = QLabel("0")
+            val.setStyleSheet(f"color:{TXT_H};font-size:28px;font-weight:900;background:transparent;border:none;")
+            self._billing_labels[key] = val
+            copy.addWidget(ttl)
+            copy.addWidget(val)
+            lo.addWidget(ic)
+            lo.addLayout(copy, 1)
+            return card
+
+        summary_row.addWidget(_summary_card("total", "TỔNG CHI PHÍ", "ic_card.svg", "#4f46e5", "#ddd6fe"))
+        summary_row.addWidget(_summary_card("approved", "ỨNG VIÊN ĐÃ NHẬN", "ic_users.svg", "#16a34a", "#dcfce7"))
+        summary_row.addWidget(_summary_card("due", "HẠN THANH TOÁN", "ic_clock.svg", "#0284c7", "#dbeafe"))
+        outer.addLayout(summary_row)
+
+        table_card = QFrame()
+        table_card.setStyleSheet(f"QFrame{{background:{CARD_BG};border:1px solid {BORDER};border-radius:14px;}}")
+        _shadow(table_card, blur=16, dy=4, alpha=12)
+        table_lo = QVBoxLayout(table_card)
+        table_lo.setContentsMargins(0, 0, 0, 0)
+        table_lo.setSpacing(0)
+
+        filter_bar = QHBoxLayout()
+        filter_bar.setContentsMargins(30, 30, 30, 24)
+        filter_bar.setSpacing(16)
+        self._billing_status_filter = _combo(["Trạng thái hóa đơn: Tất cả", "Đã thanh toán", "Đang chờ thanh toán", "Quá hạn"])
+        self._billing_status_filter.setFixedSize(250, 48)
+        self._billing_period_filter = _combo(["Thời gian: 30 ngày gần nhất", "Tháng này", "Quý này", "Tất cả thời gian"])
+        self._billing_period_filter.setFixedSize(280, 48)
+        self._billing_status_filter.currentIndexChanged.connect(self._refresh_billing_page)
+        self._billing_period_filter.currentIndexChanged.connect(self._refresh_billing_page)
+        filter_bar.addWidget(self._billing_status_filter)
+        filter_bar.addWidget(self._billing_period_filter)
+        filter_bar.addStretch()
+        filter_btn = QPushButton()
+        filter_btn.setFixedSize(52, 52)
+        filter_btn.setCursor(Qt.PointingHandCursor)
+        filter_btn.setIcon(QIcon(_svg_pm("ic_search.svg", 18, TXT_M)))
+        filter_btn.setIconSize(QSize(18, 18))
+        filter_btn.setToolTip("Lọc hóa đơn")
+        filter_btn.setStyleSheet(
+            f"QPushButton{{background:#f8fafc;border:1px solid {BORDER};border-radius:10px;}}"
+            "QPushButton:hover{background:#eef2ff;}"
+        )
+        filter_bar.addWidget(filter_btn)
+        table_lo.addLayout(filter_bar)
+
+        divider = QFrame()
+        divider.setFixedHeight(1)
+        divider.setStyleSheet(f"background:{BORDER};border:none;")
+        table_lo.addWidget(divider)
+
+        self.table_billing = QTableWidget(0, 7)
+        self.table_billing.setHorizontalHeaderLabels(["Mã hóa đơn", "Công ty", "Ngày", "Kỳ thanh toán", "Số tiền", "Trạng thái", "Thao tác"])
+        self.table_billing.verticalHeader().setVisible(False)
+        self.table_billing.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_billing.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table_billing.setAlternatingRowColors(False)
+        self.table_billing.horizontalHeader().setStretchLastSection(True)
+        self.table_billing.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_billing.setMinimumHeight(560)
+        self.table_billing.setStyleSheet(
+            "QTableWidget{background:#ffffff;border:none;gridline-color:#eef2f7;font-size:14px;color:#0f172a;}"
+            "QHeaderView::section{background:#ffffff;color:#1f2942;font-size:13px;font-weight:800;border:none;border-bottom:1px solid #e2e8f0;padding:16px 10px;}"
+            "QTableWidget::item{padding:12px 10px;border:none;border-bottom:1px solid #eef2f7;}"
+            "QTableWidget::item:selected{background:#eef2ff;color:#1e1b4b;}"
+        )
+        table_lo.addWidget(self.table_billing)
+
+        self._billing_page_label = QLabel("")
+        self._billing_page_label.setStyleSheet(f"color:{TXT_M};font-size:13px;background:transparent;border:none;padding:18px 30px;")
+        table_lo.addWidget(self._billing_page_label)
+        outer.addWidget(table_card)
+        outer.addStretch()
+        scroll.setWidget(pg)
+        return scroll
+
+    def _billing_rows(self) -> tuple[list[dict], int, str]:
+        try:
+            apps = jobhub_api.hr_applications()
+        except ApiError:
+            apps = []
+        try:
+            jobs = jobhub_api.hr_my_jobs()
+        except ApiError:
+            jobs = []
+        jobs_by_id = {str(j.get("id")): j for j in jobs}
+        rows: list[dict] = []
+        total = 0
+        for app in apps:
+            if str(app.get("status", "")).lower() != "approved":
+                continue
+            job = jobs_by_id.get(str(app.get("job_id"))) or app
+            min_salary = _to_int(job.get("min_salary") or app.get("min_salary"))
+            max_salary = _to_int(job.get("max_salary") or app.get("max_salary"))
+            avg_salary = (min_salary + max_salary) // 2 if min_salary > 0 and max_salary > min_salary else 0
+            fee = int(avg_salary * _HR_ACCEPT_FEE_RATE) if avg_salary else 0
+            total += fee
+            raw_date = app.get("applied_at") or datetime.now().strftime("%Y-%m-%d")
+            period = raw_date[:7] if isinstance(raw_date, str) and len(raw_date) >= 7 else datetime.now().strftime("%Y-%m")
+            rows.append({
+                "invoice_id": f"#HD-{_to_int(app.get('application_id')) or len(rows) + 1:04d}",
+                "candidate": app.get("candidate_name") or app.get("full_name") or "Ứng viên",
+                "job": app.get("job_title") or job.get("title") or "Tin tuyển dụng",
+                "date": raw_date[:10] if isinstance(raw_date, str) else str(raw_date),
+                "period": period,
+                "avg_salary": avg_salary,
+                "fee": fee,
+                "status": "Đang chờ thanh toán",
+            })
+        due_date = (datetime.now() + timedelta(days=30)).strftime("%d/%m/%Y")
+        return rows, total, due_date
+
+    def _refresh_billing_page(self) -> None:
+        rows, total, due_date = self._billing_rows()
+        status_idx = getattr(self, "_billing_status_filter", None).currentIndex() if hasattr(self, "_billing_status_filter") else 0
+        if status_idx == 1:
+            rows = [r for r in rows if r["status"] == "Đã thanh toán"]
+        elif status_idx == 2:
+            rows = [r for r in rows if r["status"] == "Đang chờ thanh toán"]
+        elif status_idx == 3:
+            rows = [r for r in rows if r["status"] == "Quá hạn"]
+        self._billing_labels["approved"].setText(str(len(rows)))
+        self._billing_labels["total"].setText(_fmt_vnd(total))
+        self._billing_labels["due"].setText(due_date)
+
+        self.table_billing.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            values = [
+                row["invoice_id"],
+                "TechCorp HR",
+                row["date"],
+                row["period"],
+                _fmt_vnd(row["fee"]),
+                row["status"],
+                "",
+            ]
+            for c, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if c == 4:
+                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.table_billing.setItem(r, c, item)
+            status_item = self.table_billing.item(r, 5)
+            if status_item:
+                status_item.setForeground(QColor("#b45309"))
+                status_item.setTextAlignment(Qt.AlignCenter)
+            action = QPushButton()
+            action.setIcon(QIcon(_svg_pm("ic_view.svg", 18, P)))
+            action.setIconSize(QSize(18, 18))
+            action.setCursor(Qt.PointingHandCursor)
+            action.setToolTip("Xem chi tiết hóa đơn")
+            action.setStyleSheet("QPushButton{background:transparent;border:none;} QPushButton:hover{background:#eef2ff;border-radius:8px;}")
+            action.clicked.connect(lambda _=False, _row=row: self._show_invoice_detail(_row))
+            self.table_billing.setCellWidget(r, 6, action)
+        self.table_billing.setFixedHeight(max(520, 58 + len(rows) * 64))
+        if hasattr(self, "_billing_page_label"):
+            shown = len(rows)
+            self._billing_page_label.setText(f"Hiển thị {shown} trong {shown} hóa đơn")
+
+    def _show_invoice_detail(self, row: dict) -> None:
+        dlg = QDialog(self.win)
+        dlg.setWindowTitle(f"Chi tiết hóa đơn {row.get('invoice_id', '')}")
+        dlg.setMinimumWidth(440)
+        dlg.setStyleSheet(
+            f"QDialog{{background:{CONTENT_BG};}}"
+            f"QLabel{{color:{TXT_H};background:transparent;border:none;}}"
+        )
+        lo = QVBoxLayout(dlg)
+        lo.setContentsMargins(24, 22, 24, 22)
+        lo.setSpacing(12)
+        title = QLabel(f"Hóa đơn {row.get('invoice_id', '')}")
+        title.setStyleSheet(f"color:{TXT_H};font-size:20px;font-weight:900;background:transparent;border:none;")
+        lo.addWidget(title)
+        details = [
+            ("Công ty", "TechCorp HR"),
+            ("Ứng viên", row.get("candidate", "Ứng viên")),
+            ("Công việc", row.get("job", "Tin tuyển dụng")),
+            ("Ngày phát sinh", row.get("date", "")),
+            ("Kỳ thanh toán", row.get("period", "")),
+            ("Số tiền", _fmt_vnd(row.get("fee", 0))),
+            ("Trạng thái", row.get("status", "")),
+        ]
+        for key, value in details:
+            line = QLabel(f"<b>{key}:</b> {value}")
+            line.setTextFormat(Qt.RichText)
+            line.setStyleSheet(f"color:{TXT_S};font-size:14px;background:transparent;border:none;")
+            lo.addWidget(line)
+        btn = QPushButton("Đóng")
+        btn.setFixedHeight(38)
+        btn.setStyleSheet(f"QPushButton{{background:{P};color:#fff;border:none;border-radius:8px;font-weight:700;}}")
+        btn.clicked.connect(dlg.accept)
+        row_lo = QHBoxLayout()
+        row_lo.addStretch()
+        row_lo.addWidget(btn)
+        lo.addLayout(row_lo)
+        dlg.exec()
+
     def _go(self, idx: int) -> None:
         self._stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._nav_btns):
@@ -2291,12 +2678,14 @@ class HRDashboard:
             "Đăng tin mới",
             "Quản lý tin đăng",
             "Đơn ứng tuyển",
+            "Hóa đơn",
         ]
         subs = [
             "Theo dõi hiệu quả tuyển dụng của bạn",
             "Tạo tin tuyển dụng mới cho ứng viên",
             "Xem và chỉnh sửa các tin tuyển dụng đang hoạt động",
             "Quản lý các ứng viên đã ứng tuyển",
+            "Quản lý và theo dõi các khoản phí tuyển dụng phát sinh",
         ]
         self.lbl_page_title.setText(titles[idx])
         self.lbl_page_sub.setText(subs[idx])
@@ -2307,6 +2696,25 @@ class HRDashboard:
             self._fill_jobs_table()
         elif idx == 3:
             self._fill_cands_table()
+        elif idx == 4:
+            self._refresh_billing_page()
+
+    def _validate_salary_pair(self, min_text: str, max_text: str, parent=None) -> tuple[int, int] | None:
+        parent = parent or self.win
+        min_text = min_text.strip()
+        max_text = max_text.strip()
+        if not min_text.isdigit() or not max_text.isdigit():
+            QMessageBox.warning(parent, "Lương không hợp lệ", "Vui lòng nhập lương tối thiểu và tối đa bằng số.")
+            return None
+        min_salary = int(min_text)
+        max_salary = int(max_text)
+        if min_salary <= 0 or max_salary <= 0:
+            QMessageBox.warning(parent, "Lương không hợp lệ", "Lương tối thiểu và tối đa phải lớn hơn 0.")
+            return None
+        if max_salary <= min_salary:
+            QMessageBox.warning(parent, "Lương không hợp lệ", "Lương tối đa phải lớn hơn lương tối thiểu.")
+            return None
+        return min_salary, max_salary
 
     # ── job actions ───────────────────────────────────────────
     def _create_job(self, draft: bool) -> None:
@@ -2319,24 +2727,32 @@ class HRDashboard:
         # Collect all form fields
         level    = self.combo_level.currentText()
         job_type = self.combo_type.currentText()
+        dept     = self.line_dept.text().strip() or "Kỹ thuật & Công nghệ"
         min_salary_txt = self.line_min_salary.text().strip()
         max_salary_txt = self.line_max_salary.text().strip()
         location = self.line_location.text().strip()
         count    = self.line_count.text().strip() or "1"
         deadline = self.line_deadline.text().strip()
-        desc     = self.plain_desc.toPlainText().strip()
+        desc         = self.plain_desc.toPlainText().strip()
+        duties       = self.plain_duties.toPlainText().strip()
+        requirements = self.plain_requirements.toPlainText().strip()
+        soft_skills  = self.plain_soft_skills.toPlainText().strip()
+        benefits     = self.plain_benefits.toPlainText().strip()
 
-        min_salary = int(min_salary_txt) if min_salary_txt.isdigit() else 0
-        max_salary = int(max_salary_txt) if max_salary_txt.isdigit() else 0
+        salary_pair = self._validate_salary_pair(min_salary_txt, max_salary_txt)
+        if not salary_pair:
+            return
+        min_salary, max_salary = salary_pair
+        encoded_desc = _encode_desc(desc, duties, requirements, soft_skills, benefits)
         try:
             jobhub_api.hr_create_job(
                 {
                     "title": title,
-                    "description": desc,
-                    "department": "Kỹ thuật & Công nghệ",
+                    "description": encoded_desc,
+                    "department": dept,
                     "level": level,
-                    "min_salary": min_salary if min_salary > 0 else None,
-                    "max_salary": max_salary if max_salary > 0 else None,
+                    "min_salary": min_salary,
+                    "max_salary": max_salary,
                     "location": location or "Hà Nội",
                     "job_type": job_type,
                     "count": int(count) if str(count).isdigit() else 1,
@@ -2350,12 +2766,17 @@ class HRDashboard:
 
         # Clear form
         self.line_title.clear()
+        self.line_dept.clear()
         self.line_min_salary.clear()
         self.line_max_salary.clear()
         self.line_location.clear()
         self.line_count.clear()
         self.line_deadline.clear()
         self.plain_desc.clear()
+        self.plain_duties.clear()
+        self.plain_requirements.clear()
+        self.plain_soft_skills.clear()
+        self.plain_benefits.clear()
 
         msg = ("Đã lưu bản nháp thành công!" if draft
                else "Tin đã gửi Admin duyệt thành công!")
@@ -2380,10 +2801,11 @@ class HRDashboard:
 
     def _fill_jobs_table(self) -> None:
         try:
-            self._jobs_data = list(jobhub_api.hr_my_jobs())
+            self._jobs_all_data = list(jobhub_api.hr_my_jobs())
         except ApiError as e:
             QMessageBox.warning(self.win, "Lỗi", str(e))
-            self._jobs_data = []
+            self._jobs_all_data = []
+        self._jobs_data = list(self._jobs_all_data)
         self._jobs_page = 0
         self._render_jobs_page()
 
@@ -2394,7 +2816,7 @@ class HRDashboard:
 
     def _filter_jobs(self, text: str) -> None:
         kw = text.strip().lower()
-        all_jobs = list(self._jobs_data)
+        all_jobs = list(getattr(self, "_jobs_all_data", self._jobs_data))
 
         # ── Status filter ────────────────────────────────────
         _STATUS_MAP = {
@@ -2450,6 +2872,7 @@ class HRDashboard:
         self._render_jobs(self._jobs_data[start: start + _PAGE_SIZE])
         # Badge shows TOTAL filtered count
         self._lbl_job_count.setText(f"  {total} tin  ")
+        self._jobs_no_result_lbl.setVisible(total == 0)
         self._update_jobs_pag(n_pages, total)
 
     def _go_jobs_page(self, n: int) -> None:
@@ -2567,7 +2990,7 @@ class HRDashboard:
             tbl.setCellWidget(row, 5, badge_wrap)
 
             # ── Action buttons ───────────────────────────────
-            tbl.setCellWidget(row, 6, self._make_job_actions(j["id"]))
+            tbl.setCellWidget(row, 6, self._make_job_actions(_to_int(j.get("id")), j.get("status", "")))
 
         hh = tbl.horizontalHeader()
         # Cols 1+2 managed proportionally by _jobs_resizer (58 : 42)
@@ -2582,12 +3005,12 @@ class HRDashboard:
         tbl.setColumnWidth(3, 112)
         tbl.setColumnWidth(4, 90)
         tbl.setColumnWidth(5, 136)
-        tbl.setColumnWidth(6, 118)
+        tbl.setColumnWidth(6, 160)
         # Fix height to exactly fit rows — no empty space
-        tbl.setFixedHeight(44 + len(jobs) * 54 + 2)
+        tbl.setFixedHeight(max(260, 44 + len(jobs) * 54 + 2))
         self._jobs_resizer._apply()   # set proportional widths immediately
 
-    def _make_job_actions(self, job_id: int) -> QWidget:
+    def _make_job_actions(self, job_id: int, status: str = "") -> QWidget:
         """Three icon-only action buttons per row with tooltip labels + toasts."""
         wrap = QWidget()
         wrap.setStyleSheet("background:transparent;")
@@ -2625,6 +3048,7 @@ class HRDashboard:
 
         btn_edit = _ic_btn("ic_edit.svg",   "#6366f1", "#ede9fe", "Chỉnh sửa tin")
         btn_view = _ic_btn("ic_view.svg",   "#0ea5e9", "#e0f2fe", "Xem chi tiết")
+        btn_submit = _ic_btn("ic_check.svg", "#10b981", "#d1fae5", "Gửi Admin duyệt")
         btn_del  = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Xoá tin")
 
         # ── Edit dialog ──────────────────────────────────────────
@@ -2639,7 +3063,7 @@ class HRDashboard:
                 return
 
             dlg = QDialog(self.win)
-            dlg.setWindowTitle(f"✏️ Chỉnh sửa tin — #{_jid}")
+            dlg.setWindowTitle(f"Chỉnh sửa tin - #{_jid}")
             dlg.setMinimumWidth(540)
             dlg.setStyleSheet(
                 f"QDialog{{background:{CONTENT_BG};border-radius:12px;}}"
@@ -2656,7 +3080,7 @@ class HRDashboard:
             vlo.setSpacing(16)
 
             # Header
-            h_lbl = QLabel(f"✏️  Chỉnh sửa tin đăng  #{_jid}")
+            h_lbl = QLabel(f"Chỉnh sửa tin đăng #{_jid}")
             h_lbl.setStyleSheet(
                 f"color:{TXT_H};font-size:16px;font-weight:700;"
                 f"background:transparent;border:none;padding-bottom:8px;"
@@ -2681,60 +3105,93 @@ class HRDashboard:
                 )
                 return l
 
+            _LEVELS = ["Nhân viên", "Trưởng nhóm", "Quản lý", "Giám đốc", "Thực tập sinh"]
+            _TYPES  = ["Toàn thời gian", "Bán thời gian", "Remote", "Hybrid", "Hợp đồng"]
+
             # Row 0: title
             grid.addWidget(_lbl("Tiêu đề *"), 0, 0, 1, 2)
             e_title = QLineEdit(job.get("title", ""))
             e_title.setPlaceholderText("Tiêu đề vị trí tuyển dụng")
             grid.addWidget(e_title, 1, 0, 1, 2)
 
-            # Row 2: level | job_type
-            grid.addWidget(_lbl("Cấp độ"), 2, 0)
-            grid.addWidget(_lbl("Loại hình"), 2, 1)
+            # Row 2: department
+            grid.addWidget(_lbl("Phòng ban / Bộ phận"), 2, 0, 1, 2)
+            e_dept = QLineEdit(job.get("department", ""))
+            e_dept.setPlaceholderText("Ví dụ: Kỹ thuật & Công nghệ, Marketing…")
+            grid.addWidget(e_dept, 3, 0, 1, 2)
+
+            # Row 4: level | job_type
+            grid.addWidget(_lbl("Cấp bậc"), 4, 0)
+            grid.addWidget(_lbl("Loại hình làm việc"), 4, 1)
             c_level = QComboBox()
-            c_level.addItems(["Intern", "Junior", "Mid", "Senior", "Lead", "Manager"])
+            c_level.addItems(_LEVELS)
             cur_lv = job.get("level", "")
             idx = c_level.findText(cur_lv)
             if idx >= 0: c_level.setCurrentIndex(idx)
             c_type = QComboBox()
-            c_type.addItems(["Full-time", "Part-time", "Remote", "Hybrid", "Contract"])
+            c_type.addItems(_TYPES)
             cur_jt = job.get("job_type", "")
             idx2 = c_type.findText(cur_jt)
             if idx2 >= 0: c_type.setCurrentIndex(idx2)
-            grid.addWidget(c_level, 3, 0)
-            grid.addWidget(c_type, 3, 1)
+            grid.addWidget(c_level, 5, 0)
+            grid.addWidget(c_type, 5, 1)
 
-            # Row 4: min/max salary
-            grid.addWidget(_lbl("Lương tối thiểu (VNĐ)"), 4, 0)
-            grid.addWidget(_lbl("Lương tối đa (VNĐ)"), 4, 1)
+            # Row 6: min/max salary
+            grid.addWidget(_lbl("Lương tối thiểu (VNĐ)"), 6, 0)
+            grid.addWidget(_lbl("Lương tối đa (VNĐ)"), 6, 1)
             e_min_sal = QLineEdit(str(job.get("min_salary") or ""))
             e_min_sal.setPlaceholderText("VD: 15000000")
             e_max_sal = QLineEdit(str(job.get("max_salary") or ""))
             e_max_sal.setPlaceholderText("VD: 25000000")
-            grid.addWidget(e_min_sal, 5, 0)
-            grid.addWidget(e_max_sal, 5, 1)
+            grid.addWidget(e_min_sal, 7, 0)
+            grid.addWidget(e_max_sal, 7, 1)
 
-            # Row 6: location | count
-            grid.addWidget(_lbl("Địa điểm"), 6, 0)
-            grid.addWidget(_lbl("Số lượng"), 6, 1)
+            # Row 8: location | count
+            grid.addWidget(_lbl("Địa điểm làm việc"), 8, 0)
+            grid.addWidget(_lbl("Số lượng tuyển"), 8, 1)
             e_loc = QLineEdit(job.get("location", ""))
             e_loc.setPlaceholderText("Hà Nội, TP.HCM…")
             e_count = QLineEdit(str(job.get("count", 1)))
             e_count.setPlaceholderText("1")
-            grid.addWidget(e_loc, 7, 0)
-            grid.addWidget(e_count, 7, 1)
+            grid.addWidget(e_loc, 9, 0)
+            grid.addWidget(e_count, 9, 1)
 
-            # Row 8: deadline
-            grid.addWidget(_lbl("Hạn nộp"), 8, 0, 1, 2)
+            # Row 10: deadline
+            grid.addWidget(_lbl("Hạn nộp hồ sơ"), 10, 0, 1, 2)
             e_dead = QLineEdit(job.get("deadline", ""))
             e_dead.setPlaceholderText("DD/MM/YYYY")
-            grid.addWidget(e_dead, 9, 0, 1, 2)
+            grid.addWidget(e_dead, 11, 0, 1, 2)
 
-            # Row 10: description
-            grid.addWidget(_lbl("Mô tả công việc"), 10, 0, 1, 2)
-            e_desc = QPlainTextEdit(job.get("description", ""))
-            e_desc.setFixedHeight(100)
-            e_desc.setPlaceholderText("Mô tả chi tiết vị trí tuyển dụng…")
-            grid.addWidget(e_desc, 11, 0, 1, 2)
+            # Row 12: description (decoded from structured blob)
+            _sd = _decode_desc(job.get("description", ""))
+            grid.addWidget(_lbl("Mô tả chung"), 12, 0, 1, 2)
+            e_desc = QPlainTextEdit(_sd.get("desc", ""))
+            e_desc.setFixedHeight(90)
+            e_desc.setPlaceholderText("Mô tả tổng quan vị trí tuyển dụng…")
+            grid.addWidget(e_desc, 13, 0, 1, 2)
+
+            grid.addWidget(_lbl("Nhiệm vụ chính  (mỗi dòng = 1 nhiệm vụ)"), 14, 0, 1, 2)
+            e_duties = QPlainTextEdit("\n".join(_sd.get("duties", [])))
+            e_duties.setFixedHeight(80)
+            e_duties.setPlaceholderText("Mỗi dòng là một nhiệm vụ chính…")
+            grid.addWidget(e_duties, 15, 0, 1, 2)
+
+            grid.addWidget(_lbl("Yêu cầu chuyên môn"), 16, 0)
+            grid.addWidget(_lbl("Kỹ năng mềm"), 16, 1)
+            e_reqs = QPlainTextEdit("\n".join(_sd.get("requirements", [])))
+            e_reqs.setFixedHeight(80)
+            e_reqs.setPlaceholderText("Mỗi dòng là một yêu cầu…")
+            e_soft = QPlainTextEdit("\n".join(_sd.get("soft_skills", [])))
+            e_soft.setFixedHeight(80)
+            e_soft.setPlaceholderText("Mỗi dòng là một kỹ năng…")
+            grid.addWidget(e_reqs, 17, 0)
+            grid.addWidget(e_soft, 17, 1)
+
+            grid.addWidget(_lbl("Quyền lợi & Phúc lợi  (mỗi dòng = 1 quyền lợi)"), 18, 0, 1, 2)
+            e_benefits = QPlainTextEdit("\n".join(_sd.get("benefits", [])))
+            e_benefits.setFixedHeight(80)
+            e_benefits.setPlaceholderText("Mỗi dòng là một quyền lợi…")
+            grid.addWidget(e_benefits, 19, 0, 1, 2)
 
             vlo.addLayout(grid)
 
@@ -2748,7 +3205,9 @@ class HRDashboard:
                 "border:none;border-radius:8px;padding:0 20px;font-size:13px;}}"
                 "QPushButton:hover{background:#e2e8f0;}"
             )
-            btn_save = QPushButton("💾  Lưu thay đổi")
+            btn_save = QPushButton("Lưu thay đổi")
+            btn_save.setIcon(QIcon(_svg_pm("ic_check.svg", 15, "#ffffff")))
+            btn_save.setIconSize(QSize(15, 15))
             btn_save.setFixedHeight(36)
             btn_save.setStyleSheet(
                 f"QPushButton{{background:{P};color:#ffffff;"
@@ -2762,13 +3221,24 @@ class HRDashboard:
             vlo.addLayout(btn_row)
 
             def _save():
+                salary_pair = self._validate_salary_pair(e_min_sal.text(), e_max_sal.text(), dlg)
+                if not salary_pair:
+                    return
+                min_salary, max_salary = salary_pair
+                encoded = _encode_desc(
+                    e_desc.toPlainText().strip(),
+                    e_duties.toPlainText().strip(),
+                    e_reqs.toPlainText().strip(),
+                    e_soft.toPlainText().strip(),
+                    e_benefits.toPlainText().strip(),
+                )
                 payload = {
                     "title": e_title.text().strip() or job.get("title", ""),
-                    "description": e_desc.toPlainText().strip() or job.get("description"),
-                    "department": job.get("department") or "Kỹ thuật & Công nghệ",
+                    "description": encoded,
+                    "department": e_dept.text().strip() or job.get("department") or "Kỹ thuật & Công nghệ",
                     "level": c_level.currentText(),
-                    "min_salary": int(e_min_sal.text()) if e_min_sal.text().isdigit() else None,
-                    "max_salary": int(e_max_sal.text()) if e_max_sal.text().isdigit() else None,
+                    "min_salary": min_salary,
+                    "max_salary": max_salary,
                     "location": e_loc.text().strip() or job.get("location"),
                     "job_type": c_type.currentText(),
                     "count": int(e_count.text()) if e_count.text().isdigit() else int(job.get("count") or 1),
@@ -2784,7 +3254,7 @@ class HRDashboard:
                 self._fill_jobs_table()
                 _saved_title = e_title.text().strip()
                 self._show_toast(
-                    f'Đã lưu thay đổi tin \u201c{_saved_title}\u201d',
+                    f'Đã lưu thay đổi tin "{_saved_title}"',
                     "ic_check.svg", "#10b981"
                 )
 
@@ -2803,130 +3273,229 @@ class HRDashboard:
                 return
 
             dlg = QDialog(self.win)
-            dlg.setWindowTitle(f"👁️ Chi tiết tin — #{_jid}")
-            dlg.setMinimumWidth(480)
+            dlg.setWindowTitle(f"Chi tiết tin tuyển dụng — #{_jid}")
+            dlg.setMinimumWidth(620)
+            dlg.setMaximumWidth(700)
+            dlg.resize(660, 680)
             dlg.setStyleSheet(
                 f"QDialog{{background:{CONTENT_BG};}}"
-                f"QLabel{{color:{TXT_H};background:transparent;border:none;}}"
+                "QLabel{background:transparent;border:none;}"
+                f"QScrollArea{{background:{CONTENT_BG};border:none;}}"
             )
-            vlo = QVBoxLayout(dlg)
-            vlo.setContentsMargins(24, 20, 24, 20)
-            vlo.setSpacing(12)
 
-            # Title
-            t = QLabel(job.get("title", "—"))
-            t.setStyleSheet(
-                f"color:{TXT_H};font-size:18px;font-weight:700;"
-                "background:transparent;border:none;"
-            )
-            vlo.addWidget(t)
+            scroll = QScrollArea(dlg)
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            inner = QWidget()
+            inner.setStyleSheet(f"background:{CONTENT_BG};")
+            vlo = QVBoxLayout(inner)
+            vlo.setContentsMargins(24, 20, 24, 24)
+            vlo.setSpacing(14)
+            scroll.setWidget(inner)
+            outer_lo = QVBoxLayout(dlg)
+            outer_lo.setContentsMargins(0, 0, 0, 0)
+            outer_lo.addWidget(scroll)
 
-            c = QLabel(f"🏢  {job.get('company_name','—')}  ·  {job.get('department','—')}")
-            c.setStyleSheet(f"color:{TXT_M};font-size:13px;background:transparent;border:none;")
-            vlo.addWidget(c)
-
-            div = QFrame(); div.setFixedHeight(1)
-            div.setStyleSheet(f"background:{BORDER};border:none;margin:4px 0;")
-            vlo.addWidget(div)
-
-            STATUS_COLORS = {
-                "published":        ("#d1fae5", "#059669"),
-                "pending_approval": ("#fef3c7", "#d97706"),
-                "draft":            ("#f1f5f9", "#64748b"),
-                "rejected":         ("#fee2e2", "#dc2626"),
+            _ST_MAP = {
+                "published":        ("Đang tuyển", "#d1fae5", "#059669"),
+                "pending_approval": ("Chờ duyệt",  "#fef3c7", "#d97706"),
+                "draft":            ("Bản nháp",    "#f1f5f9", "#64748b"),
+                "rejected":         ("Vi phạm",     "#fee2e2", "#dc2626"),
+                "closed":           ("Đã đóng",     "#f1f5f9", "#374151"),
             }
             st = job.get("status", "")
-            st_bg, st_fg = STATUS_COLORS.get(st, ("#f1f5f9", "#64748b"))
-            st_lbl = QLabel(st.replace("_", " ").title())
-            st_lbl.setFixedHeight(24)
-            st_lbl.setStyleSheet(
+            st_txt, st_bg, st_fg = _ST_MAP.get(st, (st, "#f1f5f9", "#64748b"))
+
+            # ── HERO CARD ────────────────────────────────────────
+            hero = QFrame()
+            hero.setStyleSheet(
+                f"QFrame{{background:#ffffff;border-radius:16px;"
+                f"border:1.5px solid {BORDER};}}"
+            )
+            _shadow(hero, 12, 4, 12)
+            hero_lo = QHBoxLayout(hero)
+            hero_lo.setContentsMargins(20, 18, 20, 18)
+            hero_lo.setSpacing(18)
+
+            comp_name = job.get("company_name", "?")
+            logo_lbl = QLabel((comp_name[0] if comp_name else "?").upper())
+            logo_lbl.setFixedSize(60, 60)
+            logo_lbl.setAlignment(Qt.AlignCenter)
+            logo_lbl.setStyleSheet(
+                f"background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+                f"stop:0 {P},stop:1 {P_DARK});"
+                "color:#ffffff;border-radius:14px;"
+                "font-size:24px;font-weight:800;border:none;"
+            )
+            title_col = QVBoxLayout()
+            title_col.setSpacing(4)
+            h1 = QLabel(job.get("title", "—"))
+            h1.setWordWrap(True)
+            h1.setStyleSheet(
+                f"color:{TXT_H};font-size:20px;font-weight:800;"
+                "background:transparent;border:none;"
+            )
+            comp_row_h = QHBoxLayout()
+            comp_row_h.setSpacing(6)
+            comp_l = QLabel(comp_name)
+            comp_l.setStyleSheet(
+                f"color:{P};font-size:13px;font-weight:700;"
+                "background:transparent;border:none;"
+            )
+            comp_row_h.addWidget(comp_l)
+            dept_str = job.get("department", "")
+            if dept_str:
+                dot = QLabel("·")
+                dot.setStyleSheet(f"color:{TXT_M};background:transparent;border:none;")
+                dept_l = QLabel(dept_str)
+                dept_l.setStyleSheet(
+                    f"color:{TXT_M};font-size:13px;background:transparent;border:none;"
+                )
+                comp_row_h.addWidget(dot)
+                comp_row_h.addWidget(dept_l)
+            comp_row_h.addStretch()
+            st_badge = QLabel(st_txt)
+            st_badge.setFixedHeight(22)
+            st_badge.setStyleSheet(
                 f"background:{st_bg};color:{st_fg};"
-                "border-radius:10px;padding:0 10px;"
+                "border-radius:11px;padding:0 10px;"
                 "font-size:11px;font-weight:700;border:none;"
             )
+            title_col.addWidget(h1)
+            title_col.addLayout(comp_row_h)
+            title_col.addWidget(st_badge)
+            hero_lo.addWidget(logo_lbl, 0, Qt.AlignTop)
+            hero_lo.addLayout(title_col, 1)
+            vlo.addWidget(hero)
 
-            # Info chips row
-            chips_row = QHBoxLayout()
-            chips_row.setSpacing(8)
-            chips_row.addWidget(st_lbl)
-            chips_row.addStretch()
-            vlo.addLayout(chips_row)
-
-            # Details grid
-            fields = [
-                ("📍 Địa điểm",   job.get("location",    "—")),
-                ("💰 Lương",       job.get("salary_text", "—")),
-                ("🧑‍💼 Cấp độ",     job.get("level",       "—")),
-                ("🕐 Loại hình",   job.get("job_type",    "—")),
-                ("👥 Số lượng",    str(job.get("count",   "—"))),
-                ("📅 Hạn nộp",     job.get("deadline",    "—")),
-                ("📊 Ứng viên",    str(job.get("applicants_count", 0))),
-                ("🗓️ Đăng ngày",   job.get("created_at",  "—")),
-            ]
-            grid = QGridLayout()
-            grid.setHorizontalSpacing(20)
-            grid.setVerticalSpacing(6)
-            for i, (k, v) in enumerate(fields):
-                r, c2 = divmod(i, 2)
-                key_l = QLabel(k)
-                key_l.setStyleSheet(
-                    f"color:{TXT_M};font-size:12px;background:transparent;border:none;"
-                )
-                val_l = QLabel(f"<b>{v}</b>")
-                val_l.setTextFormat(Qt.RichText)
-                val_l.setStyleSheet(
-                    f"color:{TXT_H};font-size:13px;background:transparent;border:none;"
-                )
-                sub = QVBoxLayout()
-                sub.setSpacing(2)
-                sub.addWidget(key_l)
-                sub.addWidget(val_l)
-                grid.addLayout(sub, r, c2)
-            vlo.addLayout(grid)
-
-            # Description
-            desc_hdr = QLabel("📄  Mô tả")
-            desc_hdr.setStyleSheet(
-                f"color:{TXT_S};font-size:12px;font-weight:700;"
-                "background:transparent;border:none;margin-top:8px;"
+            # ── INFO CHIPS GRID ──────────────────────────────────
+            chips_frame = QFrame()
+            chips_frame.setStyleSheet(
+                f"QFrame{{background:#ffffff;border-radius:14px;"
+                f"border:1.5px solid {BORDER};}}"
             )
-            vlo.addWidget(desc_hdr)
-            desc_txt = QLabel(job.get("description", "—")[:400] + ("…" if len(job.get("description","")) > 400 else ""))
-            desc_txt.setWordWrap(True)
-            desc_txt.setStyleSheet(
-                f"color:{TXT_S};font-size:12px;background:#f8fafc;"
-                "border-radius:8px;padding:10px;border:none;"
-            )
-            vlo.addWidget(desc_txt)
+            chips_lo = QGridLayout(chips_frame)
+            chips_lo.setContentsMargins(16, 14, 16, 14)
+            chips_lo.setSpacing(10)
+            for chip_title, chip_val, chip_accent, r, c in [
+                ("Mức lương",  job.get("salary_text", "—"),           P,        0, 0),
+                ("Loại hình",  job.get("job_type",    "—"),            "#374151", 0, 1),
+                ("Địa điểm",  job.get("location",    "—"),            "#374151", 1, 0),
+                ("Cấp bậc",   job.get("level",       "—"),            "#6366f1", 1, 1),
+                ("Số lượng",  f"{job.get('count','—')} vị trí",       "#059669", 2, 0),
+                ("Hạn nộp",   job.get("deadline",    "—"),            "#d97706", 2, 1),
+            ]:
+                chip = QFrame()
+                chip.setStyleSheet(
+                    f"QFrame{{background:#f8fafc;border:1px solid {BORDER};"
+                    "border-radius:10px;}}"
+                )
+                chip.setFixedHeight(52)
+                chip_vlo = QVBoxLayout(chip)
+                chip_vlo.setContentsMargins(10, 6, 10, 6)
+                chip_vlo.setSpacing(1)
+                ct = QLabel(chip_title)
+                ct.setStyleSheet(
+                    f"color:{TXT_M};font-size:10px;font-weight:600;"
+                    "letter-spacing:0.4px;background:transparent;border:none;"
+                )
+                cv = QLabel(chip_val or "—")
+                cv.setStyleSheet(
+                    f"color:{chip_accent};font-size:12px;font-weight:700;"
+                    "background:transparent;border:none;"
+                )
+                chip_vlo.addWidget(ct)
+                chip_vlo.addWidget(cv)
+                chips_lo.addWidget(chip, r, c)
+            vlo.addWidget(chips_frame)
 
-            # Close btn
+            # ── META BAR ─────────────────────────────────────────
+            meta_row = QHBoxLayout()
+            meta_row.setSpacing(20)
+            meta_row.setContentsMargins(4, 0, 0, 0)
+            created_at = job.get("created_at", "")
+            applicants = job.get("applicants_count", 0)
+            for icon_svg, meta_txt, meta_color in [
+                ("ic_jobs.svg",  f"Đăng ngày {created_at}" if created_at else "Mới đăng", TXT_M),
+                ("ic_user.svg",  f"{applicants} ứng viên đã ứng tuyển", P if applicants > 0 else TXT_M),
+                ("ic_check.svg", "Nhà tuyển dụng đã xác minh", "#059669"),
+            ]:
+                mr = QHBoxLayout()
+                mr.setSpacing(5)
+                mi = QLabel()
+                mi.setFixedSize(13, 13)
+                mi.setPixmap(_svg_pm(icon_svg, 13, meta_color))
+                mi.setStyleSheet("background:transparent;border:none;")
+                mt = QLabel(meta_txt)
+                mt.setStyleSheet(
+                    f"color:{meta_color};font-size:12px;"
+                    "background:transparent;border:none;"
+                )
+                mr.addWidget(mi)
+                mr.addWidget(mt)
+                meta_row.addLayout(mr)
+            meta_row.addStretch()
+            vlo.addLayout(meta_row)
+
+            # ── DESCRIPTION CARD ─────────────────────────────────
+            desc_card = QFrame()
+            desc_card.setStyleSheet(
+                f"QFrame{{background:#ffffff;border-radius:14px;"
+                f"border:1.5px solid {BORDER};}}"
+            )
+            _shadow(desc_card, 8, 3, 8)
+            desc_card_lo = QVBoxLayout(desc_card)
+            desc_card_lo.setContentsMargins(20, 16, 20, 16)
+            desc_card_lo.setSpacing(10)
+            desc_hdr_lbl = QLabel("Mô tả công việc")
+            desc_hdr_lbl.setStyleSheet(
+                f"color:{TXT_H};font-size:15px;font-weight:800;"
+                "background:transparent;border:none;"
+            )
+            desc_card_lo.addWidget(desc_hdr_lbl)
+            div2 = QFrame(); div2.setFixedHeight(1)
+            div2.setStyleSheet(f"QFrame{{background:{BORDER};border:none;}}")
+            desc_card_lo.addWidget(div2)
+            raw_desc = (job.get("description") or "").strip()
+            desc_lbl = QLabel(raw_desc if raw_desc else "Chưa có mô tả.")
+            desc_lbl.setWordWrap(True)
+            desc_lbl.setTextFormat(Qt.PlainText)
+            desc_lbl.setStyleSheet(
+                f"color:{TXT_S};font-size:13px;"
+                "background:transparent;border:none;"
+            )
+            desc_card_lo.addWidget(desc_lbl)
+            vlo.addWidget(desc_card)
+
+            # ── CLOSE BUTTON ─────────────────────────────────────
             close_btn = QPushButton("Đóng")
-            close_btn.setFixedHeight(36)
+            close_btn.setFixedHeight(40)
+            close_btn.setCursor(Qt.PointingHandCursor)
             close_btn.setStyleSheet(
                 f"QPushButton{{background:{P};color:#ffffff;"
-                "border:none;border-radius:8px;padding:0 24px;"
-                "font-size:13px;font-weight:600;}}"
+                "border:none;border-radius:10px;padding:0 28px;"
+                "font-size:14px;font-weight:600;}}"
                 f"QPushButton:hover{{background:{P_DARK};}}"
             )
             close_btn.clicked.connect(dlg.accept)
-            btn_row = QHBoxLayout()
-            btn_row.addStretch()
-            btn_row.addWidget(close_btn)
-            vlo.addLayout(btn_row)
+            close_row = QHBoxLayout()
+            close_row.addStretch()
+            close_row.addWidget(close_btn)
+            vlo.addLayout(close_row)
 
             dlg.exec()
-            _vt = job.get('title', '')
+            _vt = job.get("title", "")
             self._show_toast(
-                f'\u201c{_vt}\u201d \u2014 \u0111\u00e3 xem chi ti\u1ebft',
+                f'"{_vt}" — đã xem chi tiết',
                 "ic_view.svg", "#0ea5e9"
             )
-
         # ── Delete ───────────────────────────────────────────────
         def _do_delete(_jid=job_id):
             job = next((j for j in self._jobs_data if j.get("id") == _jid), None)
             job_title = job.get("title", f"#{_jid}") if job else f"#{_jid}"
             ret = QMessageBox.question(
-                self.win, "🗑️  Xác nhận xoá",
+                self.win, "Xác nhận xoá",
                 f"Bạn có chắc muốn xoá tin:\n\"{job_title}\"?\n\nThao tác này không thể hoàn tác.",
                 QMessageBox.Yes | QMessageBox.No,
             )
@@ -2942,12 +3511,38 @@ class HRDashboard:
                     "ic_delete.svg", "#ef4444"
                 )
 
-        btn_edit.clicked.connect(_do_edit)
-        btn_view.clicked.connect(_do_view)
-        btn_del.clicked.connect(_do_delete)
+        def _do_submit(_jid=job_id):
+            try:
+                job = jobhub_api.hr_get_job(_jid)
+            except ApiError as e:
+                self._show_toast(str(e), "ic_x.svg", "#ef4444")
+                return
+            if not self._validate_salary_pair(str(job.get("min_salary") or ""), str(job.get("max_salary") or "")):
+                return
+            ret = QMessageBox.question(
+                self.win, "Gửi duyệt tin",
+                f"Gửi tin #{_jid} cho Admin phê duyệt?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if ret != QMessageBox.Yes:
+                return
+            try:
+                jobhub_api.hr_submit_job(_jid)
+            except ApiError as e:
+                self._show_toast(str(e), "ic_x.svg", "#ef4444")
+                return
+            self._fill_jobs_table()
+            self._show_toast("Đã gửi tin cho Admin duyệt", "ic_check.svg", "#10b981")
+
+        btn_edit.clicked.connect(lambda _=False: _do_edit())
+        btn_view.clicked.connect(lambda _=False: _do_view())
+        btn_submit.clicked.connect(lambda _=False: _do_submit())
+        btn_del.clicked.connect(lambda _=False: _do_delete())
 
         lo.addWidget(btn_edit)
         lo.addWidget(btn_view)
+        if status in {"draft", "rejected"}:
+            lo.addWidget(btn_submit)
         lo.addWidget(btn_del)
         lo.addStretch()
         return wrap
@@ -3027,6 +3622,7 @@ class HRDashboard:
         tbl.setRowCount(len(page_apps))
 
         self._lbl_cand_count.setText(f"  {total} ứng viên  ")
+        self._cands_no_result_lbl.setVisible(total == 0)
 
         for row, a in enumerate(page_apps):
             # Col 0: Avatar + name + email
@@ -3077,6 +3673,7 @@ class HRDashboard:
                 self._make_cand_actions(
                     a["application_id"],
                     a.get("cv_name", ""),
+                    a.get("status", ""),
                 )
             )
 
@@ -3089,9 +3686,9 @@ class HRDashboard:
         hh.setSectionResizeMode(4, QHeaderView.Fixed)
         tbl.setColumnWidth(2, 140)
         tbl.setColumnWidth(3, 136)
-        tbl.setColumnWidth(4, 120)
+        tbl.setColumnWidth(4, 168)
         # Fix height to exactly fit rows — no empty space
-        tbl.setFixedHeight(44 + len(page_apps) * 62 + 2)
+        tbl.setFixedHeight(max(260, 44 + len(page_apps) * 62 + 2))
         self._cands_resizer._apply()
 
         self._update_cands_pagination(n_pages, total)
@@ -3144,7 +3741,7 @@ class HRDashboard:
         lo.addLayout(txt_col, 1)
         return wrap
 
-    def _make_cand_actions(self, app_id: int, cv_name: str) -> QWidget:
+    def _make_cand_actions(self, app_id: int, cv_name: str, status: str = "") -> QWidget:
         """Three icon-only action buttons: view CV / approve / reject."""
         wrap = QWidget()
         wrap.setStyleSheet("background:transparent;")
@@ -3180,11 +3777,15 @@ class HRDashboard:
             return btn
 
         btn_cv  = _ic_btn("ic_view.svg",   "#0ea5e9", "#e0f2fe", f"Xem CV: {cv_name}")
+        btn_dl  = _ic_btn("ic_download.svg", "#6366f1", "#ede9fe", "Tải CV")
         btn_ok  = _ic_btn("ic_check.svg",  "#10b981", "#d1fae5", "Phê duyệt")
         btn_rej = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Từ chối")
 
         btn_cv.clicked.connect(
-            lambda _=False, _aid=app_id: self._hr_set_status(_aid, "reviewed")
+            lambda _=False, _aid=app_id, _cv=cv_name, _st=status: self._open_application_cv(_aid, _cv, _st)
+        )
+        btn_dl.clicked.connect(
+            lambda _=False, _aid=app_id, _cv=cv_name: self._download_application_cv(_aid, _cv)
         )
         btn_ok.clicked.connect(
             lambda _=False, _aid=app_id: self._hr_set_status(_aid, "approved")
@@ -3192,14 +3793,79 @@ class HRDashboard:
         btn_rej.clicked.connect(
             lambda _=False, _aid=app_id: self._hr_set_status(_aid, "rejected")
         )
+        if status == "approved":
+            btn_ok.setEnabled(False)
+            btn_ok.setToolTip("Đơn đã được phê duyệt")
+        elif status == "rejected":
+            btn_rej.setEnabled(False)
+            btn_rej.setToolTip("Đơn đã bị từ chối")
 
         lo.addWidget(btn_cv)
+        lo.addWidget(btn_dl)
         lo.addWidget(btn_ok)
         lo.addWidget(btn_rej)
         lo.addStretch()
         return wrap
 
     # ── Status update (approve / reject / review) ─────────────
+    def _open_bytes_file(self, data: bytes, suggested_name: str | None, fallback: str = "cv.pdf") -> Path:
+        import os as _os
+        import subprocess as _sub
+        import sys as _sys
+        import tempfile
+
+        fname = suggested_name or fallback
+        suffix = Path(fname).suffix or ".pdf"
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp.write(data)
+        tmp.flush()
+        tmp.close()
+        path = Path(tmp.name)
+        if _sys.platform.startswith("win"):
+            _os.startfile(str(path))
+        elif _sys.platform == "darwin":
+            _sub.Popen(["open", str(path)])
+        else:
+            _sub.Popen(["xdg-open", str(path)])
+        return path
+
+    def _open_application_cv(self, app_id: int, cv_name: str = "", status: str = "") -> None:
+        try:
+            cv_bytes, suggested_name = jobhub_api.hr_view_application_cv(app_id)
+            self._open_bytes_file(cv_bytes, suggested_name or cv_name)
+            if status == "pending":
+                try:
+                    jobhub_api.hr_update_application_status(app_id, "reviewed")
+                    self._fill_cands_table()
+                except ApiError:
+                    pass
+            self._show_toast(f"Đã mở CV đơn #{app_id}", "ic_view.svg", "#0ea5e9")
+        except ApiError as e:
+            self._show_toast(str(e), "ic_x.svg", "#ef4444")
+        except Exception:
+            self._show_toast("Không thể mở CV trên máy hiện tại.", "ic_x.svg", "#ef4444")
+
+    def _download_application_cv(self, app_id: int, cv_name: str = "") -> None:
+        try:
+            cv_bytes, suggested_name = jobhub_api.hr_download_application_cv(app_id)
+        except ApiError as e:
+            self._show_toast(str(e), "ic_x.svg", "#ef4444")
+            return
+
+        from PySide6.QtWidgets import QFileDialog
+        default_name = suggested_name or cv_name or f"cv_{app_id}.pdf"
+        save_path, _ = QFileDialog.getSaveFileName(
+            self.win, "Lưu CV ứng viên", default_name, "PDF/Document (*.pdf *.doc *.docx);;Tất cả tệp (*)"
+        )
+        if not save_path:
+            return
+        try:
+            Path(save_path).write_bytes(cv_bytes)
+        except OSError as e:
+            self._show_toast(f"Không thể lưu CV: {e}", "ic_x.svg", "#ef4444")
+            return
+        self._show_toast("Đã tải CV ứng viên", "ic_download.svg", "#6366f1")
+
     _STATUS_LABEL_VI: dict[str, str] = {
         "reviewed": "Đã xem",
         "approved": "Phê duyệt",
@@ -3207,7 +3873,7 @@ class HRDashboard:
     }
     _STATUS_CONFIRM: dict[str, str] = {
         "reviewed": "Đánh dấu đã xem xét đơn #{id}?",
-        "approved": "Phê duyệt đơn ứng tuyển #{id}?",
+        "approved": "Phê duyệt đơn ứng tuyển #{id}? Sau khi phê duyệt, phí tuyển dụng sẽ được tính vào hóa đơn hiện tại.",
         "rejected": "Từ chối đơn ứng tuyển #{id}?",
     }
 

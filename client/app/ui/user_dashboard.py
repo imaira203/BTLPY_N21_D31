@@ -1,6 +1,7 @@
 """UserDashboard — pure Python, không dùng .ui file."""
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,19 @@ _NAV_ACTIVE   = "#6366f1"
 _NAV_HOVER_BG = "#f1f5f9"
 _NAV_INACT_IC = "#64748b"
 _NAV_INACT_TX = "#64748b"
+_DESC_MARKER = "__JH_V1__"
+
+
+def _decode_job_desc(raw: str | None) -> dict:
+    raw = (raw or "").strip()
+    if raw.startswith(_DESC_MARKER):
+        try:
+            return json.loads(raw[len(_DESC_MARKER):])
+        except Exception:
+            pass
+    return {"desc": raw, "duties": [], "requirements": [], "soft_skills": [], "benefits": []}
+
+
 _CONTENT_BG   = "#f8fafc"
 _TOPBAR_BG    = "#ffffff"
 _TOPBAR_H     = 72
@@ -2091,11 +2105,37 @@ class UserDashboard:
             row.addWidget(lbl, 1)
             return row
 
+        # ── Parse structured description ─────────────────────
+        _sd = _decode_job_desc(description)
+        _desc_text    = _sd.get("desc", "") or description
+        _duties_list  = _sd.get("duties", [])
+        _req_list     = _sd.get("requirements", [])
+        _soft_list    = _sd.get("soft_skills", [])
+        _benefits_list = _sd.get("benefits", [])
+
+        # Default duties when HR hasn't filled them in
+        _default_duties = [
+            f"Đảm nhận các công việc chuyên môn với cấp bậc {level}.",
+            f"Làm việc tại {loc} theo hình thức {jtype}.",
+            "Phối hợp chặt chẽ với các team liên quan.",
+            "Chủ động cải tiến quy trình và chất lượng sản phẩm.",
+        ]
+        _default_reqs = [
+            f"Phù hợp với cấp bậc: {level}.",
+            "Có kinh nghiệm thực tế trong lĩnh vực liên quan.",
+            "Thành thạo công cụ và quy trình hiện đại.",
+        ]
+        _default_soft = [
+            "Giao tiếp và trình bày hiệu quả.",
+            "Tư duy phân tích và giải quyết vấn đề.",
+            "Làm việc nhóm và hỗ trợ đồng nghiệp.",
+        ]
+
         # ── Description card (real HR text) ─────────────────
         def _desc_content(c_lo):
-            if description:
-                # Show actual description from HR
-                for para in description.split("\n"):
+            desc_body = _desc_text
+            if desc_body:
+                for para in desc_body.split("\n"):
                     para = para.strip()
                     if para:
                         c_lo.addWidget(_body_lbl(para))
@@ -2105,19 +2145,13 @@ class UserDashboard:
                     "Bạn sẽ phối hợp với các kỹ sư và product manager để xây dựng "
                     "những trải nghiệm người dùng chất lượng cao."
                 ))
-            # Key responsibilities header
             kw = QLabel("Nhiệm vụ chính:")
             kw.setStyleSheet(
                 f"color:{_TXT_H}; font-size:13px; font-weight:700;"
                 "border:none; background:transparent;"
             )
             c_lo.addWidget(kw)
-            for b in [
-                f"Đảm nhận các công việc chuyên môn với cấp bậc {level}.",
-                f"Làm việc tại {loc} theo hình thức {jtype}.",
-                "Phối hợp chặt chẽ với các team liên quan.",
-                "Chủ động cải tiến quy trình và chất lượng sản phẩm.",
-            ]:
+            for b in (_duties_list if _duties_list else _default_duties):
                 c_lo.addLayout(_bullet(b))
 
         left.addWidget(_content_card("Mô tả công việc", _desc_content))
@@ -2127,16 +2161,10 @@ class UserDashboard:
             req_row = QHBoxLayout()
             req_row.setSpacing(20)
             for col_title, col_ic, items in [
-                ("Yêu cầu chuyên môn", "ic_jobs.svg", [
-                    f"Phù hợp với cấp bậc: {level}.",
-                    "Có kinh nghiệm thực tế trong lĩnh vực liên quan.",
-                    "Thành thạo công cụ và quy trình hiện đại.",
-                ]),
-                ("Kỹ năng mềm", "ic_user.svg", [
-                    "Giao tiếp và trình bày hiệu quả.",
-                    "Tư duy phân tích và giải quyết vấn đề.",
-                    "Làm việc nhóm và hỗ trợ đồng nghiệp.",
-                ]),
+                ("Yêu cầu chuyên môn", "ic_jobs.svg",
+                 _req_list if _req_list else _default_reqs),
+                ("Kỹ năng mềm", "ic_user.svg",
+                 _soft_list if _soft_list else _default_soft),
             ]:
                 sub = QVBoxLayout()
                 sub.setSpacing(10)
@@ -2178,45 +2206,53 @@ class UserDashboard:
 
         # ── Perks card ───────────────────────────────────────
         def _perks_content(c_lo):
-            perks_grid = QGridLayout()
-            perks_grid.setSpacing(12)
-            perks_data = [
-                ("💰", "Lương cạnh tranh",    sal,                           "#dbeafe", _BLUE),
-                ("🛡️", "Bảo hiểm toàn diện", "Y tế, nha khoa và thị lực",  "#dcfce7", "#16a34a"),
-                ("💻", "Trang bị cao cấp",    "MacBook & workspace stipend", "#f3e8ff", "#9333ea"),
-                ("🕐", "Giờ làm linh hoạt",   jtype,                         "#fef3c7", "#d97706"),
-            ]
-            for i, (ic, name, desc_txt, bg, fgc) in enumerate(perks_data):
-                pf = QFrame()
-                pf.setStyleSheet(
-                    f"QFrame{{background:{bg}; border-radius:12px; border:none;}}"
-                )
-                pf_lo = QHBoxLayout(pf)
-                pf_lo.setContentsMargins(14, 12, 14, 12)
-                pf_lo.setSpacing(12)
-                ic_lbl = QLabel(ic)
-                ic_lbl.setFixedSize(36, 36)
-                ic_lbl.setAlignment(Qt.AlignCenter)
-                ic_lbl.setStyleSheet(
-                    "background:white; border-radius:9px; font-size:16px; border:none;"
-                )
-                txt = QVBoxLayout()
-                txt.setSpacing(2)
-                n = QLabel(name)
-                n.setStyleSheet(
-                    f"color:{_TXT_H}; font-size:12px; font-weight:700;"
-                    "border:none; background:transparent;"
-                )
-                d = QLabel(desc_txt)
-                d.setStyleSheet(
-                    f"color:{_TXT_M}; font-size:11px; border:none; background:transparent;"
-                )
-                txt.addWidget(n)
-                txt.addWidget(d)
-                pf_lo.addWidget(ic_lbl)
-                pf_lo.addLayout(txt, 1)
-                perks_grid.addWidget(pf, i // 2, i % 2)
-            c_lo.addLayout(perks_grid)
+            if _benefits_list:
+                for item in _benefits_list:
+                    row = QHBoxLayout()
+                    row.setSpacing(8)
+                    dot = QLabel("•")
+                    dot.setStyleSheet(f"color:{_BLUE}; font-size:16px; font-weight:700; border:none; background:transparent;")
+                    dot.setFixedWidth(14)
+                    lbl = QLabel(item)
+                    lbl.setWordWrap(True)
+                    lbl.setStyleSheet(f"color:{_TXT_M}; font-size:13px; border:none; background:transparent;")
+                    row.addWidget(dot, 0, Qt.AlignTop)
+                    row.addWidget(lbl, 1)
+                    c_lo.addLayout(row)
+            else:
+                perks_grid = QGridLayout()
+                perks_grid.setSpacing(12)
+                perks_data = [
+                    ("Luong", "Luong canh tranh",    sal,                         "#dbeafe", _BLUE),
+                    ("BH",    "Bao hiem toan dien",  "Y te, nha khoa va thi luc", "#dcfce7", "#16a34a"),
+                    ("TB",    "Trang bi cao cap",    "Thiet bi & khong gian lam", "#f3e8ff", "#9333ea"),
+                    ("GG",    "Gio lam linh hoat",   jtype,                       "#fef3c7", "#d97706"),
+                ]
+                for i, (ic, name, desc_txt, bg, fgc) in enumerate(perks_data):
+                    pf = QFrame()
+                    pf.setStyleSheet(f"QFrame{{background:{bg}; border-radius:12px; border:none;}}")
+                    pf_lo = QHBoxLayout(pf)
+                    pf_lo.setContentsMargins(14, 12, 14, 12)
+                    pf_lo.setSpacing(12)
+                    ic_lbl = QLabel(ic)
+                    ic_lbl.setFixedSize(36, 36)
+                    ic_lbl.setAlignment(Qt.AlignCenter)
+                    ic_lbl.setStyleSheet(
+                        f"background:white; border-radius:9px; font-size:11px;"
+                        f" font-weight:700; color:{fgc}; border:none;"
+                    )
+                    txt = QVBoxLayout()
+                    txt.setSpacing(2)
+                    n = QLabel(name)
+                    n.setStyleSheet(f"color:{_TXT_H}; font-size:12px; font-weight:700; border:none; background:transparent;")
+                    d = QLabel(desc_txt)
+                    d.setStyleSheet(f"color:{_TXT_M}; font-size:11px; border:none; background:transparent;")
+                    txt.addWidget(n)
+                    txt.addWidget(d)
+                    pf_lo.addWidget(ic_lbl)
+                    pf_lo.addLayout(txt, 1)
+                    perks_grid.addWidget(pf, i // 2, i % 2)
+                c_lo.addLayout(perks_grid)
 
         left.addWidget(_content_card("Quyền lợi & Phúc lợi", _perks_content))
         left.addStretch()
@@ -3065,7 +3101,7 @@ class UserDashboard:
         pro_label.setAlignment(Qt.AlignCenter)
         pro_label.setStyleSheet(
             "background:transparent; color:white;"
-            "font-size:11px; font-weight:800; border-top-right-radius:31px; border-bottom-right-radius:31px;"
+            "font-size:11px; font-weight:800; border-radius:10px;"
         )
         pro_lo.addWidget(pro_label)
 

@@ -1326,7 +1326,39 @@ class AdminDashboard:
         v.addLayout(r3)
         return card
 
+    @staticmethod
+    def _salary_number(value) -> int:
+        if value is None:
+            return 0
+        if isinstance(value, (int, float)):
+            return int(value)
+        digits = "".join(ch for ch in str(value) if ch.isdigit())
+        return int(digits) if digits else 0
+
+    def _job_salary_is_valid(self, job: dict) -> bool:
+        min_salary = self._salary_number(job.get("min_salary"))
+        max_salary = self._salary_number(job.get("max_salary"))
+        return min_salary > 0 and max_salary > min_salary
+
+    def _can_approve_job_salary(self, job_id: int, job: dict | None = None) -> bool:
+        if job is None:
+            try:
+                job = jobhub_api.admin_job_detail(job_id)
+            except ApiError as e:
+                _toast(self.win, f"Lỗi: {e}", success=False)
+                return False
+        if self._job_salary_is_valid(job):
+            return True
+        _toast(
+            self.win,
+            "Không thể duyệt: lương tối đa phải lớn hơn lương tối thiểu và cả hai lớn hơn 0.",
+            success=False,
+        )
+        return False
+
     def _approve_job(self, job_id: int) -> None:
+        if not self._can_approve_job_salary(job_id):
+            return
         try:
             jobhub_api.admin_approve_job(job_id)
             _toast(self.win, "Đã phê duyệt tin tuyển dụng", success=True)
@@ -1998,6 +2030,8 @@ class AdminDashboard:
         act_lo.addWidget(act_ttl)
 
         def _do_approve():
+            if not self._can_approve_job_salary(job_id, job):
+                return
             try:
                 jobhub_api.admin_approve_job(job_id)
                 _toast(self.win, "Đã phê duyệt tin tuyển dụng", success=True)
