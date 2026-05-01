@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import (
-    CandidateProfileView,
     CandidateSubscription,
     HRApprovalStatus,
     HRProfile,
     Job,
     JobApplication,
     JobStatus,
+    ProfileView,
     SubscriptionStatus,
     User,
     UserRole,
@@ -38,6 +38,36 @@ def _is_candidate_pro_active(db: Session, candidate_id: int) -> bool:
     if not sub or sub.status != SubscriptionStatus.active or not sub.pro_expires_at:
         return False
     return sub.pro_expires_at > datetime.utcnow()
+
+
+def _to_job_out(job: Job, db: Session, company_name: str | None = None) -> JobOut:
+    if company_name is None:
+        hp = db.scalar(select(HRProfile).where(HRProfile.user_id == job.hr_user_id))
+        company_name = hp.company_name if hp else None
+    raw_status = job.status.value if hasattr(job.status, "value") else str(job.status or "").strip()
+    if raw_status not in {s.value for s in JobStatus}:
+        raw_status = JobStatus.pending_approval.value
+    app_count = db.scalar(select(func.count()).select_from(JobApplication).where(JobApplication.job_id == job.id)) or 0
+    return JobOut(
+        id=job.id,
+        hr_user_id=job.hr_user_id,
+        title=job.title,
+        description=job.description,
+        department=job.department,
+        level=job.level,
+        salary_text=job.salary_text,
+        min_salary=job.min_salary,
+        max_salary=job.max_salary,
+        location=job.location,
+        job_type=job.job_type,
+        count=job.headcount,
+        deadline=job.deadline_text,
+        applicants_count=int(app_count),
+        status=JobStatus(raw_status),
+        admin_note=job.admin_note,
+        created_at=job.created_at,
+        company_name=company_name,
+    )
 
 
 @router.get("/dashboard", response_model=StatsOut)
@@ -128,14 +158,14 @@ def reject_hr(
 def pending_jobs(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
     _require_admin(user)
     rows = db.scalars(select(Job).where(Job.status == JobStatus.pending_approval).order_by(Job.id.desc())).all()
-    return list(rows)
+    return [_to_job_out(job, db) for job in rows]
 
 
 @router.get("/jobs", response_model=list[JobOut])
 def all_jobs(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
     _require_admin(user)
     rows = db.scalars(select(Job).order_by(Job.id.desc()).limit(1000)).all()
-    return list(rows)
+    return [_to_job_out(job, db) for job in rows]
 
 
 @router.post("/jobs/{job_id}/approve", response_model=JobOut)
@@ -154,7 +184,7 @@ def approve_job(
     db.commit()
     db.refresh(job)
     runtime_cache.upsert_job(job)
-    return job
+    return _to_job_out(job, db)
 
 
 @router.post("/jobs/{job_id}/reject", response_model=JobOut)
@@ -173,7 +203,7 @@ def reject_job(
     db.commit()
     db.refresh(job)
     runtime_cache.upsert_job(job)
-    return job
+    return _to_job_out(job, db)
 
 
 @router.delete("/jobs/{job_id}")
@@ -221,7 +251,7 @@ def candidate_overview(user: Annotated[User, Depends(get_current_user)], db: Ann
     out: list[dict] = []
     for user_id, full_name, email, created_at, is_active, role, app_count in rows:
         profile_views = db.scalar(
-            select(func.count()).select_from(CandidateProfileView).where(CandidateProfileView.candidate_id == user_id)
+            select(func.count()).select_from(ProfileView).where(ProfileView.viewed_user_id == user_id)
         ) or 0
         out.append(
             {
@@ -362,4 +392,4 @@ def job_detail(
     job = db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    return _to_job_out(job, db)

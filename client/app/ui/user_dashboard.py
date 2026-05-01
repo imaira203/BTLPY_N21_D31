@@ -1584,6 +1584,8 @@ class UserDashboard:
         self._pending_pro_invoice: dict | None = None
         self._subscription_poll_timer: QTimer | None = None
         self._profile_views_total: int = 0
+        self._profile_views_month: int = 0
+        self._profile_views_filter: str = "all"
         self._pro_monthly_price_vnd: int = _PRO_MONTHLY_PRICE_VND
 
         # ── Profile data (persisted in session) ──────────────
@@ -2375,7 +2377,7 @@ class UserDashboard:
                 if job_id <= 0:
                     _Toast(self.win.centralWidget(), "Khong tim thay ma tin tuyen dung.", accent="#ef4444")
                     return
-                self._apply_to_job(
+                ok = self._apply_to_job(
                     job_id,
                     _t,
                     _c,
@@ -2383,6 +2385,14 @@ class UserDashboard:
                     selected_cv_id=dlg.get_selected_cv_id(),
                     new_cv_path=dlg.get_new_cv_path(),
                 )
+                if ok:
+                    self._application_status_by_job_id[int(job_id)] = "pending"
+                    btn_apply_now.setText("  Đã ứng tuyển")
+                    btn_apply_now.setEnabled(False)
+                    btn_apply_now.setStyleSheet(
+                        "QPushButton{background:#cbd5e1; color:#475569; border:none;"
+                        "border-radius:22px; font-size:13px; font-weight:700;}"
+                    )
 
         btn_apply_now.clicked.connect(_open_apply_from_detail)
         act_lo.addWidget(btn_apply_now)
@@ -2458,7 +2468,11 @@ class UserDashboard:
             competitors_payload = jobhub_api.candidate_job_competitors(_jid_for_comp) if _jid_for_comp > 0 else {}
         except Exception:
             competitors_payload = {}
-        competitors = list(competitors_payload.get("competitors") or [])
+        competitors = list(
+            competitors_payload.get("competitors")
+            or competitors_payload.get("recent_competitors")
+            or []
+        )
         if not competitors:
             empty_msg = (
                 "Chưa có ứng viên khác cho công việc này."
@@ -2483,10 +2497,9 @@ class UserDashboard:
                 row.setStyleSheet("QFrame{background:#f8fafc; border-radius:10px; border:none;}")
                 row_lo = QVBoxLayout(row)
                 row_lo.setContentsMargins(10, 8, 10, 8)
-                row_lo.setSpacing(2)
+                row_lo.setSpacing(6)
                 nm = str(c.get("candidate_display_name") or "Ứng viên")
-                status_txt = _HR_STATUS_VI.get(str(c.get("status") or "pending").lower(), "Đang xử lý")
-                top = QLabel(f"{nm} · {status_txt}")
+                top = QLabel(nm)
                 top.setStyleSheet(
                     f"color:{_TXT_H}; font-size:11px; font-weight:700; border:none; background:transparent;"
                 )
@@ -2503,6 +2516,16 @@ class UserDashboard:
                 )
                 row_lo.addWidget(top)
                 row_lo.addWidget(info_lbl)
+                detail_btn = QPushButton("Xem chi tiết hồ sơ")
+                detail_btn.setCursor(Qt.PointingHandCursor)
+                detail_btn.setFixedHeight(28)
+                detail_btn.setStyleSheet(
+                    f"QPushButton{{background:{_BLUE_BG}; color:{_BLUE}; border:none; border-radius:8px;"
+                    "font-size:11px; font-weight:700; padding:0 10px;}"
+                    "QPushButton:hover{background:#dbeafe;}"
+                )
+                detail_btn.clicked.connect(lambda _, _cand=c: self._track_and_open_competitor_profile(_cand))
+                row_lo.addWidget(detail_btn, 0, Qt.AlignLeft)
                 comp_lo.addWidget(row)
             if len(competitors) > 5:
                 more_btn = QPushButton("Xem thêm")
@@ -2615,7 +2638,7 @@ class UserDashboard:
         title_lbl.setStyleSheet(
             f"color:{_TXT_H}; font-size:16px; font-weight:800; background:transparent; border:none;"
         )
-        sub_lbl = QLabel(f"Tổng số: {len(competitors)} ứng viên (ẩn địa chỉ/thông tin liên hệ)")
+        sub_lbl = QLabel(f"Tổng số: {len(competitors)} ứng viên.")
         sub_lbl.setStyleSheet(
             f"color:{_TXT_M}; font-size:12px; background:transparent; border:none;"
         )
@@ -2640,8 +2663,7 @@ class UserDashboard:
             rlo.setSpacing(10)
 
             nm = str(cand.get("candidate_display_name") or "Ứng viên")
-            status_txt = _HR_STATUS_VI.get(str(cand.get("status") or "pending").lower(), "Đang xử lý")
-            top = QLabel(f"{nm} · {status_txt}")
+            top = QLabel(nm)
             top.setStyleSheet(f"color:{_TXT_H}; font-size:13px; font-weight:700; border:none;")
             bits = [
                 str(cand.get("professional_field") or "").strip(),
@@ -2666,7 +2688,7 @@ class UserDashboard:
                 "font-size:12px; font-weight:700; padding:0 12px;}"
                 "QPushButton:hover{background:#dbeafe;}"
             )
-            detail_btn.clicked.connect(lambda _, _cand=cand: self._open_competitor_profile_dialog(_cand))
+            detail_btn.clicked.connect(lambda _, _cand=cand: self._track_and_open_competitor_profile(_cand))
             rlo.addWidget(detail_btn)
             body_lo.addWidget(row)
         body_lo.addStretch()
@@ -2686,73 +2708,196 @@ class UserDashboard:
         dlg.exec()
 
     def _open_competitor_profile_dialog(self, competitor: dict) -> None:
+        viewed_user_id = int(competitor.get("candidate_user_id") or 0)
+        if viewed_user_id > 0:
+            try:
+                # Fallback: ensure tracking still happens even if dialog is opened directly.
+                jobhub_api.candidate_track_profile_view(viewed_user_id)
+            except Exception:
+                pass
         dlg = QDialog(self.win)
         dlg.setWindowTitle("Hồ sơ ứng viên")
         dlg.setModal(True)
-        dlg.resize(520, 460)
-        dlg.setStyleSheet("QDialog{background:#f8fafc;}")
-        lo = QVBoxLayout(dlg)
-        lo.setContentsMargins(16, 14, 16, 14)
-        lo.setSpacing(10)
+        dlg.resize(860, 560)
+        dlg.setStyleSheet(
+            f"QDialog{{background:{_CONTENT_BG};}}"
+            "QLabel{border:none;background:transparent;}"
+        )
+        root = QVBoxLayout(dlg)
+        root.setContentsMargins(18, 16, 18, 14)
+        root.setSpacing(12)
 
         name = str(competitor.get("candidate_display_name") or "Ứng viên")
-        status_txt = _HR_STATUS_VI.get(str(competitor.get("status") or "pending").lower(), "Đang xử lý")
         is_pro = bool(competitor.get("is_pro_active"))
+        tagline = str(competitor.get("tagline") or "Chưa cập nhật tagline")
+        profile = competitor if isinstance(competitor, dict) else {}
 
-        head = QFrame()
-        head.setStyleSheet("QFrame{background:white; border-radius:12px; border:1px solid #e5e7eb;}")
-        hlo = QVBoxLayout(head)
-        hlo.setContentsMargins(14, 12, 14, 12)
-        hlo.setSpacing(4)
+        header = QHBoxLayout()
+        title = QLabel("Hồ sơ ứng viên")
+        title.setStyleSheet(f"color:{_TXT_H}; font-size:18px; font-weight:800;")
+        header.addWidget(title)
+        header.addStretch()
+        root.addLayout(header)
+
+        body = QHBoxLayout()
+        body.setSpacing(14)
+
+        # Left identity card (same style as HR profile detail dialog)
+        left_card = QFrame()
+        left_card.setFixedWidth(250)
+        left_card.setStyleSheet("QFrame{background:#ffffff;border:none;border-radius:14px;}")
+        _shadow(left_card, 10, 3, 10)
+        left_lo = QVBoxLayout(left_card)
+        left_lo.setContentsMargins(18, 20, 18, 18)
+        left_lo.setSpacing(8)
+
+        initials = "".join(part[:1].upper() for part in name.split()[:2]) or "UV"
+        avatar = QLabel(initials)
+        avatar.setFixedSize(88, 88)
+        avatar.setAlignment(Qt.AlignCenter)
+        avatar.setStyleSheet(
+            "background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #1e3a8a,stop:1 #2563eb);"
+            "border-radius:44px; color:white; font-size:28px; font-weight:800;"
+            "border:3px solid #10b981;"
+        )
+        left_lo.addWidget(avatar, 0, Qt.AlignHCenter)
+
+        if is_pro:
+            pro_lbl = QLabel("PRO")
+            pro_lbl.setAlignment(Qt.AlignCenter)
+            pro_lbl.setFixedWidth(58)
+            pro_lbl.setStyleSheet(
+                "background:#fef3c7;color:#b45309;border:none;border-radius:10px;"
+                "font-size:11px;font-weight:800;padding:3px 10px;"
+            )
+            left_lo.addWidget(pro_lbl, 0, Qt.AlignHCenter)
         nm = QLabel(name)
-        nm.setStyleSheet(f"color:{_TXT_H}; font-size:16px; font-weight:800; border:none;")
-        st = QLabel(f"Trạng thái ứng tuyển: {status_txt}" + (" · Thành viên PRO" if is_pro else ""))
-        st.setStyleSheet(f"color:{_TXT_M}; font-size:12px; border:none;")
-        hlo.addWidget(nm)
-        hlo.addWidget(st)
-        lo.addWidget(head)
+        nm.setAlignment(Qt.AlignCenter)
+        nm.setStyleSheet(f"color:{_TXT_H}; font-size:22px; font-weight:800;")
+        tg = QLabel(tagline)
+        tg.setAlignment(Qt.AlignCenter)
+        tg.setWordWrap(True)
+        tg.setStyleSheet(f"color:{_TXT_M}; font-size:12px;")
+        left_lo.addWidget(nm)
+        left_lo.addWidget(tg)
+        left_lo.addStretch()
+        body.addWidget(left_card)
 
-        card = QFrame()
-        card.setStyleSheet("QFrame{background:white; border-radius:12px; border:1px solid #e5e7eb;}")
-        clo = QVBoxLayout(card)
-        clo.setContentsMargins(14, 12, 14, 12)
-        clo.setSpacing(8)
+        # Right detail cards
+        right_col = QVBoxLayout()
+        right_col.setSpacing(12)
 
-        def _field(label: str, value: str) -> None:
-            t = QLabel(label)
-            t.setStyleSheet(f"color:{_TXT_M}; font-size:11px; font-weight:700; border:none;")
-            v = QLabel(value or "—")
-            v.setWordWrap(True)
-            v.setStyleSheet(f"color:{_TXT_S}; font-size:12px; border:none;")
-            clo.addWidget(t)
-            clo.addWidget(v)
+        def _field_block(label: str, val: str) -> QWidget:
+            w = QWidget()
+            v = QVBoxLayout(w)
+            v.setContentsMargins(0, 0, 0, 0)
+            v.setSpacing(2)
+            l = QLabel(label)
+            l.setStyleSheet(f"color:{_TXT_M}; font-size:10px; font-weight:700; text-transform:uppercase;")
+            t = QLabel(val or "—")
+            t.setWordWrap(True)
+            t.setStyleSheet(f"color:{_TXT_H}; font-size:12px; font-weight:600;")
+            v.addWidget(l)
+            v.addWidget(t)
+            return w
 
-        _field("Tagline", str(competitor.get("tagline") or ""))
-        _field("Lĩnh vực", str(competitor.get("professional_field") or ""))
-        _field("Bằng cấp", str(competitor.get("degree") or ""))
-        _field("Kinh nghiệm", str(competitor.get("experience_text") or ""))
-        _field("Ngôn ngữ", str(competitor.get("language") or ""))
-        skills = competitor.get("skills_json")
-        if isinstance(skills, dict) and skills:
-            skill_parts = [f"{k}: {', '.join([str(x) for x in v])}" for k, v in skills.items() if isinstance(v, list)]
-            _field("Kỹ năng", " | ".join(skill_parts))
-        lo.addWidget(card, 1)
+        prof = QFrame()
+        prof.setStyleSheet("QFrame{background:#ffffff;border:none;border-radius:14px;}")
+        _shadow(prof, 8, 2, 8)
+        clo = QVBoxLayout(prof)
+        clo.setContentsMargins(16, 14, 16, 14)
+        clo.setSpacing(10)
+        cttl = QLabel("Thông tin chuyên môn")
+        cttl.setStyleSheet(f"color:{_TXT_H}; font-size:15px; font-weight:800;")
+        clo.addWidget(cttl)
+        cgrid = QGridLayout()
+        cgrid.setHorizontalSpacing(24)
+        cgrid.setVerticalSpacing(8)
+        cgrid.addWidget(_field_block("Ngành nghề", str(profile.get("professional_field") or "")), 0, 0)
+        cgrid.addWidget(_field_block("Bằng cấp", str(profile.get("degree") or "")), 0, 1)
+        cgrid.addWidget(_field_block("Số năm kinh nghiệm", str(profile.get("experience_text") or "")), 1, 0)
+        cgrid.addWidget(_field_block("Ngôn ngữ", str(profile.get("language") or "")), 1, 1)
+        clo.addLayout(cgrid)
 
-        hint = QLabel("Thông tin liên hệ và địa chỉ được ẩn theo chính sách bảo mật.")
+        skills_raw = profile.get("skills_json")
+        if isinstance(skills_raw, str) and skills_raw.strip():
+            try:
+                parsed = json.loads(skills_raw)
+                skills_raw = parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                skills_raw = {}
+        skills_map: dict[str, list[str]] = {}
+        if isinstance(skills_raw, dict):
+            for cat, vals in skills_raw.items():
+                cat_name = str(cat or "Khác").strip() or "Khác"
+                if isinstance(vals, list):
+                    norm_vals = [str(v).strip() for v in vals if str(v).strip()]
+                elif vals is None:
+                    norm_vals = []
+                else:
+                    norm_vals = [str(vals).strip()] if str(vals).strip() else []
+                if norm_vals:
+                    skills_map[cat_name] = norm_vals
+
+        if skills_map:
+            skills_card = QFrame()
+            skills_card.setStyleSheet("QFrame{background:#f8fafc;border:none;border-radius:12px;}")
+            skl = QVBoxLayout(skills_card)
+            skl.setContentsMargins(12, 10, 12, 10)
+            skl.setSpacing(10)
+            skill_title = QLabel("Kỹ năng")
+            skill_title.setStyleSheet(f"color:{_TXT_H}; font-size:12px; font-weight:800;")
+            skl.addWidget(skill_title)
+            for cat, vals in skills_map.items():
+                cat_lbl = QLabel(cat)
+                cat_lbl.setStyleSheet(f"color:{_TXT_M}; font-size:11px; font-weight:800;")
+                skl.addWidget(cat_lbl)
+                chip_grid_wrap = QWidget()
+                chip_grid = QGridLayout(chip_grid_wrap)
+                chip_grid.setContentsMargins(0, 0, 0, 0)
+                chip_grid.setHorizontalSpacing(8)
+                chip_grid.setVerticalSpacing(8)
+                for idx, val in enumerate(vals):
+                    chip = QLabel(val)
+                    chip.setFixedHeight(28)
+                    chip.setStyleSheet(
+                        f"background:#e0e7ff; color:{_BLUE_DARK}; border:none; border-radius:14px;"
+                        "padding:0 12px; font-size:11px; font-weight:700;"
+                    )
+                    chip_grid.addWidget(chip, idx // 5, idx % 5)
+                skl.addWidget(chip_grid_wrap)
+            clo.addWidget(skills_card)
+        right_col.addWidget(prof, 1)
+        right_col.addStretch()
+        body.addLayout(right_col, 1)
+        root.addLayout(body, 1)
+
+        hint = QLabel("Tên và thông tin liên hệ được ẩn theo chính sách bảo mật.")
         hint.setStyleSheet(f"color:{_TXT_M}; font-size:11px; border:none;")
-        lo.addWidget(hint)
+        root.addWidget(hint)
 
         btn = QPushButton("Đóng")
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFixedHeight(34)
         btn.setStyleSheet(
-            "QPushButton{background:#2563eb; color:white; border:none; border-radius:10px;"
-            "font-size:12px; font-weight:700; padding:0 14px;}"
-            "QPushButton:hover{background:#1d4ed8;}"
+            "QPushButton{background:#f1f5f9;color:#374151;border:none;border-radius:9px;padding:0 14px;font-size:12px;font-weight:700;}"
+            "QPushButton:hover{background:#e2e8f0;}"
         )
         btn.clicked.connect(dlg.accept)
-        lo.addWidget(btn, 0, Qt.AlignRight)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(btn)
+        root.addLayout(btn_row)
         dlg.exec()
+
+    def _track_and_open_competitor_profile(self, competitor: dict) -> None:
+        viewed_user_id = int(competitor.get("candidate_user_id") or 0)
+        if viewed_user_id > 0:
+            try:
+                jobhub_api.candidate_track_profile_view(viewed_user_id)
+            except Exception:
+                pass
+        self._open_competitor_profile_dialog(competitor)
 
     # ══════════════════════════════════════════════════════════
     #  PAGE BUILDERS
@@ -3522,7 +3667,7 @@ class UserDashboard:
         benefits = [
             ("ic_shield_check.svg", "Huy hiệu xác thực", "Tăng độ tin cậy với nhà tuyển dụng bằng huy hiệu ứng viên đã xác thực."),
             ("ic_users.svg", "Xem danh sách đối thủ cạnh tranh", "Theo dõi hồ sơ ứng viên cùng ngành và so sánh mức độ nổi bật của hồ sơ."),
-            ("ic_eye2.svg", "Số người xem hồ sơ", "Hiển thị tổng lượt nhà tuyển dụng đã xem hồ sơ của bạn theo thời gian thực."),
+            ("ic_eye2.svg", "Số người xem hồ sơ", "Hiển thị số người đã xem hồ sơ của bạn theo thời gian thực."),
         ]
         for i, (icon, card_title, desc) in enumerate(benefits):
             grid.addWidget(self._pro_benefit_card(icon, card_title, desc), i // 3, i % 3)
@@ -3816,12 +3961,6 @@ class UserDashboard:
             "border:none; background:transparent;"
         )
         id_lo.addWidget(self._save_status_lbl)
-        self._profile_views_lbl = QLabel("Lượt xem hồ sơ: 0")
-        self._profile_views_lbl.setStyleSheet(
-            "color:#2563eb; font-size:11px; font-weight:700;"
-            "border:none; background:transparent;"
-        )
-        id_lo.addWidget(self._profile_views_lbl, 0, Qt.AlignLeft)
         id_lo.addSpacing(20)
 
         # ── CTAs ───────────────────────────────────────────────
@@ -3877,6 +4016,46 @@ class UserDashboard:
         right_col = QVBoxLayout()
         right_col.setSpacing(16)
         right_col.setContentsMargins(0, 0, 0, 0)
+
+        # ── Card 0: Lượt xem hồ sơ (PRO) ───────────────────────
+        self._profile_views_card = QFrame()
+        self._profile_views_card.setStyleSheet(
+            "QFrame{background:white; border:none; border-radius:16px;}"
+        )
+        _shadow(self._profile_views_card, 8, 3, 10)
+        vstat_lo = QVBoxLayout(self._profile_views_card)
+        vstat_lo.setContentsMargins(24, 18, 24, 18)
+        vstat_lo.setSpacing(12)
+
+        hdr = QHBoxLayout()
+        hdr.addLayout(self._section_title("ic_user.svg", "#2563eb", "Số người xem hồ sơ"))
+        hdr.addStretch()
+        self._profile_views_filter_cb = QComboBox()
+        self._profile_views_filter_cb.setFixedHeight(32)
+        self._profile_views_filter_cb.addItem("Toàn bộ", "all")
+        self._profile_views_filter_cb.addItem("Tháng hiện tại", "month")
+        self._profile_views_filter_cb.setCurrentIndex(1 if self._profile_views_filter == "month" else 0)
+        self._profile_views_filter_cb.setStyleSheet(
+            "QComboBox{background:#f8fafc; color:#0f172a; border:1px solid #cbd5e1;"
+            "border-radius:10px; padding:0 10px; font-size:12px; font-weight:600; min-width:132px;}"
+            "QComboBox::drop-down{border:none; width:18px;}"
+            "QComboBox QAbstractItemView{border:1px solid #cbd5e1; background:white; selection-background-color:#e2e8f0;}"
+        )
+        self._profile_views_filter_cb.currentIndexChanged.connect(self._on_profile_views_filter_changed)
+        hdr.addWidget(self._profile_views_filter_cb)
+        vstat_lo.addLayout(hdr)
+
+        self._profile_views_value_lbl = QLabel("0")
+        self._profile_views_value_lbl.setStyleSheet(
+            "color:#1d4ed8; font-size:26px; font-weight:800; border:none; background:transparent;"
+        )
+        vstat_lo.addWidget(self._profile_views_value_lbl)
+        self._profile_views_hint_lbl = QLabel("người xem hồ sơ")
+        self._profile_views_hint_lbl.setStyleSheet(
+            f"color:{_TXT_M}; font-size:12px; border:none; background:transparent;"
+        )
+        vstat_lo.addWidget(self._profile_views_hint_lbl)
+        right_col.addWidget(self._profile_views_card)
 
         # ── Card 1: Thông tin cá nhân ──────────────────────────
         p_card = QFrame()
@@ -3960,6 +4139,7 @@ class UserDashboard:
         lo.addStretch()
 
         self._update_profile_progress()
+        self._refresh_profile_views_widgets()
 
         return scroll
 
@@ -5080,11 +5260,38 @@ class UserDashboard:
                 self._avatar_pro_badge.setVisible(is_pro)
             except RuntimeError:
                 self._avatar_pro_badge = None
-        if hasattr(self, "_profile_views_lbl") and self._profile_views_lbl is not None:
+        self._refresh_profile_views_widgets()
+
+    def _on_profile_views_filter_changed(self, _idx: int) -> None:
+        cb = getattr(self, "_profile_views_filter_cb", None)
+        if cb is not None:
+            self._profile_views_filter = str(cb.currentData() or "all")
+        self._refresh_profile_views_widgets()
+
+    def _refresh_profile_views_widgets(self) -> None:
+        is_pro = bool(getattr(self, "_subscription", {}).get("is_pro_active"))
+        card = getattr(self, "_profile_views_card", None)
+        if card is not None:
             try:
-                self._profile_views_lbl.setText(f"Lượt xem hồ sơ: {int(self._profile_views_total)}")
+                card.setVisible(is_pro)
             except RuntimeError:
-                self._profile_views_lbl = None
+                self._profile_views_card = None
+        if not is_pro:
+            return
+        mode = str(getattr(self, "_profile_views_filter", "all"))
+        count = int(self._profile_views_month if mode == "month" else self._profile_views_total)
+        value_lbl = getattr(self, "_profile_views_value_lbl", None)
+        hint_lbl = getattr(self, "_profile_views_hint_lbl", None)
+        if value_lbl is not None:
+            try:
+                value_lbl.setText(str(count))
+            except RuntimeError:
+                self._profile_views_value_lbl = None
+        if hint_lbl is not None:
+            try:
+                hint_lbl.setText("người xem trong tháng hiện tại" if mode == "month" else "người xem toàn bộ")
+            except RuntimeError:
+                self._profile_views_hint_lbl = None
 
     def _bootstrap_candidate_data(self) -> None:
         """Initial load from server for saved jobs and application history."""
@@ -5314,9 +5521,15 @@ class UserDashboard:
             self._profile_data["cv_name"] = None
         try:
             views_summary = jobhub_api.candidate_profile_views_summary() or {}
-            self._profile_views_total = int(views_summary.get("total_views") or 0)
+            self._profile_views_total = int(
+                views_summary.get("all_time_viewers")
+                or views_summary.get("total_views")
+                or 0
+            )
+            self._profile_views_month = int(views_summary.get("current_month_viewers") or 0)
         except Exception:
             self._profile_views_total = int(self._profile_views_total or 0)
+            self._profile_views_month = int(self._profile_views_month or 0)
 
         avatar_key = str(self._profile_data.get("avatar_storage_key") or "").strip()
         if avatar_key:
@@ -5521,11 +5734,11 @@ class UserDashboard:
         location: str,
         selected_cv_id: int | None = None,
         new_cv_path: str | None = None,
-    ) -> None:
+    ) -> bool:
         try:
             if not self._is_contact_profile_complete(show_toast=True):
                 self._go(3)
-                return
+                return False
             if selected_cv_id is None and not new_cv_path:
                 cvs = jobhub_api.list_my_cvs()
                 if cvs:
@@ -5538,7 +5751,7 @@ class UserDashboard:
                     title_text="Thiếu CV",
                     icon_char="!",
                 )
-                return
+                return False
             jobhub_api.apply_job_with_cv(job_id, cv_id=selected_cv_id, cv_file_path=new_cv_path)
             self._sync_application_history()
             if new_cv_path:
@@ -5551,6 +5764,7 @@ class UserDashboard:
                 title_text="Nộp hồ sơ thành công! ✓",
                 icon_char="✓",
             )
+            return True
         except ApiError as e:
             _Toast(
                 self.win.centralWidget(),
@@ -5560,6 +5774,7 @@ class UserDashboard:
                 title_text="Nộp hồ sơ thất bại!",
                 icon_char="!",
             )
+            return False
 
     def _poll_application_statuses(self) -> None:
         """Periodic refresh for application statuses from backend."""

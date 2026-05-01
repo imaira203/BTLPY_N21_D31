@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Callable
 
 from PySide6.QtCore import QPropertyAnimation, QRect, QSize, Qt, QTimer
@@ -634,15 +635,92 @@ class AdminDashboard:
             item = self.activities_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        now = datetime.now()
 
-        activities = [
-            ("Nguyễn Văn A", "Ứng tuyển vị trí Senior Developer", "5 phút trước", "mới",          "#DBEAFE", "#1D4ED8"),
-            ("Trần Thị B",   "Lên lịch phỏng vấn",                "1 giờ trước",  "đã lên lịch",  "#FEF9C3", "#92400E"),
-            ("Lê Văn C",     "Chấp nhận offer",                    "2 giờ trước",  "đã tuyển",     "#DCFCE7", "#15803D"),
-            ("Phạm Thị D",   "Từ chối đơn ứng tuyển",             "3 giờ trước",  "từ chối",      "#FEE2E2", "#B91C1C"),
-            ("Hoàng Văn E",  "Hoàn thành bài test kỹ thuật",      "5 giờ trước",  "đang xử lý",   "#F3F4F6", "#6B7280"),
-        ]
-        for name, action, time_str, badge_text, badge_bg, badge_fg in activities:
+        def _parse_dt(raw: str) -> datetime | None:
+            txt = str(raw or "").strip()
+            if not txt:
+                return None
+            try:
+                if "T" in txt:
+                    dt = datetime.fromisoformat(txt.replace("Z", "+00:00"))
+                    return dt.replace(tzinfo=None) if dt.tzinfo else dt
+                return datetime.strptime(txt, "%d/%m/%Y")
+            except Exception:
+                return None
+
+        def _ago_text(dt: datetime) -> str:
+            delta = now - dt
+            mins = int(max(0, delta.total_seconds() // 60))
+            if mins < 1:
+                return "vừa xong"
+            if mins < 60:
+                return f"{mins} phút trước"
+            hours = mins // 60
+            if hours < 24:
+                return f"{hours} giờ trước"
+            days = hours // 24
+            if days == 1:
+                return "hôm qua"
+            if days < 7:
+                return f"{days} ngày trước"
+            return dt.strftime("%d/%m/%Y")
+
+        activities: list[dict] = []
+        try:
+            for hr in list(jobhub_api.admin_pending_hr())[:12]:
+                dt = _parse_dt(hr.get("created_at"))
+                activities.append(
+                    {
+                        "name": str(hr.get("full_name") or hr.get("email") or "HR"),
+                        "action": "Gửi hồ sơ doanh nghiệp chờ duyệt",
+                        "time": _ago_text(dt) if dt else "gần đây",
+                        "badge_text": "chờ duyệt HR",
+                        "badge_bg": "#DBEAFE",
+                        "badge_fg": "#1D4ED8",
+                        "_dt": dt or now,
+                    }
+                )
+        except ApiError:
+            pass
+
+        try:
+            for j in list(jobhub_api.admin_pending_jobs())[:16]:
+                dt = _parse_dt(j.get("created_at"))
+                activities.append(
+                    {
+                        "name": str(j.get("company_name") or "Nhà tuyển dụng"),
+                        "action": f"Đăng tin chờ duyệt: {j.get('title') or '—'}",
+                        "time": _ago_text(dt) if dt else "gần đây",
+                        "badge_text": "tin chờ duyệt",
+                        "badge_bg": "#FEF9C3",
+                        "badge_fg": "#92400E",
+                        "_dt": dt or now,
+                    }
+                )
+        except ApiError:
+            pass
+
+        try:
+            for c in list(jobhub_api.admin_candidate_overview())[:20]:
+                dt = _parse_dt(c.get("created_at"))
+                activities.append(
+                    {
+                        "name": str(c.get("full_name") or c.get("email") or "Ứng viên"),
+                        "action": "Tạo tài khoản ứng viên mới",
+                        "time": _ago_text(dt) if dt else "gần đây",
+                        "badge_text": "ứng viên mới",
+                        "badge_bg": "#DCFCE7",
+                        "badge_fg": "#15803D",
+                        "_dt": dt or now,
+                    }
+                )
+        except ApiError:
+            pass
+
+        activities.sort(key=lambda x: x["_dt"], reverse=True)
+        activities = activities[:10]
+        for act in activities:
             row = QFrame()
             row.setMinimumHeight(64)
             row.setStyleSheet(
@@ -655,12 +733,12 @@ class AdminDashboard:
 
             col = QVBoxLayout()
             col.setSpacing(2)
-            lbl_name = QLabel(name)
+            lbl_name = QLabel(str(act.get("name") or "Hệ thống"))
             lbl_name.setStyleSheet(
                 "QLabel { font-size:14px; font-weight:600; color:#111827;"
                 " background:transparent; border:none; }"
             )
-            lbl_action = QLabel(action)
+            lbl_action = QLabel(str(act.get("action") or "Có hoạt động mới"))
             lbl_action.setStyleSheet(
                 "QLabel { font-size:12px; color:#6B7280;"
                 " background:transparent; border:none; }"
@@ -670,7 +748,7 @@ class AdminDashboard:
             h.addLayout(col)
             h.addStretch()
 
-            lbl_time = QLabel(time_str)
+            lbl_time = QLabel(str(act.get("time") or "gần đây"))
             lbl_time.setStyleSheet(
                 "QLabel { font-size:12px; color:#9CA3AF;"
                 " background:transparent; border:none; }"
@@ -678,10 +756,21 @@ class AdminDashboard:
             lbl_time.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             h.addWidget(lbl_time)
 
-            badge = _pill(badge_text, badge_bg, badge_fg)
+            badge = _pill(
+                str(act.get("badge_text") or "mới"),
+                str(act.get("badge_bg") or "#F3F4F6"),
+                str(act.get("badge_fg") or "#6B7280"),
+            )
             h.addWidget(badge)
 
             self.activities_layout.addWidget(row)
+
+        if not activities:
+            empty = QLabel("Chưa có hoạt động gần đây.")
+            empty.setStyleSheet(
+                "QLabel { font-size:13px; color:#9CA3AF; background:transparent; border:none; padding:8px 0; }"
+            )
+            self.activities_layout.addWidget(empty)
 
     # ══════════════════════════════════════════════════════════════
     #  USER MANAGEMENT PAGE

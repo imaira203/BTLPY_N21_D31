@@ -180,6 +180,11 @@ def upload_hr_avatar(file_path: str) -> dict:
         return _request("POST", "/users/me/hr-avatar", files={"file": (name, f)})
 
 
+def hr_avatar_view() -> tuple[bytes, str | None]:
+    r = _request_raw("GET", "/users/me/hr-avatar/view")
+    return r.content, _filename_from_cd(r.headers.get("Content-Disposition"))
+
+
 def my_candidate_profile() -> dict | None:
     return _request("GET", "/users/me/candidate-profile")
 
@@ -281,6 +286,10 @@ def candidate_job_competitors(job_id: int) -> dict:
     return _request("GET", f"/candidate/jobs/{job_id}/competitors")
 
 
+def candidate_track_profile_view(viewed_user_id: int) -> dict:
+    return _request("POST", "/candidate/profile/views/track", json={"viewed_user_id": int(viewed_user_id)})
+
+
 def hr_dashboard() -> dict:
     return _request("GET", "/hr/dashboard")
 
@@ -333,6 +342,10 @@ def hr_applications(
 
 def hr_update_application_status(application_id: int, new_status: str) -> dict:
     return _request("PUT", f"/hr/applications/{application_id}/status", json={"status": new_status})
+
+
+def hr_view_candidate_profile(application_id: int) -> dict:
+    return _request("POST", f"/hr/applications/{application_id}/view-profile")
 
 
 def hr_invoices() -> list:

@@ -18,7 +18,6 @@ from ..models import (
     ApplicationStatus,
     CVDocument,
     CandidateProfile,
-    CandidateProfileView,
     CandidateSavedJob,
     CandidateSubscription,
     HRProfile,
@@ -28,6 +27,7 @@ from ..models import (
     Job,
     JobApplication,
     JobStatus,
+    ProfileView,
     SubscriptionStatus,
     User,
     UserRole,
@@ -41,6 +41,7 @@ from ..schemas import (
     InvoiceOut,
     JobOut,
     ProUpgradeIn,
+    ProfileViewTrackIn,
     SavedJobOut,
 )
 from ..storage_paths import absolute_path, relative_key, resolve_existing_file
@@ -106,6 +107,19 @@ def _candidate_is_pro_active(db: Session, candidate_id: int) -> bool:
     if not sub:
         sub = db.scalar(select(CandidateSubscription).where(CandidateSubscription.candidate_id == candidate_id))
     return _is_pro_active(sub)
+
+
+def _is_hr_overdue_locked(db: Session, hr_user_id: int) -> bool:
+    now = datetime.utcnow()
+    inv_id = db.scalar(
+        select(Invoice.id).where(
+            Invoice.owner_user_id == hr_user_id,
+            Invoice.invoice_type == InvoiceType.candidate_contact_unlock,
+            Invoice.status == InvoiceStatus.pending,
+            Invoice.due_at < now,
+        )
+    )
+    return inv_id is not None
 
 
 def _ensure_contact_info_for_apply(db: Session, user: User) -> None:
@@ -282,6 +296,8 @@ def browse_jobs(db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
         rows = db.execute(q).all()
     out: list[JobOut] = []
     for job, company_name in rows:
+        if _is_hr_overdue_locked(db, int(job.hr_user_id)):
+            continue
         app_count = db.scalar(select(func.count()).select_from(JobApplication).where(JobApplication.job_id == job.id)) or 0
         out.append(
             JobOut(
@@ -316,6 +332,8 @@ def track_job_view(
     job = db.get(Job, job_id)
     if not job or job.status != JobStatus.published:
         raise HTTPException(status_code=404, detail="Job not found")
+    if _is_hr_overdue_locked(db, int(job.hr_user_id)):
+        raise HTTPException(status_code=404, detail="Job not found")
     job.view_count = int(job.view_count or 0) + 1
     db.commit()
     return {"ok": True, "job_id": job.id, "view_count": int(job.view_count)}
@@ -333,6 +351,8 @@ def apply_job(
     job = db.get(Job, job_id)
     if not job or job.status != JobStatus.published:
         raise HTTPException(status_code=404, detail="Job not found")
+    if _is_hr_overdue_locked(db, int(job.hr_user_id)):
+        raise HTTPException(status_code=403, detail="Tin đang tạm khoá do nhà tuyển dụng quá hạn thanh toán")
     cv_id = body.cv_id
     if cv_id is None:
         latest_cv = db.scalar(
@@ -342,7 +362,7 @@ def apply_job(
             .limit(1)
         )
         if not latest_cv:
-            raise HTTPException(status_code=400, detail="Ban can tai len CV truoc khi ung tuyen")
+            raise HTTPException(status_code=400, detail="Bạn cần tải lên CV trước khi ứng tuyển")
         cv_id = latest_cv.id
     cv = db.get(CVDocument, cv_id)
     if not cv or cv.user_id != user.id:
@@ -354,7 +374,7 @@ def apply_job(
         ).order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
     )
     if existing and _normalized_app_status(existing.status) != ApplicationStatus.rejected:
-        raise HTTPException(status_code=400, detail="Already applied")
+        raise HTTPException(status_code=400, detail="Đã ứng tuyển")
     app = JobApplication(job_id=job_id, candidate_id=user.id, cv_id=cv.id)
     db.add(app)
     db.commit()
@@ -375,6 +395,8 @@ async def apply_job_with_optional_new_cv(
     job = db.get(Job, job_id)
     if not job or job.status != JobStatus.published:
         raise HTTPException(status_code=404, detail="Job not found")
+    if _is_hr_overdue_locked(db, int(job.hr_user_id)):
+        raise HTTPException(status_code=403, detail="Tin đang tạm khoá do nhà tuyển dụng quá hạn thanh toán")
     existing = db.scalar(
         select(JobApplication).where(
             JobApplication.job_id == job_id,
@@ -382,7 +404,7 @@ async def apply_job_with_optional_new_cv(
         ).order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
     )
     if existing and _normalized_app_status(existing.status) != ApplicationStatus.rejected:
-        raise HTTPException(status_code=400, detail="Already applied")
+        raise HTTPException(status_code=400, detail="Đã ứng tuyển")
 
     selected_cv_id = cv_id
     if cv_file is not None:
@@ -406,7 +428,7 @@ async def apply_job_with_optional_new_cv(
             selected_cv_id = latest_cv.id
 
     if selected_cv_id is None:
-        raise HTTPException(status_code=400, detail="Ban can chon CV co san hoac tai len CV moi")
+        raise HTTPException(status_code=400, detail="Bạn cần chọn CV có sẵn hoặc tải lên CV mới")
 
     cv = db.get(CVDocument, selected_cv_id)
     if not cv or cv.user_id != user.id:
@@ -455,17 +477,22 @@ def my_profile_views_summary(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     _require_candidate(user)
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     total_views = db.scalar(
-        select(func.count()).select_from(CandidateProfileView).where(CandidateProfileView.candidate_id == user.id)
+        select(func.count()).select_from(ProfileView).where(ProfileView.viewed_user_id == user.id)
     ) or 0
-    unique_hr_viewers = db.scalar(
-        select(func.count(func.distinct(CandidateProfileView.viewer_user_id)))
-        .select_from(CandidateProfileView)
-        .where(CandidateProfileView.candidate_id == user.id)
+    month_views = db.scalar(
+        select(func.count())
+        .select_from(ProfileView)
+        .where(ProfileView.viewed_user_id == user.id, ProfileView.viewed_at >= month_start)
     ) or 0
     return {
+        # New keys used by UI filter.
+        "all_time_viewers": int(total_views),
+        "current_month_viewers": int(month_views),
+        # Backward compatibility keys.
         "total_views": int(total_views),
-        "unique_hr_viewers": int(unique_hr_viewers),
+        "unique_hr_viewers": int(total_views),
     }
 
 
@@ -502,6 +529,7 @@ def my_job_competitors(
         masked_name = f"{name[:1]}***" if name else "Ứng viên"
         competitors.append(
             {
+                "candidate_user_id": int(cand.id),
                 "application_id": app.id,
                 "status": _normalized_app_status(app.status).value,
                 "applied_at": app.created_at.isoformat(),
@@ -520,6 +548,41 @@ def my_job_competitors(
         "total_competitors": len(competitors),
         "competitors": competitors,
     }
+
+
+@router.post("/profile/views/track")
+def track_profile_view(
+    payload: ProfileViewTrackIn,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_candidate(user)
+    viewed_user = db.get(User, int(payload.viewed_user_id))
+    if not viewed_user or viewed_user.role != UserRole.candidate:
+        raise HTTPException(status_code=404, detail="Nguoi duoc xem khong ton tai")
+    if viewed_user.id == user.id:
+        return {"ok": True, "created": False}
+
+    existed = db.scalar(
+        select(ProfileView).where(
+            ProfileView.viewer_user_id == user.id,
+            ProfileView.viewed_user_id == viewed_user.id,
+        )
+    )
+    if existed:
+        existed.viewed_at = datetime.utcnow()
+        db.commit()
+        return {"ok": True, "created": False}
+
+    db.add(
+        ProfileView(
+            viewer_user_id=user.id,
+            viewed_user_id=viewed_user.id,
+            viewed_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+    return {"ok": True, "created": True}
 
 
 @router.post("/jobs/{job_id}/save", response_model=SavedJobOut)
@@ -879,15 +942,49 @@ def job_competitor_insights(
         or 1
     )
     rows = db.execute(
-        select(JobApplication.id, JobApplication.created_at)
+        select(JobApplication, User, CandidateProfile)
+        .join(User, User.id == JobApplication.candidate_id)
+        .outerjoin(CandidateProfile, CandidateProfile.user_id == User.id)
         .where(JobApplication.job_id == job_id, JobApplication.candidate_id != user.id)
-        .order_by(JobApplication.created_at.desc())
-        .limit(30)
+        .order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
+        .limit(50)
     ).all()
-    competitors = [{"alias": f"Ung vien #{rid}", "applied_at": created.isoformat()} for rid, created in rows]
+
+    def _mask_name(name: str) -> str:
+        txt = (name or "").strip()
+        if not txt:
+            return "Ứng viên ẩn danh"
+        parts = [p for p in txt.split() if p]
+        if len(parts) >= 2:
+            return " ".join(f"{p[0]}***" for p in parts[:2])
+        if len(txt) <= 1:
+            return "*"
+        return f"{txt[0]}***"
+
+    competitors: list[dict] = []
+    for app, cand_user, cand_profile in rows:
+        display_name = _mask_name(str(cand_user.full_name or cand_user.email or "Ứng viên"))
+        skills = cand_profile.skills_as_dict() if cand_profile else {}
+        competitors.append(
+            {
+                "candidate_user_id": int(cand_user.id),
+                "application_id": int(app.id),
+                "candidate_display_name": display_name,
+                "status": _normalized_app_status(app.status).value,
+                "is_pro_active": _candidate_is_pro_active(db, int(cand_user.id)),
+                "tagline": str(cand_profile.tagline or "") if cand_profile else "",
+                "professional_field": str(cand_profile.professional_field or "") if cand_profile else "",
+                "degree": str(cand_profile.degree or "") if cand_profile else "",
+                "experience_text": str(cand_profile.experience_text or "") if cand_profile else "",
+                "language": str(cand_profile.language or "") if cand_profile else "",
+                "skills_json": skills,
+                "applied_at": app.created_at.isoformat() if app.created_at else "",
+            }
+        )
     return {
         "job_id": job_id,
         "total_competitors": max(0, int(total) - 1),
         "my_apply_order": int(rank),
+        "competitors": competitors,
         "recent_competitors": competitors,
     }

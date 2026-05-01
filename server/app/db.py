@@ -146,30 +146,46 @@ def apply_mysql_schema_patches() -> None:
             with engine.begin() as conn:
                 conn.execute(text("DROP TABLE candidate_subscription_payments"))
             log.info("Đã xóa bảng candidate_subscription_payments (không còn sử dụng).")
-        if not insp.has_table("candidate_profile_views"):
+        if not insp.has_table("profile_views"):
             stmt = (
-                "CREATE TABLE candidate_profile_views ("
+                "CREATE TABLE profile_views ("
                 "id INT AUTO_INCREMENT PRIMARY KEY, "
-                "candidate_id INT NOT NULL, "
                 "viewer_user_id INT NOT NULL, "
-                "job_id INT NOT NULL, "
-                "application_id INT NULL, "
+                "viewed_user_id INT NOT NULL, "
                 "viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-                "INDEX idx_candidate_profile_views_candidate (candidate_id), "
-                "INDEX idx_candidate_profile_views_viewer (viewer_user_id), "
-                "INDEX idx_candidate_profile_views_job (job_id), "
-                "INDEX idx_candidate_profile_views_application (application_id), "
-                "INDEX idx_candidate_profile_views_viewed_at (viewed_at), "
-                "UNIQUE KEY uq_candidate_profile_view (candidate_id, viewer_user_id, job_id), "
-                "CONSTRAINT fk_candidate_profile_views_candidate FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE, "
-                "CONSTRAINT fk_candidate_profile_views_viewer FOREIGN KEY (viewer_user_id) REFERENCES users(id) ON DELETE CASCADE, "
-                "CONSTRAINT fk_candidate_profile_views_job FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE, "
-                "CONSTRAINT fk_candidate_profile_views_application FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE SET NULL"
+                "INDEX idx_profile_views_viewer (viewer_user_id), "
+                "INDEX idx_profile_views_viewed (viewed_user_id), "
+                "INDEX idx_profile_views_viewed_at (viewed_at), "
+                "UNIQUE KEY uq_profile_views_pair (viewer_user_id, viewed_user_id), "
+                "CONSTRAINT fk_profile_views_viewer FOREIGN KEY (viewer_user_id) REFERENCES users(id) ON DELETE CASCADE, "
+                "CONSTRAINT fk_profile_views_viewed FOREIGN KEY (viewed_user_id) REFERENCES users(id) ON DELETE CASCADE"
                 ")"
             )
             with engine.begin() as conn:
                 conn.execute(text(stmt))
-            log.info("Đã tạo bảng candidate_profile_views (DB cũ).")
+            log.info("Đã tạo bảng profile_views.")
+        if insp.has_table("candidate_profile_views") and insp.has_table("profile_views"):
+            if dialect == "sqlite":
+                stmt = (
+                    "INSERT OR IGNORE INTO profile_views (viewer_user_id, viewed_user_id, viewed_at) "
+                    "SELECT cpv.viewer_user_id, cpv.candidate_id, MAX(cpv.viewed_at) "
+                    "FROM candidate_profile_views cpv "
+                    "GROUP BY cpv.viewer_user_id, cpv.candidate_id"
+                )
+            else:
+                stmt = (
+                    "INSERT INTO profile_views (viewer_user_id, viewed_user_id, viewed_at) "
+                    "SELECT cpv.viewer_user_id, cpv.candidate_id, MAX(cpv.viewed_at) "
+                    "FROM candidate_profile_views cpv "
+                    "LEFT JOIN profile_views pv "
+                    "ON pv.viewer_user_id = cpv.viewer_user_id AND pv.viewed_user_id = cpv.candidate_id "
+                    "WHERE pv.id IS NULL "
+                    "GROUP BY cpv.viewer_user_id, cpv.candidate_id"
+                )
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+                conn.execute(text("DROP TABLE candidate_profile_views"))
+            log.info("Đã migrate và xóa bảng candidate_profile_views.")
         if insp.has_table("invoices"):
             with engine.begin() as conn:
                 conn.execute(
@@ -195,8 +211,8 @@ def apply_mysql_schema_patches() -> None:
             log.info("Đã chuẩn hóa enum jobs.status để hỗ trợ trạng thái 'closed'.")
         if insp.has_table("users") and insp.has_table("candidate_profiles"):
             stmt = (
-                "INSERT INTO candidate_profiles (user_id) "
-                "SELECT u.id "
+                "INSERT INTO candidate_profiles (user_id, updated_at) "
+                "SELECT u.id, NOW() "
                 "FROM users u "
                 "LEFT JOIN candidate_profiles cp ON cp.user_id = u.id "
                 "WHERE u.role = 'candidate' AND cp.user_id IS NULL"

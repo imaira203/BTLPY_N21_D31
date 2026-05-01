@@ -134,6 +134,23 @@ def _svg_icon(name: str, size: int = 20, color: str = NAV_INACT_T) -> QIcon:
     return QIcon(_svg_pm(name, size, color))
 
 
+def _circular_fill_pixmap(src: QPixmap, size: QSize) -> QPixmap:
+    if src.isNull():
+        return QPixmap()
+    side = min(size.width(), size.height())
+    scaled = src.scaled(side, side, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    out = QPixmap(side, side)
+    out.fill(Qt.transparent)
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.Antialiasing)
+    path = QPainterPath()
+    path.addEllipse(0, 0, side, side)
+    painter.setClipPath(path)
+    painter.drawPixmap(0, 0, scaled)
+    painter.end()
+    return out
+
+
 def _fmt_vnd(amount: int | float) -> str:
     return f"{int(amount):,}".replace(",", ".") + " đ"
 
@@ -746,6 +763,11 @@ class HRDashboard:
         self._nav_btns: list[_NavBtn] = []
         self._hr_profile_data: dict = {}
         self._hr_me_data: dict = {}
+        self._hr_avatar_pixmap: QPixmap | None = None
+        self._billing_poll_timer: QTimer | None = None
+        self._billing_poll_invoice_code: str = ""
+        self._billing_detail_invoice_code: str = ""
+        self._billing_detail_refresh_cb = None
         self._build()
         self._load_hr_identity()
         self._go(0)
@@ -784,11 +806,15 @@ class HRDashboard:
         toast = QWidget(self.win)
         toast.setWindowFlags(Qt.FramelessWindowHint | Qt.SubWindow)
         toast.setAttribute(Qt.WA_TranslucentBackground, False)
-        toast.setFixedWidth(320)
+        # Responsive width: adapt to current window size, keep sensible limits.
+        parent_w = max(320, int(self.win.width() or 0))
+        toast_w = max(300, min(460, int(parent_w * 0.42)))
+        toast.setFixedWidth(toast_w)
 
         lo = QHBoxLayout(toast)
         lo.setContentsMargins(14, 12, 14, 12)
         lo.setSpacing(10)
+        lo.setAlignment(Qt.AlignTop)
 
         # Icon badge — SVG rendered into circular tinted badge
         ic_lbl = QLabel()
@@ -802,6 +828,9 @@ class HRDashboard:
         # Message
         msg_lbl = QLabel(text)
         msg_lbl.setWordWrap(True)
+        msg_lbl.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        msg_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        msg_lbl.setMaximumWidth(max(180, toast_w - 14 - 14 - 32 - 20 - (10 * 2)))
         msg_lbl.setStyleSheet(
             f"color:{TXT_H};font-size:13px;font-weight:500;"
             "background:transparent;border:none;"
@@ -838,12 +867,12 @@ class HRDashboard:
         toast.setGraphicsEffect(sh)
 
         toast.adjustSize()
-        toast.setFixedHeight(toast.sizeHint().height())
+        toast.setFixedHeight(max(56, toast.sizeHint().height()))
 
         # Position: bottom-right of window
         pw = self.win.width()
         ph = self.win.height()
-        tx = pw - toast.width() - 24
+        tx = max(12, pw - toast.width() - 24)
         ty_end = ph - toast.height() - 24
         ty_start = ph  # slide up from below
 
@@ -1609,6 +1638,15 @@ class HRDashboard:
         except ApiError:
             profile = {}
         self._hr_profile_data = dict(profile)
+        try:
+            avatar_bytes, _ = jobhub_api.hr_avatar_view()
+            pm = QPixmap()
+            if pm.loadFromData(avatar_bytes):
+                self._hr_avatar_pixmap = pm
+            else:
+                self._hr_avatar_pixmap = None
+        except Exception:
+            self._hr_avatar_pixmap = None
         self._apply_hr_identity(profile)
 
     def _apply_hr_identity(self, profile: dict | None = None) -> None:
@@ -1623,7 +1661,23 @@ class HRDashboard:
 
         display = company_name or self.lbl_hr_name.text()
         initials = "".join(part[:1].upper() for part in display.split()[:2]) or "HR"
-        self._btn_hr_avatar.setText(initials)
+        if self._hr_avatar_pixmap and not self._hr_avatar_pixmap.isNull():
+            top_pm = _circular_fill_pixmap(self._hr_avatar_pixmap, self._btn_hr_avatar.size())
+            self._btn_hr_avatar.setIcon(QIcon(top_pm))
+            self._btn_hr_avatar.setIconSize(self._btn_hr_avatar.size())
+            self._btn_hr_avatar.setText("")
+            self._btn_hr_avatar.setStyleSheet(
+                "QPushButton{background:#ffffff;border-radius:20px;border:1px solid #e2e8f0;}"
+                "QPushButton:hover{background:#f8fafc;}"
+            )
+        else:
+            self._btn_hr_avatar.setIcon(QIcon())
+            self._btn_hr_avatar.setText(initials)
+            self._btn_hr_avatar.setStyleSheet(
+                f"QPushButton{{background:{P};color:#fff;border-radius:20px;"
+                "font-size:13px;font-weight:800;border:none;}}"
+                f"QPushButton:hover{{background:{P_DARK};}}"
+            )
         self._refresh_hr_profile_form()
 
     def _hr_status_label(self, status: str) -> str:
@@ -1924,7 +1978,17 @@ class HRDashboard:
         self._hr_prof_phone_lbl.setText(f"SĐT liên hệ: {phone or '—'}")
         self._hr_prof_email_lbl.setText(f"Email liên hệ: {email or '—'}")
         initials = "".join(part[:1].upper() for part in (company or "HR").split()[:2]) or "HR"
-        self._hr_prof_avatar_lbl.setText(initials)
+        if self._hr_avatar_pixmap and not self._hr_avatar_pixmap.isNull():
+            self._hr_prof_avatar_lbl.setPixmap(_circular_fill_pixmap(self._hr_avatar_pixmap, self._hr_prof_avatar_lbl.size()))
+            self._hr_prof_avatar_lbl.setText("")
+            self._hr_prof_avatar_lbl.setStyleSheet("background:transparent;border:none;")
+        else:
+            self._hr_prof_avatar_lbl.setPixmap(QPixmap())
+            self._hr_prof_avatar_lbl.setText(initials)
+            self._hr_prof_avatar_lbl.setStyleSheet(
+                f"background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 {P_DARK},stop:1 {P});"
+                "color:white;border-radius:42px;font-size:24px;font-weight:800;border:none;"
+            )
 
         self._hr_prof_company_inp.blockSignals(True)
         self._hr_prof_phone_inp.blockSignals(True)
@@ -1953,6 +2017,8 @@ class HRDashboard:
         except ApiError as e:
             QMessageBox.warning(self.win, "Lỗi", str(e))
             return
+        pm = QPixmap(path)
+        self._hr_avatar_pixmap = pm if not pm.isNull() else None
         self._hr_profile_data = dict(updated or {})
         self._apply_hr_identity(self._hr_profile_data)
         self._show_toast("Đã cập nhật ảnh đại diện", "ic_check.svg", "#10b981")
@@ -2966,7 +3032,7 @@ class HRDashboard:
         self._billing_period_filter.setFixedSize(280, 48)
         self._billing_status_filter.currentIndexChanged.connect(self._refresh_billing_page)
         self._billing_period_filter.currentIndexChanged.connect(self._refresh_billing_page)
-        self._billing_period_filter.setCurrentIndex(1)  # default: tháng hiện tại
+        self._billing_period_filter.setCurrentIndex(3)  # default: tất cả thời gian
         filter_bar.addWidget(self._billing_status_filter)
         filter_bar.addWidget(self._billing_period_filter)
         filter_bar.addStretch()
@@ -3063,6 +3129,8 @@ class HRDashboard:
                 status_text = "Đã thanh toán"
             elif status_key == "overdue":
                 status_text = "Quá hạn"
+            elif status_key == "due":
+                status_text = "Đến hạn thanh toán"
             elif status_key == "cancelled":
                 status_text = "Đã hủy"
             else:
@@ -3141,7 +3209,7 @@ class HRDashboard:
         if status_idx == 1:
             rows = [r for r in rows if r["status"] == "Đã thanh toán"]
         elif status_idx == 2:
-            rows = [r for r in rows if r["status"] == "Đang chờ thanh toán"]
+            rows = [r for r in rows if r["status"] in {"Đang chờ thanh toán", "Đến hạn thanh toán"}]
         elif status_idx == 3:
             rows = [r for r in rows if r["status"] == "Quá hạn"]
         rows = [r for r in rows if _row_in_selected_cycle(r)]
@@ -3319,19 +3387,12 @@ class HRDashboard:
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        if row.get("can_pay_now") and row.get("payment_url"):
-            btn_pay = QPushButton("Thanh toán qua SePay")
-            btn_pay.setFixedHeight(38)
-            btn_pay.setCursor(Qt.PointingHandCursor)
-            btn_pay.setStyleSheet(
-                f"QPushButton{{background:{P};color:#fff;border:none;border-radius:10px;font-weight:800;padding:0 14px;}}"
-                f"QPushButton:hover{{background:{P_DARK};}}"
-            )
-            btn_pay.clicked.connect(
-                lambda _=False, url=str(row.get("payment_url") or ""): webbrowser.open(url) if url else None
-            )
-            btn_row.addWidget(btn_pay)
-            btn_row.addSpacing(8)
+        pay_wrap = QWidget()
+        pay_lo = QHBoxLayout(pay_wrap)
+        pay_lo.setContentsMargins(0, 0, 0, 0)
+        pay_lo.setSpacing(0)
+        btn_row.addWidget(pay_wrap)
+        btn_row.addSpacing(8)
         btn = QPushButton("Đóng")
         btn.setFixedHeight(38)
         btn.setStyleSheet(
@@ -3341,7 +3402,129 @@ class HRDashboard:
         btn.clicked.connect(dlg.accept)
         btn_row.addWidget(btn)
         lo.addLayout(btn_row)
+
+        current_row: dict = dict(row)
+
+        def _render_pay_action() -> None:
+            while pay_lo.count():
+                it = pay_lo.takeAt(0)
+                if it.widget():
+                    it.widget().deleteLater()
+            if current_row.get("can_pay_now") and current_row.get("payment_url"):
+                btn_pay = QPushButton("Thanh toán")
+                btn_pay.setFixedHeight(38)
+                btn_pay.setCursor(Qt.PointingHandCursor)
+                btn_pay.setStyleSheet(
+                    f"QPushButton{{background:{P};color:#fff;border:none;border-radius:10px;font-weight:800;padding:0 14px;}}"
+                    f"QPushButton:hover{{background:{P_DARK};}}"
+                )
+
+                def _pay_and_poll(_checked=False) -> None:
+                    url = str(current_row.get("payment_url") or "").strip()
+                    if url:
+                        try:
+                            webbrowser.open(url)
+                        except Exception:
+                            pass
+                    inv_code = str(current_row.get("invoice_id") or "").lstrip("#").strip()
+                    if inv_code:
+                        self._start_billing_refresh_poll(inv_code)
+                        self._show_toast(
+                            "Đã mở cổng SePay. Hệ thống sẽ tự đồng bộ ngay khi thanh toán thành công.",
+                            "ic_view.svg",
+                            "#6366f1",
+                        )
+
+                btn_pay.clicked.connect(_pay_and_poll)
+                pay_lo.addWidget(btn_pay)
+
+        def _apply_invoice_row(new_row: dict) -> None:
+            incoming = dict(new_row or {})
+            # Defensive merge: keep previous non-empty values if incoming payload is partial.
+            for k in [
+                "invoice_id", "fee", "period_start", "period_end", "date",
+                "payment_window_start", "payment_window_end", "status",
+                "note", "payment_url", "can_pay_now",
+            ]:
+                v = incoming.get(k)
+                if v is None or (isinstance(v, str) and not v.strip()):
+                    incoming[k] = current_row.get(k)
+            if (incoming.get("fee") in (None, 0, "0", "0.0")) and current_row.get("fee"):
+                incoming["fee"] = current_row.get("fee")
+            current_row.update(incoming)
+            amount_lbl.setText(_fmt_vnd(current_row.get("fee") or 0))
+            period_lbl.setText(
+                f"Kỳ thanh toán: {current_row.get('period_start', '—')} - {current_row.get('period_end', '—')}"
+            )
+            created_v.setText(str(current_row.get("date") or "—"))
+            period_v.setText(f"{current_row.get('period_start', '—')} - {current_row.get('period_end', '—')}")
+            paywin_v.setText(
+                f"{current_row.get('payment_window_start', '—')} - {current_row.get('payment_window_end', '—')}"
+            )
+            status_v.setText(str(current_row.get("status") or "—"))
+            note_text.setText(str(current_row.get("note") or "—"))
+            _render_pay_action()
+
+        _apply_invoice_row(current_row)
+        inv_code = str(current_row.get("invoice_id") or "").lstrip("#").strip()
+        self._billing_detail_invoice_code = inv_code
+        self._billing_detail_refresh_cb = _apply_invoice_row
+
+        def _clear_detail_binding() -> None:
+            if self._billing_detail_invoice_code == inv_code:
+                self._billing_detail_invoice_code = ""
+                self._billing_detail_refresh_cb = None
+
+        dlg.finished.connect(lambda _res=0: _clear_detail_binding())
         dlg.exec()
+
+    def _start_billing_refresh_poll(self, invoice_code: str) -> None:
+        self._billing_poll_invoice_code = str(invoice_code or "").strip()
+        if not self._billing_poll_invoice_code:
+            return
+        if self._billing_poll_timer is None:
+            self._billing_poll_timer = QTimer(self.win)
+            self._billing_poll_timer.setInterval(4000)
+            self._billing_poll_timer.timeout.connect(self._poll_billing_after_payment)
+        if self._billing_poll_timer.isActive():
+            self._billing_poll_timer.stop()
+        self._billing_poll_timer.start()
+
+    def _poll_billing_after_payment(self) -> None:
+        invoice_code = str(self._billing_poll_invoice_code or "").strip()
+        if not invoice_code:
+            if self._billing_poll_timer and self._billing_poll_timer.isActive():
+                self._billing_poll_timer.stop()
+            return
+        try:
+            invoices = list(jobhub_api.hr_invoices() or [])
+        except Exception:
+            return
+        for inv in invoices:
+            code = str(inv.get("invoice_code") or "").strip()
+            if code != invoice_code:
+                continue
+            status_key = str(inv.get("status") or "").strip().lower()
+            if status_key == "paid":
+                if self._billing_poll_timer and self._billing_poll_timer.isActive():
+                    self._billing_poll_timer.stop()
+                self._refresh_billing_page()
+                if self._billing_detail_invoice_code and self._billing_detail_invoice_code == invoice_code:
+                    rows, _total, _period = self._billing_rows()
+                    matched = next(
+                        (
+                            r for r in rows
+                            if str(r.get("invoice_id") or "").lstrip("#").strip() == invoice_code
+                        ),
+                        None,
+                    )
+                    if matched and callable(self._billing_detail_refresh_cb):
+                        try:
+                            self._billing_detail_refresh_cb(matched)
+                        except Exception:
+                            pass
+                self._show_toast("Thanh toán thành công. Hóa đơn đã được cập nhật.", "ic_check.svg", "#10b981")
+            return
 
     def _go(self, idx: int) -> None:
         self._stack.setCurrentIndex(idx)
@@ -4652,6 +4835,22 @@ class HRDashboard:
         return wrap
 
     def _open_candidate_profile_dialog(self, app_data: dict, app_id: int, cv_name: str = "") -> None:
+        # Detail view is considered an action: backend may lock it when overdue invoice.
+        try:
+            view_result = jobhub_api.hr_view_candidate_profile(app_id)
+            new_status = str(view_result.get("status") or "").strip().lower()
+            if new_status:
+                app_data["status"] = new_status
+            self._fill_cands_table()
+        except ApiError as e:
+            detail = str(e).strip() or "Không thể mở hồ sơ ứng viên."
+            if getattr(e, "status", None) == 403:
+                detail = "Tài khoản đang bị tạm khóa thao tác do hóa đơn quá hạn. Vui lòng thanh toán để tiếp tục."
+            elif getattr(e, "status", None) == 404:
+                detail = f"Không tìm thấy đơn ứng tuyển #{app_id}."
+            self._show_toast(detail, "ic_x.svg", "#ef4444")
+            return
+
         can_full = bool(app_data.get("can_view_full_profile"))
         is_pro = bool(app_data.get("is_pro_active"))
         profile = app_data.get("candidate_profile") or {}
@@ -4948,7 +5147,7 @@ class HRDashboard:
             self._open_bytes_file(cv_bytes, suggested_name or cv_name)
             if status == "pending":
                 try:
-                    jobhub_api.hr_update_application_status(app_id, "reviewed")
+                    jobhub_api.hr_view_candidate_profile(app_id)
                     self._fill_cands_table()
                 except ApiError:
                     pass
@@ -5007,8 +5206,16 @@ class HRDashboard:
         try:
             result = jobhub_api.hr_update_application_status(app_id, new_status)
             ok = bool(result.get("ok"))
-        except ApiError:
+        except ApiError as e:
             ok = False
+            detail = str(e).strip() or "Không thể cập nhật trạng thái đơn ứng tuyển."
+            if getattr(e, "status", None) == 403:
+                detail = "Tài khoản đang bị tạm khóa thao tác do hóa đơn quá hạn. Vui lòng thanh toán để tiếp tục."
+            elif getattr(e, "status", None) == 404:
+                detail = f"Không tìm thấy đơn ứng tuyển #{app_id}."
+            elif getattr(e, "status", None) == 400 and "khong the thay doi trang thai" in detail.lower():
+                detail = f"Đơn #{app_id} đã chốt trạng thái, không thể cập nhật."
+            self._show_toast(detail, "ic_x.svg", "#ef4444")
         if ok:
             _TOAST = {
                 "reviewed": ("ic_view.svg",   "#0ea5e9", f"Đã đánh dấu xem xét đơn #{app_id}"),
@@ -5020,7 +5227,8 @@ class HRDashboard:
                 amount = int(result.get("invoice_amount_vnd") or 0)
                 msg = f"Đã phê duyệt đơn #{app_id}. Đã tạo invoice: {amount:,} VND"
             self._show_toast(msg, ic, col)
-        else:
+        elif 'result' in locals():
+            # API trả về phản hồi hợp lệ nhưng không thành công.
             self._show_toast(f"Không tìm thấy đơn #{app_id}", "ic_x.svg", "#ef4444")
         # Refresh table với dữ liệu mới nhất
         self._fill_cands_table()

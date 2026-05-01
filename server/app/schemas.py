@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .models import (
     ApplicationStatus,
@@ -31,28 +31,72 @@ class UserOut(BaseModel):
 
 
 class RegisterCandidate(BaseModel):
-    email: EmailStr
+    email: str
     password: str = Field(min_length=6)
     full_name: str | None = None
 
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, v: str) -> str:
+        email = (v or "").strip()
+        if "@" not in email:
+            raise ValueError("Email không hợp lệ")
+        local, _, domain = email.partition("@")
+        if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+            raise ValueError("Email không hợp lệ")
+        return email.lower()
+
 
 class RegisterHR(BaseModel):
-    email: EmailStr
+    email: str
     password: str = Field(min_length=6)
     full_name: str | None = None
     company_name: str = Field(min_length=1)
     contact_phone: str | None = None
     company_description: str | None = None
 
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, v: str) -> str:
+        email = (v or "").strip()
+        if "@" not in email:
+            raise ValueError("Email không hợp lệ")
+        local, _, domain = email.partition("@")
+        if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+            raise ValueError("Email không hợp lệ")
+        return email.lower()
+
 
 class LoginIn(BaseModel):
-    email: EmailStr
+    email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, v: str) -> str:
+        email = (v or "").strip()
+        if "@" not in email:
+            raise ValueError("Email không hợp lệ")
+        local, _, domain = email.partition("@")
+        if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+            raise ValueError("Email không hợp lệ")
+        return email.lower()
 
 
 class UpdateEmailIn(BaseModel):
-    new_email: EmailStr
+    new_email: str
     current_password: str = Field(min_length=1)
+
+    @field_validator("new_email")
+    @classmethod
+    def _validate_new_email(cls, v: str) -> str:
+        email = (v or "").strip()
+        if "@" not in email:
+            raise ValueError("Email không hợp lệ")
+        local, _, domain = email.partition("@")
+        if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+            raise ValueError("Email không hợp lệ")
+        return email.lower()
 
 
 class UpdatePasswordIn(BaseModel):
@@ -62,7 +106,20 @@ class UpdatePasswordIn(BaseModel):
 
 class UpdateBasicProfileIn(BaseModel):
     full_name: str | None = Field(default=None, max_length=255)
-    email: EmailStr | None = None
+    email: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        email = v.strip()
+        if "@" not in email:
+            raise ValueError("Email không hợp lệ")
+        local, _, domain = email.partition("@")
+        if not local or "." not in domain or domain.startswith(".") or domain.endswith("."):
+            raise ValueError("Email không hợp lệ")
+        return email.lower()
 
 
 class HRProfileOut(BaseModel):
@@ -92,6 +149,10 @@ class CandidateProfileUpdateIn(BaseModel):
     experience_text: str | None = Field(default=None, max_length=255)
     language: str | None = Field(default=None, max_length=255)
     skills_json: dict[str, list[str]] | None = None
+
+
+class ProfileViewTrackIn(BaseModel):
+    viewed_user_id: int = Field(gt=0)
 
 
 class CandidateProfileOut(BaseModel):

@@ -70,6 +70,16 @@ def my_hr_profile(user: Annotated[User, Depends(get_current_user)]) -> HRProfile
     return user.hr_profile
 
 
+@router.get("/me/hr-avatar/view")
+def view_my_hr_avatar(user: Annotated[User, Depends(get_current_user)]) -> FileResponse:
+    if user.role != UserRole.hr or user.hr_profile is None or not user.hr_profile.avatar_storage_key:
+        raise HTTPException(status_code=404, detail="HR avatar not found")
+    path = resolve_existing_file(settings, user.hr_profile.avatar_storage_key)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="HR avatar file not found")
+    return FileResponse(path=str(path), media_type="image/*", filename=path.name)
+
+
 @router.put("/me/hr-profile", response_model=HRProfileOut)
 def update_my_hr_profile(
     body: HRProfileUpdateIn,

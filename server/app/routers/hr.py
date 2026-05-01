@@ -8,13 +8,12 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..billing import create_invoice, mark_invoice_paid
+from ..billing import build_sepay_checkout_url, create_invoice, mark_invoice_paid
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import (
     CandidateProfile,
-    CandidateProfileView,
     CandidateSubscription,
     CVDocument,
     HRApprovalStatus,
@@ -25,6 +24,7 @@ from ..models import (
     Job,
     JobApplication,
     JobStatus,
+    ProfileView,
     User,
     UserRole,
     ApplicationStatus,
@@ -67,20 +67,19 @@ def _mark_candidate_profile_view(
     application_id: int,
 ) -> None:
     existed = db.scalar(
-        select(CandidateProfileView).where(
-            CandidateProfileView.candidate_id == candidate_id,
-            CandidateProfileView.viewer_user_id == viewer_user_id,
-            CandidateProfileView.job_id == job_id,
+        select(ProfileView).where(
+            ProfileView.viewed_user_id == candidate_id,
+            ProfileView.viewer_user_id == viewer_user_id,
         )
     )
     if existed:
+        existed.viewed_at = datetime.utcnow()
         return
     db.add(
-        CandidateProfileView(
-            candidate_id=candidate_id,
+        ProfileView(
+            viewed_user_id=candidate_id,
             viewer_user_id=viewer_user_id,
-            job_id=job_id,
-            application_id=application_id,
+            viewed_at=datetime.utcnow(),
         )
     )
 
@@ -142,6 +141,27 @@ def _payment_window_from_due(due_at: datetime) -> tuple[datetime, datetime]:
     start = datetime(due_at.year, due_at.month, start_day, 0, 0, 0)
     end = datetime(due_at.year, due_at.month, last_day, 23, 59, 59)
     return start, end
+
+
+def _has_overdue_hr_invoice(db: Session, hr_user_id: int) -> bool:
+    now = datetime.utcnow()
+    inv_id = db.scalar(
+        select(Invoice.id).where(
+            Invoice.owner_user_id == hr_user_id,
+            Invoice.invoice_type == InvoiceType.candidate_contact_unlock,
+            Invoice.status == InvoiceStatus.pending,
+            Invoice.due_at < now,
+        )
+    )
+    return inv_id is not None
+
+
+def _require_hr_billing_clear(db: Session, user: User) -> None:
+    if _has_overdue_hr_invoice(db, user.id):
+        raise HTTPException(
+            status_code=403,
+            detail="Tài khoản đang bị tạm khoá do hóa đơn quá hạn. Vui lòng thanh toán để tiếp tục sử dụng hệ thống.",
+        )
 
 
 def _upsert_monthly_hr_invoice(
@@ -288,6 +308,7 @@ def create_job(
     db: Annotated[Session, Depends(get_db)],
 ) -> JobOut:
     _require_approved_hr(user)
+    _require_hr_billing_clear(db, user)
     st = JobStatus.draft if body.as_draft else JobStatus.pending_approval
     job = Job(
         hr_user_id=user.id,
@@ -325,6 +346,7 @@ def get_job_detail(
     db: Annotated[Session, Depends(get_db)],
 ) -> JobOut:
     _require_hr(user)
+    _require_hr_billing_clear(db, user)
     job = db.get(Job, job_id)
     if not job or job.hr_user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
@@ -339,6 +361,7 @@ def update_job(
     db: Annotated[Session, Depends(get_db)],
 ) -> JobOut:
     _require_approved_hr(user)
+    _require_hr_billing_clear(db, user)
     job = db.get(Job, job_id)
     if not job or job.hr_user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
@@ -366,6 +389,7 @@ def delete_job(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     _require_hr(user)
+    _require_hr_billing_clear(db, user)
     job = db.get(Job, job_id)
     if not job or job.hr_user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
@@ -388,6 +412,7 @@ def submit_job(
     db: Annotated[Session, Depends(get_db)],
 ) -> JobOut:
     _require_approved_hr(user)
+    _require_hr_billing_clear(db, user)
     job = db.get(Job, job_id)
     if not job or job.hr_user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
@@ -468,13 +493,6 @@ def list_applications_for_hr(
     rows = db.execute(q).all()
     out: list[dict] = []
     for app, job, cand, company_name in rows:
-        _mark_candidate_profile_view(
-            db,
-            candidate_id=cand.id,
-            viewer_user_id=user.id,
-            job_id=job.id,
-            application_id=app.id,
-        )
         cv = db.get(CVDocument, app.cv_id) if app.cv_id else None
         cprof = runtime_cache.candidate_profile_by_user_id.get(cand.id)
         if not cprof:
@@ -511,7 +529,6 @@ def list_applications_for_hr(
                 "is_pro_active": _is_candidate_pro_active(db, cand.id),
             }
         )
-    db.commit()
     if page is None:
         return out
     return {
@@ -523,6 +540,36 @@ def list_applications_for_hr(
     }
 
 
+@router.post("/applications/{application_id}/view-profile")
+def view_candidate_profile(
+    application_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_hr(user)
+    _require_hr_billing_clear(db, user)
+    row = db.execute(
+        select(JobApplication, Job, User)
+        .join(Job, Job.id == JobApplication.job_id)
+        .join(User, User.id == JobApplication.candidate_id)
+        .where(JobApplication.id == application_id, Job.hr_user_id == user.id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Application not found")
+    app, job, cand = row
+    _mark_candidate_profile_view(
+        db,
+        candidate_id=cand.id,
+        viewer_user_id=user.id,
+        job_id=job.id,
+        application_id=app.id,
+    )
+    if app.status == ApplicationStatus.pending:
+        app.status = ApplicationStatus.reviewed
+    db.commit()
+    return {"ok": True, "application_id": application_id, "status": app.status.value}
+
+
 @router.get("/applications/{application_id}/cv/download")
 def download_application_cv(
     application_id: int,
@@ -530,6 +577,7 @@ def download_application_cv(
     db: Annotated[Session, Depends(get_db)],
 ) -> FileResponse:
     _require_hr(user)
+    _require_hr_billing_clear(db, user)
     row = db.execute(
         select(JobApplication, Job, CVDocument)
         .join(Job, Job.id == JobApplication.job_id)
@@ -553,6 +601,7 @@ def accept_application_and_generate_invoice(
     db: Annotated[Session, Depends(get_db)],
 ) -> Invoice:
     _require_approved_hr(user)
+    _require_hr_billing_clear(db, user)
     row = db.execute(
         select(JobApplication, Job)
         .join(Job, Job.id == JobApplication.job_id)
@@ -605,11 +654,7 @@ def mark_hr_invoice_paid(
                 status_code=400,
                 detail=f"Chua den han thanh toan. Thoi gian thanh toan: {win_start.strftime('%d/%m/%Y')} - {win_end.strftime('%d/%m/%Y')}",
             )
-        if now > win_end:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Da qua han thanh toan ({win_start.strftime('%d/%m/%Y')} - {win_end.strftime('%d/%m/%Y')})",
-            )
+        # Quá hạn vẫn cho phép thanh toán để mở khóa tài khoản HR.
     invoice = mark_invoice_paid(db, user.id, invoice_id)
     if invoice.invoice_type == InvoiceType.candidate_contact_unlock and invoice.application_id:
         app = db.get(JobApplication, invoice.application_id)
@@ -639,12 +684,20 @@ def list_hr_invoices(
         cycle_start, cycle_end = _cycle_range_from_due(inv.due_at) if inv.due_at else (None, None)
         pay_start, pay_end = _payment_window_from_due(inv.due_at) if inv.due_at else (None, None)
         now = datetime.utcnow()
+        checkout_url = build_sepay_checkout_url(str(inv.sepay_order_code)) if inv.sepay_order_code else ""
+        display_status = inv.status.value
+        if inv.status == InvoiceStatus.pending and inv.due_at:
+            if now > inv.due_at:
+                display_status = "overdue"
+            elif pay_start and now >= pay_start:
+                display_status = "due"
         can_pay_now = bool(
             inv.status == InvoiceStatus.pending
-            and pay_start
-            and pay_end
-            and pay_start <= now <= pay_end
-            and inv.sepay_payment_url
+            and checkout_url
+            and (
+                (pay_start and now >= pay_start)
+                or (inv.due_at and now > inv.due_at)
+            )
         )
         out.append(
             {
@@ -658,10 +711,10 @@ def list_hr_invoices(
                 "payment_window_start": pay_start.strftime("%d/%m/%Y") if pay_start else None,
                 "payment_window_end": pay_end.strftime("%d/%m/%Y") if pay_end else None,
                 "amount_vnd": int(inv.amount or 0),
-                "status": inv.status.value,
+                "status": display_status,
                 "note": inv.note,
                 "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
-                "sepay_payment_url": inv.sepay_payment_url,
+                "sepay_payment_url": checkout_url,
                 "can_pay_now": can_pay_now,
             }
         )
@@ -676,6 +729,7 @@ def update_application_status(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     _require_hr(user)
+    _require_hr_billing_clear(db, user)
     row = db.execute(
         select(JobApplication, Job)
         .join(Job, Job.id == JobApplication.job_id)
@@ -717,6 +771,7 @@ def get_candidate_contact(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     _require_hr(user)
+    _require_hr_billing_clear(db, user)
     row = db.execute(
         select(JobApplication, Job, User)
         .join(Job, Job.id == JobApplication.job_id)
@@ -742,6 +797,7 @@ def view_application_cv(
     db: Annotated[Session, Depends(get_db)],
 ) -> FileResponse:
     _require_hr(user)
+    _require_hr_billing_clear(db, user)
     row = db.execute(
         select(JobApplication, Job, CVDocument)
         .join(Job, Job.id == JobApplication.job_id)
