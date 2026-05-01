@@ -158,6 +158,28 @@ def hr_profile() -> dict | None:
     return _request("GET", "/users/me/hr-profile")
 
 
+def update_my_hr_profile(
+    company_name: str,
+    contact_phone: str | None = None,
+    company_description: str | None = None,
+) -> dict:
+    return _request(
+        "PUT",
+        "/users/me/hr-profile",
+        json={
+            "company_name": company_name,
+            "contact_phone": contact_phone,
+            "company_description": company_description,
+        },
+    )
+
+
+def upload_hr_avatar(file_path: str) -> dict:
+    name = Path(file_path).name
+    with open(file_path, "rb") as f:
+        return _request("POST", "/users/me/hr-avatar", files={"file": (name, f)})
+
+
 def my_candidate_profile() -> dict | None:
     return _request("GET", "/users/me/candidate-profile")
 
@@ -223,6 +245,10 @@ def candidate_my_subscription() -> dict:
     return _request("GET", "/candidate/subscription")
 
 
+def candidate_subscription_pricing() -> dict:
+    return _request("GET", "/candidate/subscription/pricing")
+
+
 def candidate_create_pro_upgrade_invoice(months: int = 1) -> dict:
     return _request("POST", "/candidate/subscription/pro/upgrade", json={"months": months})
 
@@ -232,7 +258,7 @@ def candidate_mark_invoice_paid(invoice_id: int) -> dict:
 
 
 def candidate_list_subscription_payments() -> list:
-    return _request("GET", "/candidate/subscription/payments")
+    return _request("GET", "/candidate/invoices")
 
 
 def candidate_save_job(job_id: int) -> dict:
@@ -245,6 +271,14 @@ def candidate_unsave_job(job_id: int) -> dict:
 
 def candidate_saved_jobs() -> list:
     return _request("GET", "/candidate/jobs/saved")
+
+
+def candidate_profile_views_summary() -> dict:
+    return _request("GET", "/candidate/profile/views-summary")
+
+
+def candidate_job_competitors(job_id: int) -> dict:
+    return _request("GET", f"/candidate/jobs/{job_id}/competitors")
 
 
 def hr_dashboard() -> dict:
@@ -275,12 +309,34 @@ def hr_submit_job(job_id: int) -> dict:
     return _request("PUT", f"/hr/jobs/{job_id}/submit")
 
 
-def hr_applications() -> list:
-    return _request("GET", "/hr/applications")
+def hr_applications(
+    *,
+    page: int | None = None,
+    page_size: int | None = None,
+    keyword: str | None = None,
+    status_filter: str | None = None,
+    sort_by: str | None = None,
+) -> list | dict:
+    params: dict[str, str | int] = {}
+    if page is not None:
+        params["page"] = int(page)
+    if page_size is not None:
+        params["page_size"] = int(page_size)
+    if keyword:
+        params["keyword"] = keyword
+    if status_filter:
+        params["status_filter"] = status_filter
+    if sort_by:
+        params["sort_by"] = sort_by
+    return _request("GET", "/hr/applications", params=params or None)
 
 
 def hr_update_application_status(application_id: int, new_status: str) -> dict:
     return _request("PUT", f"/hr/applications/{application_id}/status", json={"status": new_status})
+
+
+def hr_invoices() -> list:
+    return _request("GET", "/hr/invoices")
 
 
 def hr_download_application_cv(application_id: int) -> tuple[bytes, str | None]:

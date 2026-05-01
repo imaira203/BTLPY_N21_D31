@@ -1,0 +1,5 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="12" cy="12" r="10" fill="softColor"/>
+  <circle cx="12" cy="12" r="9" stroke="#FFFFFF" stroke-width="1.5"/>
+  <text x="12" y="15" text-anchor="middle" fill="currentColor" font-size="7.2" font-family="Arial, sans-serif" font-weight="700">PRO</text>
+</svg>

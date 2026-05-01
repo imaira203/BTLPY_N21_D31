@@ -917,6 +917,7 @@ class AdminDashboard:
             name     = str(u.get("full_name", "—"))
             email    = str(u.get("email", "—"))
             is_active = bool(u.get("is_active", True))
+            is_pro_active = bool(u.get("is_pro_active", False))
 
             # ── col 0: avatar + name + email ─────────────────────
             cell_w = QWidget(); cell_w.setStyleSheet("background:transparent;")
@@ -942,7 +943,18 @@ class AdminDashboard:
                 "QLabel { font-size:12px; color:#6B7280;"
                 " background:transparent; border:none; }"
             )
-            info_v.addWidget(lbl_n); info_v.addWidget(lbl_e)
+            name_row = QHBoxLayout()
+            name_row.setSpacing(4)
+            name_row.setContentsMargins(0, 0, 0, 0)
+            name_row.addWidget(lbl_n)
+            if is_pro_active:
+                pro_badge = QLabel()
+                pro_badge.setFixedSize(16, 16)
+                pro_badge.setPixmap(QIcon(str(resource_icon("ic_pro_badge.svg"))).pixmap(16, 16))
+                pro_badge.setStyleSheet("background:transparent; border:none;")
+                name_row.addWidget(pro_badge)
+            name_row.addStretch()
+            info_v.addLayout(name_row); info_v.addWidget(lbl_e)
             cell_h.addWidget(av); cell_h.addLayout(info_v); cell_h.addStretch()
             table.setCellWidget(row, 0, cell_w)
 

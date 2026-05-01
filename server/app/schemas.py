@@ -77,6 +77,12 @@ class HRProfileOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class HRProfileUpdateIn(BaseModel):
+    company_name: str = Field(min_length=1, max_length=255)
+    contact_phone: str | None = Field(default=None, max_length=64)
+    company_description: str | None = None
+
+
 class CandidateProfileUpdateIn(BaseModel):
     tagline: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=64)
@@ -207,19 +213,6 @@ class SavedJobOut(BaseModel):
     id: int
     candidate_id: int
     job_id: int
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class CandidateSubscriptionPaymentOut(BaseModel):
-    id: int
-    candidate_id: int
-    invoice_id: int | None
-    months: int
-    amount: float
-    currency: str
-    paid_at: datetime
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -76,8 +76,9 @@ def create_invoice(
     amount_vnd: int,
     note: str,
     application_id: int | None = None,
+    due_at: datetime | None = None,
 ) -> Invoice:
-    due_at = datetime.utcnow() + timedelta(days=max(1, settings.invoice_due_days))
+    due_at_final = due_at or (datetime.utcnow() + timedelta(days=max(1, settings.invoice_due_days)))
     order_code = f"INV-{owner_user_id}-{uuid4().hex[:14].upper()}"
     _ = build_sepay_checkout_fields(
         order_code=order_code,
@@ -92,7 +93,7 @@ def create_invoice(
         invoice_type=invoice_type,
         amount=Decimal(amount_vnd),
         currency="VND",
-        due_at=due_at,
+        due_at=due_at_final,
         sepay_order_code=order_code,
         sepay_payment_url=payment_url,
         note=note,

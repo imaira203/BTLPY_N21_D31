@@ -135,17 +135,21 @@ CREATE TABLE IF NOT EXISTS invoices (
   INDEX idx_invoice_owner_type_status (owner_user_id, invoice_type, status)
 );
 
-CREATE TABLE IF NOT EXISTS candidate_subscription_payments (
+CREATE TABLE IF NOT EXISTS candidate_profile_views (
   id INT AUTO_INCREMENT PRIMARY KEY,
   candidate_id INT NOT NULL,
-  invoice_id INT NULL UNIQUE,
-  months INT NOT NULL,
-  amount DECIMAL(12,2) NOT NULL,
-  currency VARCHAR(8) NOT NULL DEFAULT 'VND',
-  paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  viewer_user_id INT NOT NULL,
+  job_id INT NOT NULL,
+  application_id INT NULL,
+  viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
-  INDEX idx_candidate_sub_payments_candidate (candidate_id),
-  INDEX idx_candidate_sub_payments_paid_at (paid_at)
+  FOREIGN KEY (viewer_user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+  FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE SET NULL,
+  UNIQUE KEY uq_candidate_profile_view (candidate_id, viewer_user_id, job_id),
+  INDEX idx_candidate_profile_views_candidate (candidate_id),
+  INDEX idx_candidate_profile_views_viewer (viewer_user_id),
+  INDEX idx_candidate_profile_views_job (job_id),
+  INDEX idx_candidate_profile_views_application (application_id),
+  INDEX idx_candidate_profile_views_viewed_at (viewed_at)
 );

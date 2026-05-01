@@ -7,7 +7,18 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import HRApprovalStatus, HRProfile, Job, JobApplication, JobStatus, User, UserRole
+from ..models import (
+    CandidateProfileView,
+    CandidateSubscription,
+    HRApprovalStatus,
+    HRProfile,
+    Job,
+    JobApplication,
+    JobStatus,
+    SubscriptionStatus,
+    User,
+    UserRole,
+)
 from ..runtime_cache import runtime_cache
 from ..schemas import AdminDecision, JobOut, StatsOut, UserOut
 
@@ -18,6 +29,15 @@ def _require_admin(user: User) -> User:
     if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
     return user
+
+
+def _is_candidate_pro_active(db: Session, candidate_id: int) -> bool:
+    sub = runtime_cache.subscription_by_candidate_id.get(candidate_id)
+    if not sub:
+        sub = db.scalar(select(CandidateSubscription).where(CandidateSubscription.candidate_id == candidate_id))
+    if not sub or sub.status != SubscriptionStatus.active or not sub.pro_expires_at:
+        return False
+    return sub.pro_expires_at > datetime.utcnow()
 
 
 @router.get("/dashboard", response_model=StatsOut)
@@ -200,6 +220,9 @@ def candidate_overview(user: Annotated[User, Depends(get_current_user)], db: Ann
     ).all()
     out: list[dict] = []
     for user_id, full_name, email, created_at, is_active, role, app_count in rows:
+        profile_views = db.scalar(
+            select(func.count()).select_from(CandidateProfileView).where(CandidateProfileView.candidate_id == user_id)
+        ) or 0
         out.append(
             {
                 "id": user_id,
@@ -208,6 +231,8 @@ def candidate_overview(user: Annotated[User, Depends(get_current_user)], db: Ann
                 "phone": "",
                 "created_at": created_at.strftime("%d/%m/%Y"),
                 "applications_count": int(app_count or 0),
+                "profile_views": int(profile_views),
+                "is_pro_active": _is_candidate_pro_active(db, int(user_id)),
                 "is_active": bool(is_active),
                 "role": role.value,
             }

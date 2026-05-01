@@ -51,5 +51,8 @@ class RuntimeCache:
     def upsert_candidate_profile(self, profile: CandidateProfile) -> None:
         self.candidate_profile_by_user_id[profile.user_id] = profile
 
+    def upsert_hr_profile(self, profile: HRProfile) -> None:
+        self.hr_profile_by_user_id[profile.user_id] = profile
+
 
 runtime_cache = RuntimeCache()

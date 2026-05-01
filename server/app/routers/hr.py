@@ -1,7 +1,9 @@
-from datetime import datetime
+import calendar
+from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -12,6 +14,8 @@ from ..db import get_db
 from ..deps import get_current_user
 from ..models import (
     CandidateProfile,
+    CandidateProfileView,
+    CandidateSubscription,
     CVDocument,
     HRApprovalStatus,
     HRProfile,
@@ -24,6 +28,7 @@ from ..models import (
     User,
     UserRole,
     ApplicationStatus,
+    SubscriptionStatus,
 )
 from ..runtime_cache import runtime_cache
 from ..schemas import ApplicationDecisionIn, InvoiceOut, JobCreate, JobOut, StatsOut
@@ -44,11 +49,141 @@ def _require_approved_hr(user: User) -> None:
         raise HTTPException(status_code=403, detail="HR profile not approved yet")
 
 
+def _is_candidate_pro_active(db: Session, candidate_id: int) -> bool:
+    sub = runtime_cache.subscription_by_candidate_id.get(candidate_id)
+    if not sub:
+        sub = db.scalar(select(CandidateSubscription).where(CandidateSubscription.candidate_id == candidate_id))
+    if not sub or sub.status != SubscriptionStatus.active or not sub.pro_expires_at:
+        return False
+    return sub.pro_expires_at > datetime.utcnow()
+
+
+def _mark_candidate_profile_view(
+    db: Session,
+    *,
+    candidate_id: int,
+    viewer_user_id: int,
+    job_id: int,
+    application_id: int,
+) -> None:
+    existed = db.scalar(
+        select(CandidateProfileView).where(
+            CandidateProfileView.candidate_id == candidate_id,
+            CandidateProfileView.viewer_user_id == viewer_user_id,
+            CandidateProfileView.job_id == job_id,
+        )
+    )
+    if existed:
+        return
+    db.add(
+        CandidateProfileView(
+            candidate_id=candidate_id,
+            viewer_user_id=viewer_user_id,
+            job_id=job_id,
+            application_id=application_id,
+        )
+    )
+
+
+def _approval_fee_from_job(job: Job) -> int:
+    """10% * lương trung bình của job; fallback khi thiếu dải lương."""
+    min_salary = int(job.min_salary or 0)
+    max_salary = int(job.max_salary or 0)
+    if min_salary > 0 and max_salary > 0:
+        base_salary = int((min_salary + max_salary) / 2)
+    elif max_salary > 0:
+        base_salary = max_salary
+    elif min_salary > 0:
+        base_salary = min_salary
+    else:
+        base_salary = 1_000_000
+    return max(1_000, int(base_salary * 0.1))
+
+
+def _monthly_cycle_due_at(now_utc: datetime) -> datetime:
+    """
+    Due date là ngày cuối cùng của tháng.
+    Nếu phát sinh trong 5 ngày cuối tháng thì dồn sang kỳ tháng sau.
+    """
+    year = now_utc.year
+    month = now_utc.month
+    last_day = calendar.monthrange(year, month)[1]
+    window_start = max(1, last_day - 4)  # 5 ngày cuối tháng
+    if now_utc.day >= window_start:
+        if month == 12:
+            year += 1
+            month = 1
+        else:
+            month += 1
+        last_day = calendar.monthrange(year, month)[1]
+    return datetime(year, month, last_day, 23, 59, 59)
+
+
+def _cycle_range_from_due(due_at: datetime) -> tuple[datetime, datetime]:
+    """Kỳ hóa đơn: từ (due kỳ trước + 1 ngày) đến due hiện tại."""
+    y = due_at.year
+    m = due_at.month
+    if m == 1:
+        prev_y, prev_m = y - 1, 12
+    else:
+        prev_y, prev_m = y, m - 1
+    prev_last_day = calendar.monthrange(prev_y, prev_m)[1]
+    prev_due_day = max(1, prev_last_day - 5)
+    prev_due = datetime(prev_y, prev_m, prev_due_day, 23, 59, 59)
+    start = datetime(prev_due.year, prev_due.month, prev_due.day) + timedelta(days=1)
+    end = datetime(due_at.year, due_at.month, due_at.day)
+    return start, end
+
+
+def _payment_window_from_due(due_at: datetime) -> tuple[datetime, datetime]:
+    """Cửa sổ thanh toán: 5 ngày cuối tháng của kỳ invoice."""
+    last_day = calendar.monthrange(due_at.year, due_at.month)[1]
+    start_day = max(1, last_day - 4)
+    start = datetime(due_at.year, due_at.month, start_day, 0, 0, 0)
+    end = datetime(due_at.year, due_at.month, last_day, 23, 59, 59)
+    return start, end
+
+
+def _upsert_monthly_hr_invoice(
+    db: Session,
+    *,
+    owner_user_id: int,
+    amount_vnd: int,
+    application_id: int,
+) -> Invoice:
+    due_at = _monthly_cycle_due_at(datetime.utcnow())
+    base_note = f"Hoa don tuyen dung theo ky {due_at.strftime('%m/%Y')}"
+    inv = db.scalar(
+        select(Invoice).where(
+            Invoice.owner_user_id == owner_user_id,
+            Invoice.invoice_type == InvoiceType.candidate_contact_unlock,
+            Invoice.status == InvoiceStatus.pending,
+            Invoice.due_at == due_at,
+        )
+    )
+    if inv:
+        inv.amount = Decimal(inv.amount) + Decimal(amount_vnd)
+        inv.note = base_note
+        return inv
+    return create_invoice(
+        db=db,
+        owner_user_id=owner_user_id,
+        invoice_type=InvoiceType.candidate_contact_unlock,
+        amount_vnd=amount_vnd,
+        note=base_note,
+        application_id=None,
+        due_at=due_at,
+    )
+
+
 def _to_job_out(job: Job, db: Session, company_name: str | None = None) -> JobOut:
     app_count = db.scalar(select(func.count()).select_from(JobApplication).where(JobApplication.job_id == job.id)) or 0
     if company_name is None:
         hp = db.scalar(select(HRProfile).where(HRProfile.user_id == job.hr_user_id))
         company_name = hp.company_name if hp else None
+    raw_status = job.status.value if hasattr(job.status, "value") else str(job.status or "").strip()
+    if raw_status not in {s.value for s in JobStatus}:
+        raw_status = JobStatus.closed.value
     return JobOut(
         id=job.id,
         hr_user_id=job.hr_user_id,
@@ -64,7 +199,7 @@ def _to_job_out(job: Job, db: Session, company_name: str | None = None) -> JobOu
         count=job.headcount,
         deadline=job.deadline_text,
         applicants_count=int(app_count),
-        status=job.status,
+        status=JobStatus(raw_status),
         admin_note=job.admin_note,
         created_at=job.created_at,
         company_name=company_name,
@@ -217,8 +352,7 @@ def update_job(
     job.job_type = body.job_type
     job.headcount = body.count
     job.deadline_text = body.deadline
-    if job.status in (JobStatus.draft, JobStatus.rejected):
-        job.status = JobStatus.draft if body.as_draft else JobStatus.pending_approval
+    job.status = JobStatus.pending_approval
     db.commit()
     db.refresh(job)
     runtime_cache.upsert_job(job)
@@ -235,13 +369,16 @@ def delete_job(
     job = db.get(Job, job_id)
     if not job or job.hr_user_id != user.id:
         raise HTTPException(status_code=404, detail="Not found")
-    if job.status == JobStatus.published:
-        raise HTTPException(status_code=400, detail="Không thể xóa tin đã publish")
-    db.delete(job)
+    # Soft delete: keep job + applications for history, just stop recruiting.
+    current_status = job.status.value if hasattr(job.status, "value") else str(job.status or "").strip()
+    if current_status != JobStatus.closed.value:
+        # Assign raw string for compatibility with DBs that currently deserialize enum as plain string.
+        job.status = JobStatus.closed.value
     db.commit()
-    runtime_cache.jobs_by_id.pop(job.id, None)
-    runtime_cache.published_job_ids = [jid for jid in runtime_cache.published_job_ids if jid != job.id]
-    return {"ok": True}
+    db.refresh(job)
+    runtime_cache.upsert_job(job)
+    status_value = job.status.value if hasattr(job.status, "value") else str(job.status)
+    return {"ok": True, "status": status_value}
 
 
 @router.put("/jobs/{job_id}/submit", response_model=JobOut)
@@ -263,11 +400,16 @@ def submit_job(
     return _to_job_out(job, db, company_name=user.hr_profile.company_name if user.hr_profile else None)
 
 
-@router.get("/applications", response_model=list[dict])
+@router.get("/applications", response_model=dict | list[dict])
 def list_applications_for_hr(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> list[dict]:
+    page: int | None = Query(default=None, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
+    keyword: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None),
+    sort_by: str = Query(default="newest"),
+) -> list[dict] | dict:
     _require_hr(user)
     q = (
         select(JobApplication, Job, User, HRProfile.company_name)
@@ -275,44 +417,110 @@ def list_applications_for_hr(
         .join(User, User.id == JobApplication.candidate_id)
         .outerjoin(HRProfile, HRProfile.user_id == Job.hr_user_id)
         .where(Job.hr_user_id == user.id)
-        .order_by(JobApplication.id.desc())
-        .limit(500)
     )
+    if status_filter and status_filter in {"pending", "reviewed", "approved", "rejected"}:
+        q = q.where(JobApplication.status == ApplicationStatus(status_filter))
+    kw = (keyword or "").strip().lower()
+    if kw:
+        like = f"%{kw}%"
+        q = q.where(
+            func.lower(func.coalesce(User.full_name, "")).like(like)
+            | func.lower(func.coalesce(User.email, "")).like(like)
+            | func.lower(func.coalesce(Job.title, "")).like(like)
+            | func.lower(func.coalesce(HRProfile.company_name, "")).like(like)
+            | func.lower(func.coalesce(Job.location, "")).like(like)
+        )
+
+    if sort_by == "oldest":
+        q = q.order_by(JobApplication.created_at.asc(), JobApplication.id.asc())
+    elif sort_by == "name_asc":
+        q = q.order_by(func.lower(func.coalesce(User.full_name, "")).asc(), User.id.asc())
+    elif sort_by == "name_desc":
+        q = q.order_by(func.lower(func.coalesce(User.full_name, "")).desc(), User.id.desc())
+    else:
+        q = q.order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
+
+    count_q = (
+        select(func.count())
+        .select_from(JobApplication)
+        .join(Job, Job.id == JobApplication.job_id)
+        .join(User, User.id == JobApplication.candidate_id)
+        .outerjoin(HRProfile, HRProfile.user_id == Job.hr_user_id)
+        .where(Job.hr_user_id == user.id)
+    )
+    if status_filter and status_filter in {"pending", "reviewed", "approved", "rejected"}:
+        count_q = count_q.where(JobApplication.status == ApplicationStatus(status_filter))
+    if kw:
+        like = f"%{kw}%"
+        count_q = count_q.where(
+            func.lower(func.coalesce(User.full_name, "")).like(like)
+            | func.lower(func.coalesce(User.email, "")).like(like)
+            | func.lower(func.coalesce(Job.title, "")).like(like)
+            | func.lower(func.coalesce(HRProfile.company_name, "")).like(like)
+            | func.lower(func.coalesce(Job.location, "")).like(like)
+        )
+    total = int(db.scalar(count_q) or 0)
+    if page is not None:
+        offset = (page - 1) * page_size
+        q = q.offset(offset).limit(page_size)
+    else:
+        q = q.limit(500)
     rows = db.execute(q).all()
     out: list[dict] = []
     for app, job, cand, company_name in rows:
+        _mark_candidate_profile_view(
+            db,
+            candidate_id=cand.id,
+            viewer_user_id=user.id,
+            job_id=job.id,
+            application_id=app.id,
+        )
         cv = db.get(CVDocument, app.cv_id) if app.cv_id else None
         cprof = runtime_cache.candidate_profile_by_user_id.get(cand.id)
         if not cprof:
             cprof = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == cand.id))
             if cprof:
                 runtime_cache.upsert_candidate_profile(cprof)
+        can_view_private = app.status == ApplicationStatus.approved or bool(app.contact_unlocked_at)
         out.append(
             {
                 "application_id": app.id,
                 "job_title": job.title,
                 "candidate_name": cand.full_name or cand.email,
-                "candidate_email": cand.email if app.contact_unlocked_at else "",
+                "candidate_email": cand.email if can_view_private else "",
                 "contact_unlocked": bool(app.contact_unlocked_at),
+                "can_view_full_profile": bool(can_view_private),
+                "can_view_cv_detail": bool(can_view_private and app.cv_id),
                 "status": app.status.value,
                 "cv_id": app.cv_id,
                 "cv_name": cv.original_name if cv else None,
                 "applied_at": app.created_at.strftime("%d/%m/%Y"),
+                "accepted_at": app.accepted_at.isoformat() if app.accepted_at else None,
                 "company": company_name or "",
                 "location": job.location or "",
                 "candidate_profile": {
                     "tagline": cprof.tagline if cprof else None,
-                    "phone": cprof.phone if cprof else None,
-                    "address": cprof.address if cprof else None,
+                    "phone": cprof.phone if (cprof and can_view_private) else None,
+                    "address": cprof.address if (cprof and can_view_private) else None,
                     "professional_field": cprof.professional_field if cprof else None,
                     "degree": cprof.degree if cprof else None,
                     "experience_text": cprof.experience_text if cprof else None,
                     "language": cprof.language if cprof else None,
                     "skills_json": cprof.skills_as_dict() if cprof else {},
                 },
+                "is_pro_active": _is_candidate_pro_active(db, cand.id),
             }
         )
-    return out
+    db.commit()
+    if page is None:
+        return out
+    return {
+        "items": out,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if page_size > 0 else 1,
+    }
 
 
 @router.get("/applications/{application_id}/cv/download")
@@ -354,34 +562,24 @@ def accept_application_and_generate_invoice(
         raise HTTPException(status_code=404, detail="Application not found")
     app, job = row
     if app.status == ApplicationStatus.approved:
-        existing = db.scalar(
+        due_at = _monthly_cycle_due_at(datetime.utcnow())
+        existing_cycle = db.scalar(
             select(Invoice).where(
-                Invoice.application_id == app.id,
-                Invoice.invoice_type == InvoiceType.candidate_contact_unlock,
                 Invoice.owner_user_id == user.id,
+                Invoice.invoice_type == InvoiceType.candidate_contact_unlock,
+                Invoice.status == InvoiceStatus.pending,
+                Invoice.due_at == due_at,
             )
         )
-        if existing:
-            return existing
-    amount = job.contact_unlock_fee()
-    existing_pending = db.scalar(
-        select(Invoice).where(
-            Invoice.application_id == app.id,
-            Invoice.invoice_type == InvoiceType.candidate_contact_unlock,
-            Invoice.owner_user_id == user.id,
-            Invoice.status == InvoiceStatus.pending,
-        )
-    )
-    if existing_pending:
-        return existing_pending
+        if existing_cycle:
+            return existing_cycle
+    amount = _approval_fee_from_job(job)
 
     app.accept()
-    invoice = create_invoice(
-        db=db,
+    invoice = _upsert_monthly_hr_invoice(
+        db,
         owner_user_id=user.id,
-        invoice_type=InvoiceType.candidate_contact_unlock,
         amount_vnd=amount,
-        note=f"Phi mo lien he ung vien {app.id} (tinh theo luong cao nhat hoac cap bac)",
         application_id=app.id,
     )
     db.commit()
@@ -396,6 +594,22 @@ def mark_hr_invoice_paid(
     db: Annotated[Session, Depends(get_db)],
 ) -> Invoice:
     _require_hr(user)
+    invoice = db.scalar(select(Invoice).where(Invoice.id == invoice_id, Invoice.owner_user_id == user.id))
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.invoice_type == InvoiceType.candidate_contact_unlock:
+        now = datetime.utcnow()
+        win_start, win_end = _payment_window_from_due(invoice.due_at)
+        if now < win_start:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Chua den han thanh toan. Thoi gian thanh toan: {win_start.strftime('%d/%m/%Y')} - {win_end.strftime('%d/%m/%Y')}",
+            )
+        if now > win_end:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Da qua han thanh toan ({win_start.strftime('%d/%m/%Y')} - {win_end.strftime('%d/%m/%Y')})",
+            )
     invoice = mark_invoice_paid(db, user.id, invoice_id)
     if invoice.invoice_type == InvoiceType.candidate_contact_unlock and invoice.application_id:
         app = db.get(JobApplication, invoice.application_id)
@@ -404,6 +618,54 @@ def mark_hr_invoice_paid(
     db.commit()
     db.refresh(invoice)
     return invoice
+
+
+@router.get("/invoices", response_model=list[dict])
+def list_hr_invoices(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[dict]:
+    _require_hr(user)
+    rows = db.execute(
+        select(Invoice)
+        .where(
+            Invoice.owner_user_id == user.id,
+            Invoice.invoice_type == InvoiceType.candidate_contact_unlock,
+        )
+        .order_by(Invoice.created_at.desc(), Invoice.id.desc())
+    ).scalars().all()
+    out: list[dict] = []
+    for inv in rows:
+        cycle_start, cycle_end = _cycle_range_from_due(inv.due_at) if inv.due_at else (None, None)
+        pay_start, pay_end = _payment_window_from_due(inv.due_at) if inv.due_at else (None, None)
+        now = datetime.utcnow()
+        can_pay_now = bool(
+            inv.status == InvoiceStatus.pending
+            and pay_start
+            and pay_end
+            and pay_start <= now <= pay_end
+            and inv.sepay_payment_url
+        )
+        out.append(
+            {
+                "id": inv.id,
+                "invoice_code": inv.sepay_order_code or f"HD-{inv.id:05d}",
+                "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                "due_at": inv.due_at.isoformat() if inv.due_at else None,
+                "period": inv.due_at.strftime("%m/%Y") if inv.due_at else "",
+                "period_start": cycle_start.strftime("%d/%m/%Y") if cycle_start else None,
+                "period_end": cycle_end.strftime("%d/%m/%Y") if cycle_end else None,
+                "payment_window_start": pay_start.strftime("%d/%m/%Y") if pay_start else None,
+                "payment_window_end": pay_end.strftime("%d/%m/%Y") if pay_end else None,
+                "amount_vnd": int(inv.amount or 0),
+                "status": inv.status.value,
+                "note": inv.note,
+                "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
+                "sepay_payment_url": inv.sepay_payment_url,
+                "can_pay_now": can_pay_now,
+            }
+        )
+    return out
 
 
 @router.put("/applications/{application_id}/status")
@@ -421,12 +683,31 @@ def update_application_status(
     ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Application not found")
-    app, _job = row
+    app, job = row
+    if app.status in (ApplicationStatus.approved, ApplicationStatus.rejected):
+        if body.status != app.status:
+            raise HTTPException(status_code=400, detail="Don da duoc chot, khong the thay doi trang thai")
+        return {"ok": True, "application_id": application_id, "status": app.status.value}
     app.status = body.status
+    fee_invoice: Invoice | None = None
     if body.status == ApplicationStatus.approved:
         app.accepted_at = datetime.utcnow()
+        app.unlock_contact()
+        fee_amount = _approval_fee_from_job(job)
+        fee_invoice = _upsert_monthly_hr_invoice(
+            db,
+            owner_user_id=user.id,
+            amount_vnd=fee_amount,
+            application_id=app.id,
+        )
     db.commit()
-    return {"ok": True, "application_id": application_id, "status": app.status.value}
+    return {
+        "ok": True,
+        "application_id": application_id,
+        "status": app.status.value,
+        "invoice_id": fee_invoice.id if fee_invoice else None,
+        "invoice_amount_vnd": int(fee_invoice.amount) if fee_invoice else None,
+    }
 
 
 @router.get("/applications/{application_id}/contact")

@@ -11,12 +11,13 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import CandidateProfile, User, UserRole
+from ..models import CandidateProfile, HRApprovalStatus, HRProfile, User, UserRole
 from ..runtime_cache import runtime_cache
 from ..schemas import (
     CandidateProfileOut,
     CandidateProfileUpdateIn,
     HRProfileOut,
+    HRProfileUpdateIn,
     UpdateBasicProfileIn,
     UpdateEmailIn,
     UpdatePasswordIn,
@@ -69,6 +70,44 @@ def my_hr_profile(user: Annotated[User, Depends(get_current_user)]) -> HRProfile
     return user.hr_profile
 
 
+@router.put("/me/hr-profile", response_model=HRProfileOut)
+def update_my_hr_profile(
+    body: HRProfileUpdateIn,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> HRProfileOut:
+    if user.role != UserRole.hr:
+        raise HTTPException(status_code=403, detail="HR only")
+
+    profile = user.hr_profile
+    if profile is None:
+        profile = HRProfile(user_id=user.id, company_name=body.company_name.strip())
+        db.add(profile)
+        db.flush()
+
+    new_company_name = body.company_name.strip()
+    new_contact_phone = (body.contact_phone or "").strip() or None
+    new_company_description = (body.company_description or "").strip() or None
+
+    company_info_changed = (
+        str(profile.company_name or "").strip() != new_company_name
+        or (str(profile.contact_phone or "").strip() or None) != new_contact_phone
+        or (str(profile.company_description or "").strip() or None) != new_company_description
+    )
+
+    profile.company_name = new_company_name
+    profile.contact_phone = new_contact_phone
+    profile.company_description = new_company_description
+
+    if company_info_changed:
+        profile.approval_status = HRApprovalStatus.pending
+
+    db.commit()
+    db.refresh(profile)
+    runtime_cache.upsert_hr_profile(profile)
+    return profile
+
+
 @router.post("/me/hr-avatar", response_model=HRProfileOut)
 async def upload_my_hr_avatar(
     user: Annotated[User, Depends(get_current_user)],
@@ -96,6 +135,7 @@ async def upload_my_hr_avatar(
     user.hr_profile.avatar_storage_key = storage_key
     db.commit()
     db.refresh(user.hr_profile)
+    runtime_cache.upsert_hr_profile(user.hr_profile)
 
     if old_key and old_key != storage_key:
         old_path = resolve_existing_file(settings, old_key)

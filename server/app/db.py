@@ -142,26 +142,34 @@ def apply_mysql_schema_patches() -> None:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             log.info("Đã tạo bảng candidate_subscriptions (DB cũ).")
-        if not insp.has_table("candidate_subscription_payments"):
+        if insp.has_table("candidate_subscription_payments"):
+            with engine.begin() as conn:
+                conn.execute(text("DROP TABLE candidate_subscription_payments"))
+            log.info("Đã xóa bảng candidate_subscription_payments (không còn sử dụng).")
+        if not insp.has_table("candidate_profile_views"):
             stmt = (
-                "CREATE TABLE candidate_subscription_payments ("
+                "CREATE TABLE candidate_profile_views ("
                 "id INT AUTO_INCREMENT PRIMARY KEY, "
                 "candidate_id INT NOT NULL, "
-                "invoice_id INT NULL UNIQUE, "
-                "months INT NOT NULL, "
-                "amount DECIMAL(12,2) NOT NULL, "
-                "currency VARCHAR(8) NOT NULL DEFAULT 'VND', "
-                "paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-                "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
-                "INDEX idx_candidate_sub_payments_candidate (candidate_id), "
-                "INDEX idx_candidate_sub_payments_paid_at (paid_at), "
-                "CONSTRAINT fk_sub_payment_candidate FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE, "
-                "CONSTRAINT fk_sub_payment_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL"
+                "viewer_user_id INT NOT NULL, "
+                "job_id INT NOT NULL, "
+                "application_id INT NULL, "
+                "viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                "INDEX idx_candidate_profile_views_candidate (candidate_id), "
+                "INDEX idx_candidate_profile_views_viewer (viewer_user_id), "
+                "INDEX idx_candidate_profile_views_job (job_id), "
+                "INDEX idx_candidate_profile_views_application (application_id), "
+                "INDEX idx_candidate_profile_views_viewed_at (viewed_at), "
+                "UNIQUE KEY uq_candidate_profile_view (candidate_id, viewer_user_id, job_id), "
+                "CONSTRAINT fk_candidate_profile_views_candidate FOREIGN KEY (candidate_id) REFERENCES users(id) ON DELETE CASCADE, "
+                "CONSTRAINT fk_candidate_profile_views_viewer FOREIGN KEY (viewer_user_id) REFERENCES users(id) ON DELETE CASCADE, "
+                "CONSTRAINT fk_candidate_profile_views_job FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE, "
+                "CONSTRAINT fk_candidate_profile_views_application FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE SET NULL"
                 ")"
             )
             with engine.begin() as conn:
                 conn.execute(text(stmt))
-            log.info("Đã tạo bảng candidate_subscription_payments (DB cũ).")
+            log.info("Đã tạo bảng candidate_profile_views (DB cũ).")
         if insp.has_table("invoices"):
             with engine.begin() as conn:
                 conn.execute(
@@ -174,6 +182,17 @@ def apply_mysql_schema_patches() -> None:
                 with engine.begin() as conn:
                     conn.execute(text("ALTER TABLE invoices MODIFY COLUMN sepay_order_code VARCHAR(64) NOT NULL"))
             log.info("Đã chuẩn hóa invoices.sepay_order_code cho DB cũ.")
+        if dialect == "mysql" and insp.has_table("jobs"):
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE jobs "
+                        "MODIFY COLUMN status "
+                        "ENUM('draft','pending_approval','published','closed','rejected') "
+                        "NOT NULL DEFAULT 'pending_approval'"
+                    )
+                )
+            log.info("Đã chuẩn hóa enum jobs.status để hỗ trợ trạng thái 'closed'.")
         if insp.has_table("users") and insp.has_table("candidate_profiles"):
             stmt = (
                 "INSERT INTO candidate_profiles (user_id) "

@@ -15,10 +15,12 @@ from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import (
+    ApplicationStatus,
     CVDocument,
+    CandidateProfile,
+    CandidateProfileView,
     CandidateSavedJob,
     CandidateSubscription,
-    CandidateSubscriptionPayment,
     HRProfile,
     Invoice,
     InvoiceStatus,
@@ -35,7 +37,6 @@ from ..schemas import (
     ApplyIn,
     CandidateApplicationHistoryOut,
     CandidateSubscriptionOut,
-    CandidateSubscriptionPaymentOut,
     CVOut,
     InvoiceOut,
     JobOut,
@@ -88,21 +89,88 @@ def _apply_pro_upgrade_from_invoice(db: Session, invoice: Invoice) -> None:
     months = max(1, round(amount / max(1, settings.pro_monthly_price_vnd)))
     sub.status = SubscriptionStatus.active
     sub.pro_expires_at = current_start + timedelta(days=duration_days * months)
-    existing_payment = db.scalar(
-        select(CandidateSubscriptionPayment).where(CandidateSubscriptionPayment.invoice_id == invoice.id)
-    )
-    if not existing_payment:
-        db.add(
-            CandidateSubscriptionPayment(
-                candidate_id=invoice.owner_user_id,
-                invoice_id=invoice.id,
-                months=months,
-                amount=invoice.amount,
-                currency=invoice.currency,
-                paid_at=invoice.paid_at or datetime.utcnow(),
-            )
-        )
     runtime_cache.upsert_subscription(sub)
+
+
+def _normalized_app_status(value: object) -> ApplicationStatus:
+    if isinstance(value, ApplicationStatus):
+        return value
+    try:
+        return ApplicationStatus(str(value))
+    except Exception:
+        return ApplicationStatus.pending
+
+
+def _candidate_is_pro_active(db: Session, candidate_id: int) -> bool:
+    sub = runtime_cache.subscription_by_candidate_id.get(candidate_id)
+    if not sub:
+        sub = db.scalar(select(CandidateSubscription).where(CandidateSubscription.candidate_id == candidate_id))
+    return _is_pro_active(sub)
+
+
+def _ensure_contact_info_for_apply(db: Session, user: User) -> None:
+    email = str(user.email or "").strip()
+    full_name = str(user.full_name or "").strip()
+    profile = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == user.id))
+    phone = str(profile.phone or "").strip() if profile else ""
+    if not full_name or not email or not phone:
+        raise HTTPException(
+            status_code=400,
+            detail="Vui long cap nhat day du ho ten, email va so dien thoai trong ho so truoc khi ung tuyen",
+        )
+
+
+def _store_single_cv_for_user(
+    db: Session,
+    user_id: int,
+    *,
+    filename: str,
+    mime_type: str | None,
+    content: bytes,
+) -> CVDocument:
+    if len(content) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large")
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(filename or "").suffix[:16] or ".bin"
+    fname = f"{user_id}_{uuid.uuid4().hex}{ext}"
+    sub = settings.subdir_for("cvs")
+    storage_key = relative_key(sub, fname)
+    dest = absolute_path(settings, storage_key)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(content)
+
+    latest = db.scalar(
+        select(CVDocument)
+        .where(CVDocument.user_id == user_id)
+        .order_by(CVDocument.id.desc())
+        .limit(1)
+    )
+    old_path = resolve_existing_file(settings, latest.stored_filename) if latest else None
+
+    if latest:
+        latest.original_name = filename or fname
+        latest.stored_filename = storage_key
+        latest.mime_type = mime_type
+        latest.created_at = datetime.utcnow()
+        db.add(latest)
+        db.flush()
+        doc = latest
+    else:
+        doc = CVDocument(
+            user_id=user_id,
+            original_name=filename or fname,
+            stored_filename=storage_key,
+            mime_type=mime_type,
+        )
+        db.add(doc)
+        db.flush()
+
+    if old_path and old_path != dest and old_path.is_file():
+        try:
+            old_path.unlink()
+        except OSError:
+            pass
+    return doc
 
 
 @router.post("/cvs", response_model=CVOut)
@@ -112,24 +180,14 @@ async def upload_cv(
     file: UploadFile = File(...),
 ) -> CVDocument:
     _require_candidate(user)
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
-    ext = Path(file.filename or "").suffix[:16] or ".bin"
-    fname = f"{user.id}_{uuid.uuid4().hex}{ext}"
-    sub = settings.subdir_for("cvs")
-    storage_key = relative_key(sub, fname)
-    dest = absolute_path(settings, storage_key)
-    dest.parent.mkdir(parents=True, exist_ok=True)
     content = await file.read()
-    if len(content) > settings.max_upload_mb * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large")
-    dest.write_bytes(content)
-    doc = CVDocument(
-        user_id=user.id,
-        original_name=file.filename or fname,
-        stored_filename=storage_key,
+    doc = _store_single_cv_for_user(
+        db,
+        user.id,
+        filename=file.filename or "cv.bin",
         mime_type=file.content_type,
+        content=content,
     )
-    db.add(doc)
     db.commit()
     db.refresh(doc)
     return doc
@@ -138,8 +196,15 @@ async def upload_cv(
 @router.get("/cvs", response_model=list[CVOut])
 def list_cvs(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[CVOut]:
     _require_candidate(user)
-    rows = db.scalars(select(CVDocument).where(CVDocument.user_id == user.id).order_by(CVDocument.id.desc())).all()
-    return list(rows)
+    latest = db.scalar(
+        select(CVDocument)
+        .where(CVDocument.user_id == user.id)
+        .order_by(CVDocument.id.desc())
+        .limit(1)
+    )
+    if not latest:
+        return []
+    return [latest]
 
 
 @router.get("/cvs/{cv_id}/download")
@@ -264,6 +329,7 @@ def apply_job(
     db: Annotated[Session, Depends(get_db)],
 ) -> dict:
     _require_candidate(user)
+    _ensure_contact_info_for_apply(db, user)
     job = db.get(Job, job_id)
     if not job or job.status != JobStatus.published:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -285,9 +351,9 @@ def apply_job(
         select(JobApplication).where(
             JobApplication.job_id == job_id,
             JobApplication.candidate_id == user.id,
-        )
+        ).order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
     )
-    if existing:
+    if existing and _normalized_app_status(existing.status) != ApplicationStatus.rejected:
         raise HTTPException(status_code=400, detail="Already applied")
     app = JobApplication(job_id=job_id, candidate_id=user.id, cv_id=cv.id)
     db.add(app)
@@ -305,6 +371,7 @@ async def apply_job_with_optional_new_cv(
     cv_file: UploadFile | None = File(default=None),
 ) -> dict:
     _require_candidate(user)
+    _ensure_contact_info_for_apply(db, user)
     job = db.get(Job, job_id)
     if not job or job.status != JobStatus.published:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -312,32 +379,21 @@ async def apply_job_with_optional_new_cv(
         select(JobApplication).where(
             JobApplication.job_id == job_id,
             JobApplication.candidate_id == user.id,
-        )
+        ).order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
     )
-    if existing:
+    if existing and _normalized_app_status(existing.status) != ApplicationStatus.rejected:
         raise HTTPException(status_code=400, detail="Already applied")
 
     selected_cv_id = cv_id
     if cv_file is not None:
-        settings.upload_dir.mkdir(parents=True, exist_ok=True)
-        ext = Path(cv_file.filename or "").suffix[:16] or ".bin"
-        fname = f"{user.id}_{uuid.uuid4().hex}{ext}"
-        sub = settings.subdir_for("cvs")
-        storage_key = relative_key(sub, fname)
-        dest = absolute_path(settings, storage_key)
-        dest.parent.mkdir(parents=True, exist_ok=True)
         content = await cv_file.read()
-        if len(content) > settings.max_upload_mb * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="File too large")
-        dest.write_bytes(content)
-        doc = CVDocument(
-            user_id=user.id,
-            original_name=cv_file.filename or fname,
-            stored_filename=storage_key,
+        doc = _store_single_cv_for_user(
+            db,
+            user.id,
+            filename=cv_file.filename or "cv.bin",
             mime_type=cv_file.content_type,
+            content=content,
         )
-        db.add(doc)
-        db.flush()
         selected_cv_id = doc.id
     elif selected_cv_id is None:
         latest_cv = db.scalar(
@@ -378,6 +434,7 @@ def list_my_applications(
     ).all()
     out: list[CandidateApplicationHistoryOut] = []
     for app, job, company_name in rows:
+        status = _normalized_app_status(app.status)
         out.append(
             CandidateApplicationHistoryOut(
                 id=app.id,
@@ -385,11 +442,84 @@ def list_my_applications(
                 title=job.title,
                 company_name=company_name,
                 location=job.location,
-                status=app.status,
+                status=status,
                 applied_at=app.created_at,
             )
         )
     return out
+
+
+@router.get("/profile/views-summary")
+def my_profile_views_summary(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_candidate(user)
+    total_views = db.scalar(
+        select(func.count()).select_from(CandidateProfileView).where(CandidateProfileView.candidate_id == user.id)
+    ) or 0
+    unique_hr_viewers = db.scalar(
+        select(func.count(func.distinct(CandidateProfileView.viewer_user_id)))
+        .select_from(CandidateProfileView)
+        .where(CandidateProfileView.candidate_id == user.id)
+    ) or 0
+    return {
+        "total_views": int(total_views),
+        "unique_hr_viewers": int(unique_hr_viewers),
+    }
+
+
+@router.get("/jobs/{job_id}/competitors")
+def my_job_competitors(
+    job_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    _require_candidate(user)
+    job = db.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    mine = db.scalar(
+        select(JobApplication)
+        .where(JobApplication.job_id == job_id, JobApplication.candidate_id == user.id)
+        .order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
+        .limit(1)
+    )
+    if not mine:
+        raise HTTPException(status_code=403, detail="Ban can ung tuyen cong viec nay truoc khi xem doi thu")
+
+    rows = db.execute(
+        select(JobApplication, User, CandidateProfile)
+        .join(User, User.id == JobApplication.candidate_id)
+        .outerjoin(CandidateProfile, CandidateProfile.user_id == User.id)
+        .where(JobApplication.job_id == job_id, JobApplication.candidate_id != user.id)
+        .order_by(JobApplication.created_at.desc(), JobApplication.id.desc())
+        .limit(50)
+    ).all()
+    competitors: list[dict] = []
+    for app, cand, profile in rows:
+        name = (cand.full_name or "Ứng viên").strip()
+        masked_name = f"{name[:1]}***" if name else "Ứng viên"
+        competitors.append(
+            {
+                "application_id": app.id,
+                "status": _normalized_app_status(app.status).value,
+                "applied_at": app.created_at.isoformat(),
+                "candidate_display_name": masked_name,
+                "is_pro_active": _candidate_is_pro_active(db, cand.id),
+                "tagline": profile.tagline if profile else None,
+                "professional_field": profile.professional_field if profile else None,
+                "degree": profile.degree if profile else None,
+                "experience_text": profile.experience_text if profile else None,
+                "language": profile.language if profile else None,
+                "skills_json": profile.skills_as_dict() if profile else {},
+            }
+        )
+    return {
+        "job_id": job_id,
+        "total_competitors": len(competitors),
+        "competitors": competitors,
+    }
 
 
 @router.post("/jobs/{job_id}/save", response_model=SavedJobOut)
@@ -500,6 +630,17 @@ def my_subscription(
         tier="pro" if is_active else "basic",
         days_remaining=days_remaining,
     )
+
+
+@router.get("/subscription/pricing")
+def subscription_pricing(
+    user: Annotated[User, Depends(get_current_user)],
+) -> dict:
+    _require_candidate(user)
+    return {
+        "currency": "VND",
+        "pro_monthly_price_vnd": int(settings.pro_monthly_price_vnd),
+    }
 
 
 @router.post("/subscription/pro/upgrade", response_model=InvoiceOut)
@@ -692,16 +833,19 @@ def sepay_checkout_redirect_page(
     return HTMLResponse(content=html)
 
 
-@router.get("/subscription/payments", response_model=list[CandidateSubscriptionPaymentOut])
-def list_subscription_payments(
+@router.get("/invoices", response_model=list[InvoiceOut])
+def list_candidate_invoices(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> list[CandidateSubscriptionPayment]:
+) -> list[Invoice]:
     _require_candidate(user)
     rows = db.scalars(
-        select(CandidateSubscriptionPayment)
-        .where(CandidateSubscriptionPayment.candidate_id == user.id)
-        .order_by(CandidateSubscriptionPayment.paid_at.desc(), CandidateSubscriptionPayment.id.desc())
+        select(Invoice)
+        .where(
+            Invoice.owner_user_id == user.id,
+            Invoice.invoice_type == InvoiceType.pro_upgrade,
+        )
+        .order_by(Invoice.created_at.desc(), Invoice.id.desc())
     ).all()
     return list(rows)
 
