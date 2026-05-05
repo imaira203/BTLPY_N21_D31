@@ -58,6 +58,15 @@ def _is_candidate_pro_active(db: Session, candidate_id: int) -> bool:
     return sub.pro_expires_at > datetime.utcnow()
 
 
+def _normalized_app_status(value: object) -> ApplicationStatus:
+    if isinstance(value, ApplicationStatus):
+        return value
+    try:
+        return ApplicationStatus(str(value))
+    except Exception:
+        return ApplicationStatus.pending
+
+
 def _mark_candidate_profile_view(
     db: Session,
     *,
@@ -277,12 +286,13 @@ def hr_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annotated
     ).all()
     recent_pending_apps: list[dict] = []
     for app, job, cand in pending_rows:
+        app_status = _normalized_app_status(app.status)
         recent_pending_apps.append(
             {
                 "application_id": app.id,
                 "job_title": job.title,
                 "candidate_name": cand.full_name or cand.email,
-                "status": app.status.value,
+                "status": app_status.value,
                 "applied_at": app.created_at.isoformat(),
             }
         )
@@ -499,7 +509,8 @@ def list_applications_for_hr(
             cprof = db.scalar(select(CandidateProfile).where(CandidateProfile.user_id == cand.id))
             if cprof:
                 runtime_cache.upsert_candidate_profile(cprof)
-        can_view_private = app.status == ApplicationStatus.approved or bool(app.contact_unlocked_at)
+        app_status = _normalized_app_status(app.status)
+        can_view_private = app_status == ApplicationStatus.approved or bool(app.contact_unlocked_at)
         out.append(
             {
                 "application_id": app.id,
@@ -509,7 +520,7 @@ def list_applications_for_hr(
                 "contact_unlocked": bool(app.contact_unlocked_at),
                 "can_view_full_profile": bool(can_view_private),
                 "can_view_cv_detail": bool(can_view_private and app.cv_id),
-                "status": app.status.value,
+                "status": app_status.value,
                 "cv_id": app.cv_id,
                 "cv_name": cv.original_name if cv else None,
                 "applied_at": app.created_at.strftime("%d/%m/%Y"),
@@ -564,10 +575,11 @@ def view_candidate_profile(
         job_id=job.id,
         application_id=app.id,
     )
-    if app.status == ApplicationStatus.pending:
+    app_status = _normalized_app_status(app.status)
+    if app_status == ApplicationStatus.pending:
         app.status = ApplicationStatus.reviewed
     db.commit()
-    return {"ok": True, "application_id": application_id, "status": app.status.value}
+    return {"ok": True, "application_id": application_id, "status": _normalized_app_status(app.status).value}
 
 
 @router.get("/applications/{application_id}/cv/download")
@@ -610,7 +622,7 @@ def accept_application_and_generate_invoice(
     if not row:
         raise HTTPException(status_code=404, detail="Application not found")
     app, job = row
-    if app.status == ApplicationStatus.approved:
+    if _normalized_app_status(app.status) == ApplicationStatus.approved:
         due_at = _monthly_cycle_due_at(datetime.utcnow())
         existing_cycle = db.scalar(
             select(Invoice).where(
@@ -738,10 +750,11 @@ def update_application_status(
     if not row:
         raise HTTPException(status_code=404, detail="Application not found")
     app, job = row
-    if app.status in (ApplicationStatus.approved, ApplicationStatus.rejected):
-        if body.status != app.status:
+    app_status = _normalized_app_status(app.status)
+    if app_status in (ApplicationStatus.approved, ApplicationStatus.rejected):
+        if body.status != app_status:
             raise HTTPException(status_code=400, detail="Don da duoc chot, khong the thay doi trang thai")
-        return {"ok": True, "application_id": application_id, "status": app.status.value}
+        return {"ok": True, "application_id": application_id, "status": app_status.value}
     app.status = body.status
     fee_invoice: Invoice | None = None
     if body.status == ApplicationStatus.approved:
@@ -758,7 +771,7 @@ def update_application_status(
     return {
         "ok": True,
         "application_id": application_id,
-        "status": app.status.value,
+        "status": _normalized_app_status(app.status).value,
         "invoice_id": fee_invoice.id if fee_invoice else None,
         "invoice_amount_vnd": int(fee_invoice.amount) if fee_invoice else None,
     }
