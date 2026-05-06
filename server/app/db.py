@@ -71,6 +71,30 @@ def apply_mysql_schema_patches() -> None:
         add_column_if_missing("job_applications", "accepted_at", "DATETIME NULL", after="status")
         add_column_if_missing("job_applications", "contact_unlocked_at", "DATETIME NULL", after="accepted_at")
         add_column_if_missing("job_applications", "cv_id", "INT NULL", after="candidate_id")
+        if dialect == "mysql" and insp.has_table("job_applications"):
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE job_applications "
+                        "MODIFY COLUMN status ENUM('submitted','pending','reviewed','approved','rejected') "
+                        "NOT NULL DEFAULT 'pending'"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "UPDATE job_applications "
+                        "SET status = 'pending' "
+                        "WHERE status IS NULL OR status = '' OR status = 'submitted'"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE job_applications "
+                        "MODIFY COLUMN status ENUM('pending','reviewed','approved','rejected') "
+                        "NOT NULL DEFAULT 'pending'"
+                    )
+                )
+            log.info("Đã chuẩn hóa schema job_applications.status.")
         add_column_if_missing("candidate_profiles", "tagline", "VARCHAR(255) NULL", after="user_id")
         add_column_if_missing("candidate_profiles", "phone", "VARCHAR(64) NULL", after="tagline")
         add_column_if_missing("candidate_profiles", "address", "VARCHAR(255) NULL", after="phone")
