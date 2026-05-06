@@ -1,6 +1,7 @@
 import uuid
 import base64
 import logging
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Annotated
@@ -32,6 +33,7 @@ from ..models import (
     User,
     UserRole,
 )
+from ..notifications import notify_role, notify_user
 from ..runtime_cache import runtime_cache
 from ..schemas import (
     ApplyIn,
@@ -102,6 +104,25 @@ def _normalized_app_status(value: object) -> ApplicationStatus:
         return ApplicationStatus.pending
 
 
+def _invoice_type_key(value: object) -> str:
+    if value is None:
+        return ""
+    return value.value if hasattr(value, "value") else str(value)
+
+
+def _extract_job_id_from_boost_text(text: str | None) -> int | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    m = re.search(r"#\s*(\d+)", raw)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except Exception:
+        return None
+
+
 def _candidate_is_pro_active(db: Session, candidate_id: int) -> bool:
     sub = runtime_cache.subscription_by_candidate_id.get(candidate_id)
     if not sub:
@@ -120,6 +141,12 @@ def _is_hr_overdue_locked(db: Session, hr_user_id: int) -> bool:
         )
     )
     return inv_id is not None
+
+
+def _boost_score(job: Job) -> int:
+    if not job.boost_expires_at or job.boost_expires_at <= datetime.utcnow():
+        return 0
+    return int(job.boost_budget_vnd or 0)
 
 
 def _ensure_contact_info_for_apply(db: Session, user: User) -> None:
@@ -282,7 +309,11 @@ def browse_jobs(db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
     cached_jobs = runtime_cache.get_published_jobs()
     rows = []
     if cached_jobs:
-        for job in sorted(cached_jobs, key=lambda item: item.id, reverse=True)[:200]:
+        for job in sorted(
+            cached_jobs,
+            key=lambda item: (_boost_score(item), item.boost_last_paid_at or datetime.min, item.id),
+            reverse=True,
+        )[:200]:
             profile = runtime_cache.hr_profile_by_user_id.get(job.hr_user_id)
             rows.append((job, profile.company_name if profile else None))
     else:
@@ -291,9 +322,14 @@ def browse_jobs(db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
             .outerjoin(HRProfile, HRProfile.user_id == Job.hr_user_id)
             .where(Job.status == JobStatus.published)
             .order_by(Job.id.desc())
-            .limit(200)
+            .limit(500)
         )
         rows = db.execute(q).all()
+        rows = sorted(
+            rows,
+            key=lambda t: (_boost_score(t[0]), t[0].boost_last_paid_at or datetime.min, t[0].id),
+            reverse=True,
+        )[:200]
     out: list[JobOut] = []
     for job, company_name in rows:
         if _is_hr_overdue_locked(db, int(job.hr_user_id)):
@@ -319,6 +355,10 @@ def browse_jobs(db: Annotated[Session, Depends(get_db)]) -> list[JobOut]:
                 admin_note=job.admin_note,
                 created_at=job.created_at,
                 company_name=company_name,
+                boost_budget_vnd=int(job.boost_budget_vnd or 0),
+                is_boosted=False,
+                boost_last_paid_at=job.boost_last_paid_at,
+                boost_expires_at=None,
             )
         )
     return out
@@ -377,6 +417,24 @@ def apply_job(
         raise HTTPException(status_code=400, detail="Đã ứng tuyển")
     app = JobApplication(job_id=job_id, candidate_id=user.id, cv_id=cv.id)
     db.add(app)
+    notify_user(
+        db,
+        user_id=int(job.hr_user_id),
+        title="Ứng viên mới",
+        message=f"Có ứng viên mới ứng tuyển vào tin '{job.title}'.",
+    )
+    notify_user(
+        db,
+        user_id=int(user.id),
+        title="Ứng tuyển thành công",
+        message=f"Bạn đã ứng tuyển vào vị trí '{job.title}'.",
+    )
+    notify_role(
+        db,
+        role=UserRole.admin,
+        title="Hoạt động ứng tuyển",
+        message=f"Tin '{job.title}' vừa có ứng viên mới.",
+    )
     db.commit()
     db.refresh(app)
     return {"ok": True, "application_id": app.id, "status": app.status.value}
@@ -436,6 +494,24 @@ async def apply_job_with_optional_new_cv(
 
     app = JobApplication(job_id=job_id, candidate_id=user.id, cv_id=cv.id)
     db.add(app)
+    notify_user(
+        db,
+        user_id=int(job.hr_user_id),
+        title="Ứng viên mới",
+        message=f"Có ứng viên mới ứng tuyển vào tin '{job.title}'.",
+    )
+    notify_user(
+        db,
+        user_id=int(user.id),
+        title="Ứng tuyển thành công",
+        message=f"Bạn đã ứng tuyển vào vị trí '{job.title}'.",
+    )
+    notify_role(
+        db,
+        role=UserRole.admin,
+        title="Hoạt động ứng tuyển",
+        message=f"Tin '{job.title}' vừa có ứng viên mới.",
+    )
     db.commit()
     db.refresh(app)
     return {"ok": True, "application_id": app.id, "status": app.status.value, "cv_id": cv.id}
@@ -856,8 +932,25 @@ def sepay_webhook_callback(
 
     if invoice.status != InvoiceStatus.paid:
         invoice.mark_paid()
-        if invoice.invoice_type == InvoiceType.pro_upgrade:
+        invoice_type = _invoice_type_key(invoice.invoice_type)
+        if invoice_type == InvoiceType.pro_upgrade.value:
             _apply_pro_upgrade_from_invoice(db, invoice)
+        elif invoice_type == InvoiceType.job_boost.value:
+            target_job_id = int(invoice.job_id) if invoice.job_id else None
+            if target_job_id is None:
+                target_job_id = _extract_job_id_from_boost_text(
+                    str(order_obj.get("order_description") or invoice.note or "")
+                )
+                if target_job_id:
+                    invoice.job_id = target_job_id
+            job = db.get(Job, int(target_job_id)) if target_job_id else None
+            if job:
+                now_utc = datetime.utcnow()
+                base_time = job.boost_expires_at if (job.boost_expires_at and job.boost_expires_at > now_utc) else now_utc
+                job.boost_budget_vnd = int(job.boost_budget_vnd or 0) + int(float(invoice.amount or 0))
+                job.boost_last_paid_at = now_utc
+                job.boost_expires_at = base_time + timedelta(days=14)
+                runtime_cache.upsert_job(job)
         db.commit()
     return {"ok": True, "accepted": True, "invoice_id": invoice.id}
 
@@ -893,7 +986,14 @@ def sepay_checkout_redirect_page(
   </script>
 </body>
 </html>"""
-    return HTMLResponse(content=html)
+    return HTMLResponse(
+        content=html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @router.get("/invoices", response_model=list[InvoiceOut])

@@ -27,6 +27,7 @@ class Invoice(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     application_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_applications.id"), nullable=True, index=True)
+    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("jobs.id"), nullable=True, index=True)
 
     owner: Mapped["User"] = relationship(back_populates="invoices")
 

@@ -131,6 +131,14 @@ def me() -> dict:
     return _request("GET", "/users/me")
 
 
+def my_notifications(limit: int = 30, unread_only: bool = False) -> list:
+    return _request("GET", "/users/me/notifications", params={"limit": int(limit), "unread_only": bool(unread_only)})
+
+
+def mark_notification_read(notification_id: int) -> dict:
+    return _request("POST", f"/users/me/notifications/{notification_id}/read")
+
+
 def update_my_email(new_email: str, current_password: str) -> dict:
     return _request("PUT", "/users/me/email", json={"new_email": new_email, "current_password": current_password})
 
@@ -318,6 +326,14 @@ def hr_submit_job(job_id: int) -> dict:
     return _request("PUT", f"/hr/jobs/{job_id}/submit")
 
 
+def hr_create_boost_invoice(job_id: int, amount_vnd: int, note: str | None = None) -> dict:
+    return _request(
+        "POST",
+        f"/hr/jobs/{job_id}/boost-invoice",
+        json={"amount_vnd": int(amount_vnd), "note": note},
+    )
+
+
 def hr_applications(
     *,
     page: int | None = None,
@@ -428,3 +444,7 @@ def admin_hr_detail(user_id: int) -> dict:
 
 def admin_job_detail(job_id: int) -> dict:
     return _request("GET", f"/admin/jobs/{job_id}")
+
+
+def admin_payment_insights(limit: int = 100, period: str = "all") -> dict:
+    return _request("GET", "/admin/payment-insights", params={"limit": int(limit), "period": period})

@@ -25,7 +25,8 @@ def build_sepay_checkout_fields(order_code: str, amount_vnd: int, note: str, own
         "operation": settings.sepay_operation,
         "order_description": note,
         "order_invoice_number": order_code,
-        "customer_id": f"CANDIDATE_{owner_user_id}",
+        # Owner có thể là candidate hoặc HR; dùng định danh trung tính theo user_id.
+        "customer_id": f"USER_{owner_user_id}",
         "payment_method": settings.sepay_payment_method,
     }
     if settings.sepay_success_url:
@@ -76,9 +77,15 @@ def create_invoice(
     amount_vnd: int,
     note: str,
     application_id: int | None = None,
+    job_id: int | None = None,
     due_at: datetime | None = None,
 ) -> Invoice:
-    due_at_final = due_at or (datetime.utcnow() + timedelta(days=max(1, settings.invoice_due_days)))
+    now_utc = datetime.utcnow()
+    # Job boost luôn có hạn thanh toán ngắn (30 phút) theo nghiệp vụ.
+    if invoice_type == InvoiceType.job_boost:
+        due_at_final = due_at or (now_utc + timedelta(minutes=30))
+    else:
+        due_at_final = due_at or (now_utc + timedelta(days=max(1, settings.invoice_due_days)))
     order_code = f"INV-{owner_user_id}-{uuid4().hex[:14].upper()}"
     _ = build_sepay_checkout_fields(
         order_code=order_code,
@@ -98,6 +105,7 @@ def create_invoice(
         sepay_payment_url=payment_url,
         note=note,
         application_id=application_id,
+        job_id=job_id,
     )
     db.add(invoice)
     db.flush()

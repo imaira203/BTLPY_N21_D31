@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS jobs (
   headcount INT NULL,
   deadline_text VARCHAR(32) NULL,
   view_count INT NOT NULL DEFAULT 0,
+  boost_budget_vnd INT NOT NULL DEFAULT 0,
+  boost_last_paid_at DATETIME NULL,
+  boost_expires_at DATETIME NULL,
   status ENUM('draft','pending_approval','published','closed','rejected') NOT NULL DEFAULT 'pending_approval',
   admin_note TEXT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -115,7 +118,7 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
 CREATE TABLE IF NOT EXISTS invoices (
   id INT AUTO_INCREMENT PRIMARY KEY,
   owner_user_id INT NOT NULL,
-  invoice_type ENUM('pro_upgrade','candidate_contact_unlock') NOT NULL,
+  invoice_type ENUM('pro_upgrade','candidate_contact_unlock','job_boost') NOT NULL,
   status ENUM('pending','paid','overdue','cancelled') NOT NULL DEFAULT 'pending',
   amount DECIMAL(12,2) NOT NULL,
   currency VARCHAR(8) NOT NULL DEFAULT 'VND',
@@ -126,13 +129,31 @@ CREATE TABLE IF NOT EXISTS invoices (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   paid_at DATETIME NULL,
   application_id INT NULL,
+  job_id INT NULL,
   FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (application_id) REFERENCES job_applications(id) ON DELETE SET NULL,
+  FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL,
   INDEX idx_invoice_owner (owner_user_id),
   INDEX idx_invoice_type (invoice_type),
   INDEX idx_invoice_application (application_id),
+  INDEX idx_invoice_job (job_id),
   INDEX idx_invoice_status (status),
   INDEX idx_invoice_owner_type_status (owner_user_id, invoice_type, status)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NULL,
+  target_role ENUM('candidate','hr','admin') NULL,
+  title VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  is_read TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_notifications_user (user_id),
+  INDEX idx_notifications_role (target_role),
+  INDEX idx_notifications_read (is_read),
+  INDEX idx_notifications_created (created_at)
 );
 
 CREATE TABLE IF NOT EXISTS profile_views (

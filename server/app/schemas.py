@@ -204,8 +204,17 @@ class JobOut(BaseModel):
     admin_note: str | None
     created_at: datetime
     company_name: str | None = None
+    boost_budget_vnd: int = 0
+    is_boosted: bool = False
+    boost_last_paid_at: datetime | None = None
+    boost_expires_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class JobBoostInvoiceCreateIn(BaseModel):
+    amount_vnd: int = Field(ge=1000)
+    note: str | None = None
 
 
 class CVOut(BaseModel):
@@ -293,5 +302,14 @@ class InvoiceOut(BaseModel):
     created_at: datetime
     paid_at: datetime | None
     application_id: int | None
+    job_id: int | None
 
     model_config = {"from_attributes": True}
+
+
+class NotificationOut(BaseModel):
+    id: int
+    title: str
+    message: str
+    is_read: bool
+    created_at: datetime
