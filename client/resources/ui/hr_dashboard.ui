@@ -532,13 +532,13 @@ QPushButton#btnSaveDraft { background-color: #F1F5F9; color: #475569; border-rad
          <widget class="QWidget" name="pageCands">
           <layout class="QVBoxLayout" name="candsLayout">
            <property name="spacing">
-            <number>0</number>
+            <number>18</number>
            </property>
            <property name="leftMargin">
             <number>32</number>
            </property>
            <property name="topMargin">
-            <number>32</number>
+            <number>24</number>
            </property>
            <property name="rightMargin">
             <number>32</number>
@@ -547,7 +547,776 @@ QPushButton#btnSaveDraft { background-color: #F1F5F9; color: #475569; border-rad
             <number>32</number>
            </property>
            <item>
-            <widget class="QTableWidget" name="tableCands"/>
+            <widget class="QFrame" name="candidateHeaderCard">
+             <property name="styleSheet">
+              <string notr="true">
+QFrame#candidateHeaderCard {
+    background-color: #ffffff;
+    border: 1px solid #eef2f7;
+    border-radius: 14px;
+}
+QLabel#candidatePageTitle {
+    color: #0f172a;
+    font-family: "Segoe UI", "Inter";
+    font-size: 24px;
+    font-weight: 800;
+    background: transparent;
+    border: none;
+}
+QLabel#candidatePageSubtitle {
+    color: #64748b;
+    font-family: "Segoe UI", "Inter";
+    font-size: 13px;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+}
+QFrame#candidateSearchFrame {
+    background-color: #f8fafc;
+    border: 1px solid #dbe3ef;
+    border-radius: 22px;
+}
+QFrame#candidateSearchFrame:focus-within {
+    background-color: #ffffff;
+    border: 1px solid #3b82f6;
+}
+QLabel#candidateSearchIcon {
+    color: #94a3b8;
+    font-family: "Segoe UI", "Inter";
+    font-size: 17px;
+    font-weight: 700;
+    background: transparent;
+    border: none;
+}
+QLineEdit#lineCandidateSearch {
+    background: transparent;
+    border: none;
+    color: #0f172a;
+    font-family: "Segoe UI", "Inter";
+    font-size: 13px;
+    padding: 0px;
+}
+QPushButton#btnCandidateSearchClear {
+    background-color: #e2e8f0;
+    color: #64748b;
+    border: none;
+    border-radius: 11px;
+    font-size: 14px;
+    font-weight: 800;
+}
+QPushButton#btnCandidateSearchClear:hover {
+    background-color: #cbd5e1;
+    color: #0f172a;
+}
+QComboBox.candidateFilterChip {
+    background-color: #f8fafc;
+    border: 1px solid #dbe3ef;
+    border-radius: 19px;
+    padding: 0px 16px;
+    color: #334155;
+    font-family: "Segoe UI", "Inter";
+    font-size: 13px;
+    font-weight: 600;
+}
+QComboBox.candidateFilterChip:hover {
+    background-color: #f1f5f9;
+    border-color: #bfdbfe;
+}
+QComboBox.candidateFilterChip:focus {
+    background-color: #ffffff;
+    border-color: #3b82f6;
+}
+QComboBox.candidateFilterChip::drop-down {
+    border: none;
+    width: 30px;
+}
+QComboBox.candidateFilterChip QAbstractItemView {
+    background-color: #ffffff;
+    border: 1px solid #dbe3ef;
+    border-radius: 10px;
+    selection-background-color: #eff6ff;
+    selection-color: #2563eb;
+    padding: 6px;
+}
+QPushButton#btnCandidateClearFilters {
+    background-color: transparent;
+    color: #ef4444;
+    border: none;
+    border-radius: 19px;
+    padding: 0px 14px;
+    font-family: "Segoe UI", "Inter";
+    font-size: 13px;
+    font-weight: 700;
+}
+QPushButton#btnCandidateClearFilters:hover {
+    background-color: #fef2f2;
+    color: #dc2626;
+}
+              </string>
+             </property>
+             <layout class="QVBoxLayout" name="candidateHeaderLayout">
+              <property name="spacing">
+               <number>18</number>
+              </property>
+              <property name="leftMargin">
+               <number>24</number>
+              </property>
+              <property name="topMargin">
+               <number>22</number>
+              </property>
+              <property name="rightMargin">
+               <number>24</number>
+              </property>
+              <property name="bottomMargin">
+               <number>22</number>
+              </property>
+              <item>
+               <layout class="QHBoxLayout" name="candidateTitleSearchRow">
+                <property name="spacing">
+                 <number>16</number>
+                </property>
+                <item>
+                 <layout class="QVBoxLayout" name="candidateTitleBlock">
+                  <property name="spacing">
+                   <number>3</number>
+                  </property>
+                  <item>
+                   <widget class="QLabel" name="candidatePageTitle">
+                    <property name="text">
+                     <string>Đơn ứng tuyển</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLabel" name="candidatePageSubtitle">
+                    <property name="text">
+                     <string>Quản lý các ứng viên đã ứng tuyển</string>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </item>
+                <item>
+                 <widget class="QFrame" name="candidateSearchFrame">
+                  <property name="minimumSize">
+                   <size>
+                    <width>420</width>
+                    <height>44</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>16777215</width>
+                    <height>44</height>
+                   </size>
+                  </property>
+                  <layout class="QHBoxLayout" name="candidateSearchLayout">
+                   <property name="spacing">
+                    <number>8</number>
+                   </property>
+                   <property name="leftMargin">
+                    <number>14</number>
+                   </property>
+                   <property name="topMargin">
+                    <number>0</number>
+                   </property>
+                   <property name="rightMargin">
+                    <number>14</number>
+                   </property>
+                   <property name="bottomMargin">
+                    <number>0</number>
+                   </property>
+                   <item>
+                    <widget class="QLabel" name="candidateSearchIcon">
+                     <property name="minimumSize">
+                      <size>
+                       <width>18</width>
+                       <height>18</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>18</width>
+                       <height>18</height>
+                      </size>
+                     </property>
+                     <property name="text">
+                      <string/>
+                     </property>
+                     <property name="pixmap">
+                      <pixmap>../icons/modern/search.svg</pixmap>
+                     </property>
+                     <property name="alignment">
+                      <set>Qt::AlignCenter</set>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLineEdit" name="lineCandidateSearch">
+                     <property name="placeholderText">
+                      <string>Tìm kiếm ứng viên, email, vị trí ứng tuyển...</string>
+                     </property>
+                     <property name="frame">
+                      <bool>false</bool>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QPushButton" name="btnCandidateSearchClear">
+                     <property name="minimumSize">
+                      <size>
+                       <width>22</width>
+                       <height>22</height>
+                      </size>
+                     </property>
+                     <property name="maximumSize">
+                      <size>
+                       <width>22</width>
+                       <height>22</height>
+                      </size>
+                     </property>
+                     <property name="cursor">
+                      <cursorShape>PointingHandCursor</cursorShape>
+                     </property>
+                     <property name="text">
+                      <string>×</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </widget>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <layout class="QHBoxLayout" name="candidateFilterRow">
+                <property name="spacing">
+                 <number>10</number>
+                </property>
+                <item>
+                 <widget class="QComboBox" name="comboCandidateStatus">
+                  <property name="minimumSize">
+                   <size>
+                    <width>178</width>
+                    <height>38</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>178</width>
+                    <height>38</height>
+                   </size>
+                  </property>
+                  <property name="cursor">
+                   <cursorShape>PointingHandCursor</cursorShape>
+                  </property>
+                  <property name="class" stdset="0">
+                   <string>candidateFilterChip</string>
+                  </property>
+                  <item>
+                   <property name="text">
+                    <string>Tất cả trạng thái</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Chờ xét duyệt</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Đã xem xét</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Phê duyệt</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Từ chối</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="comboCandidateSort">
+                  <property name="minimumSize">
+                   <size>
+                    <width>158</width>
+                    <height>38</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>158</width>
+                    <height>38</height>
+                   </size>
+                  </property>
+                  <property name="cursor">
+                   <cursorShape>PointingHandCursor</cursorShape>
+                  </property>
+                  <property name="class" stdset="0">
+                   <string>candidateFilterChip</string>
+                  </property>
+                  <item>
+                   <property name="text">
+                    <string>Mới nhất trước</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Cũ nhất trước</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tên A→Z</string>
+                   </property>
+                  </item>
+                  <item>
+                   <property name="text">
+                    <string>Tên Z→A</string>
+                   </property>
+                  </item>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QPushButton" name="btnCandidateClearFilters">
+                  <property name="minimumSize">
+                   <size>
+                    <width>86</width>
+                    <height>38</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>110</width>
+                    <height>38</height>
+                   </size>
+                  </property>
+                  <property name="cursor">
+                   <cursorShape>PointingHandCursor</cursorShape>
+                  </property>
+                  <property name="text">
+                   <string>Xóa lọc</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="candidateFilterSpacer">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <widget class="QFrame" name="candidateTableCard">
+             <property name="styleSheet">
+              <string notr="true">
+QFrame#candidateTableCard {
+    background-color: #ffffff;
+    border: 1px solid #eef2f7;
+    border-radius: 14px;
+}
+QLabel#candidateListIcon {
+    background-color: #eff6ff;
+    color: #3b82f6;
+    border: none;
+    border-radius: 16px;
+    font-family: "Segoe UI", "Inter";
+    font-size: 16px;
+    font-weight: 800;
+}
+QLabel#candidateListTitle {
+    color: #0f172a;
+    background: transparent;
+    border: none;
+    font-family: "Segoe UI", "Inter";
+    font-size: 16px;
+    font-weight: 800;
+}
+QLabel#labelCandidateCount {
+    background-color: #eff6ff;
+    color: #2563eb;
+    border: none;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-family: "Segoe UI", "Inter";
+    font-size: 11px;
+    font-weight: 800;
+}
+QTableWidget#tableCands {
+    background-color: #ffffff;
+    alternate-background-color: #fbfdff;
+    border: none;
+    gridline-color: #eef2f7;
+    color: #334155;
+    font-family: "Segoe UI", "Inter";
+    font-size: 13px;
+    selection-background-color: #eff6ff;
+    selection-color: #1d4ed8;
+    outline: none;
+}
+QTableWidget#tableCands::item {
+    padding: 10px 14px;
+    border: none;
+    border-bottom: 1px solid #eef2f7;
+}
+QTableWidget#tableCands::item:hover {
+    background-color: #f1f5f9;
+}
+QTableWidget#tableCands::item:selected {
+    background-color: #eff6ff;
+    color: #1d4ed8;
+}
+QTableWidget#tableCands QHeaderView::section {
+    background-color: #f8fafc;
+    border: none;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 12px 10px;
+    color: #64748b;
+    font-family: "Segoe UI", "Inter";
+    font-size: 11px;
+    font-weight: 800;
+}
+QFrame#candidateEmptyState {
+    background-color: #f8fafc;
+    border: 1px dashed #dbe3ef;
+    border-radius: 12px;
+}
+QLabel#candidateEmptyIcon {
+    background-color: #eff6ff;
+    color: #3b82f6;
+    border: none;
+    border-radius: 19px;
+    font-family: "Segoe UI", "Inter";
+    font-size: 18px;
+    font-weight: 800;
+}
+QLabel#candidateEmptyTitle {
+    color: #0f172a;
+    background: transparent;
+    border: none;
+    font-family: "Segoe UI", "Inter";
+    font-size: 14px;
+    font-weight: 800;
+}
+QLabel#candidateEmptySubtitle {
+    color: #64748b;
+    background: transparent;
+    border: none;
+    font-family: "Segoe UI", "Inter";
+    font-size: 12px;
+}
+QFrame#candidatePaginationBar {
+    background-color: transparent;
+    border: none;
+}
+QPushButton.candidatePaginationButton {
+    background-color: #f8fafc;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0px 12px;
+    font-family: "Segoe UI", "Inter";
+    font-size: 13px;
+    font-weight: 600;
+}
+QPushButton.candidatePaginationButton:hover {
+    background-color: #eff6ff;
+    color: #2563eb;
+    border-color: #bfdbfe;
+}
+              </string>
+             </property>
+             <layout class="QVBoxLayout" name="candidateTableLayout">
+              <property name="spacing">
+               <number>16</number>
+              </property>
+              <property name="leftMargin">
+               <number>24</number>
+              </property>
+              <property name="topMargin">
+               <number>20</number>
+              </property>
+              <property name="rightMargin">
+               <number>24</number>
+              </property>
+              <property name="bottomMargin">
+               <number>20</number>
+              </property>
+              <item>
+               <layout class="QHBoxLayout" name="candidateTableHeaderRow">
+                <property name="spacing">
+                 <number>10</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="candidateListIcon">
+                  <property name="minimumSize">
+                   <size>
+                    <width>32</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="maximumSize">
+                   <size>
+                    <width>32</width>
+                    <height>32</height>
+                   </size>
+                  </property>
+                  <property name="text">
+                   <string/>
+                  </property>
+                  <property name="pixmap">
+                   <pixmap>../icons/modern/user.svg</pixmap>
+                  </property>
+                  <property name="alignment">
+                   <set>Qt::AlignCenter</set>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="candidateListTitle">
+                  <property name="text">
+                   <string>Danh sách ứng viên</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="labelCandidateCount">
+                  <property name="text">
+                   <string>0 ứng viên</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="candidateTableHeaderSpacer">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QTableWidget" name="tableCands">
+                <property name="alternatingRowColors">
+                 <bool>true</bool>
+                </property>
+                <property name="showGrid">
+                 <bool>false</bool>
+                </property>
+                <property name="selectionBehavior">
+                 <enum>QAbstractItemView::SelectRows</enum>
+                </property>
+                <property name="editTriggers">
+                 <set>QAbstractItemView::NoEditTriggers</set>
+                </property>
+                <property name="rowCount">
+                 <number>0</number>
+                </property>
+                <property name="columnCount">
+                 <number>5</number>
+                </property>
+                <attribute name="verticalHeaderVisible">
+                 <bool>false</bool>
+                </attribute>
+                <attribute name="verticalHeaderDefaultSectionSize">
+                 <number>64</number>
+                </attribute>
+                <column>
+                 <property name="text">
+                  <string>Ứng viên</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Vị trí ứng tuyển</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Ngày ứng tuyển</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Trạng thái</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>Thao tác</string>
+                 </property>
+                </column>
+               </widget>
+              </item>
+              <item>
+               <widget class="QFrame" name="candidateEmptyState">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>118</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>118</height>
+                 </size>
+                </property>
+                <layout class="QHBoxLayout" name="candidateEmptyLayout">
+                 <property name="spacing">
+                  <number>12</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>18</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>18</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <spacer name="candidateEmptyLeftSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="candidateEmptyIcon">
+                   <property name="minimumSize">
+                    <size>
+                     <width>38</width>
+                     <height>38</height>
+                    </size>
+                   </property>
+                   <property name="maximumSize">
+                    <size>
+                     <width>38</width>
+                     <height>38</height>
+                    </size>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                   <property name="pixmap">
+                    <pixmap>../icons/modern/search.svg</pixmap>
+                   </property>
+                   <property name="alignment">
+                    <set>Qt::AlignCenter</set>
+                   </property>
+                  </widget>
+                 </item>
+                 <item>
+                  <layout class="QVBoxLayout" name="candidateEmptyTextLayout">
+                   <property name="spacing">
+                    <number>3</number>
+                   </property>
+                   <item>
+                    <widget class="QLabel" name="candidateEmptyTitle">
+                     <property name="text">
+                      <string>Chưa có ứng viên phù hợp</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <widget class="QLabel" name="candidateEmptySubtitle">
+                     <property name="text">
+                      <string>Các đơn ứng tuyển mới sẽ hiển thị tại đây.</string>
+                     </property>
+                    </widget>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <spacer name="candidateEmptyRightSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </widget>
+              </item>
+              <item>
+               <widget class="QFrame" name="candidatePaginationBar">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>40</height>
+                 </size>
+                </property>
+                <layout class="QHBoxLayout" name="candidatePaginationLayout">
+                 <property name="spacing">
+                  <number>6</number>
+                 </property>
+                 <property name="leftMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="topMargin">
+                  <number>4</number>
+                 </property>
+                 <property name="rightMargin">
+                  <number>0</number>
+                 </property>
+                 <property name="bottomMargin">
+                  <number>0</number>
+                 </property>
+                 <item>
+                  <spacer name="candidatePaginationSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Horizontal</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>40</width>
+                     <height>20</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </widget>
+              </item>
+             </layout>
+            </widget>
            </item>
           </layout>
          </widget>
