@@ -68,6 +68,9 @@ def apply_mysql_schema_patches() -> None:
         add_column_if_missing("jobs", "headcount", "INT NULL", after="job_type")
         add_column_if_missing("jobs", "deadline_text", "VARCHAR(32) NULL", after="headcount")
         add_column_if_missing("jobs", "view_count", "INT NOT NULL DEFAULT 0", after="deadline_text")
+        add_column_if_missing("jobs", "boost_budget_vnd", "INT NOT NULL DEFAULT 0", after="view_count")
+        add_column_if_missing("jobs", "boost_last_paid_at", "DATETIME NULL", after="boost_budget_vnd")
+        add_column_if_missing("jobs", "boost_expires_at", "DATETIME NULL", after="boost_last_paid_at")
         add_column_if_missing("job_applications", "accepted_at", "DATETIME NULL", after="status")
         add_column_if_missing("job_applications", "contact_unlocked_at", "DATETIME NULL", after="accepted_at")
         add_column_if_missing("job_applications", "cv_id", "INT NULL", after="candidate_id")
@@ -109,6 +112,7 @@ def apply_mysql_schema_patches() -> None:
         add_column_if_missing("invoices", "sepay_order_code", "VARCHAR(64) NULL", after="due_at")
         add_column_if_missing("invoices", "sepay_payment_url", "VARCHAR(1024) NULL", after="sepay_order_code")
         add_column_if_missing("invoices", "application_id", "INT NULL", after="paid_at")
+        add_column_if_missing("invoices", "job_id", "INT NULL", after="application_id")
         drop_column_if_exists("candidate_profiles", "headline")
         drop_column_if_exists("candidate_profiles", "introduction")
         drop_column_if_exists("candidate_profiles", "skills")
@@ -233,6 +237,36 @@ def apply_mysql_schema_patches() -> None:
                     )
                 )
             log.info("Đã chuẩn hóa enum jobs.status để hỗ trợ trạng thái 'closed'.")
+        if dialect == "mysql" and insp.has_table("invoices"):
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE invoices "
+                        "MODIFY COLUMN invoice_type "
+                        "ENUM('pro_upgrade','candidate_contact_unlock','job_boost') NOT NULL"
+                    )
+                )
+            log.info("Đã chuẩn hóa enum invoices.invoice_type để hỗ trợ 'job_boost'.")
+        if not insp.has_table("notifications"):
+            stmt = (
+                "CREATE TABLE notifications ("
+                "id INT AUTO_INCREMENT PRIMARY KEY, "
+                "user_id INT NULL, "
+                "target_role ENUM('candidate','hr','admin') NULL, "
+                "title VARCHAR(255) NOT NULL, "
+                "message TEXT NOT NULL, "
+                "is_read TINYINT(1) NOT NULL DEFAULT 0, "
+                "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                "INDEX idx_notifications_user (user_id), "
+                "INDEX idx_notifications_role (target_role), "
+                "INDEX idx_notifications_read (is_read), "
+                "INDEX idx_notifications_created (created_at), "
+                "CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                ")"
+            )
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+            log.info("Đã tạo bảng notifications.")
         if insp.has_table("users") and insp.has_table("candidate_profiles"):
             stmt = (
                 "INSERT INTO candidate_profiles (user_id, updated_at) "

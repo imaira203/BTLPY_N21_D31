@@ -5,13 +5,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import CandidateProfile, HRApprovalStatus, HRProfile, User, UserRole
+from ..models import CandidateProfile, HRApprovalStatus, HRProfile, Notification, User, UserRole
 from ..runtime_cache import runtime_cache
 from ..schemas import (
     CandidateProfileOut,
@@ -290,3 +290,46 @@ async def upload_me_avatar(
                 pass
 
     return user
+
+
+@router.get("/me/notifications")
+def my_notifications(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = 30,
+    unread_only: bool = False,
+) -> list[dict]:
+    q = select(Notification).where(
+        or_(Notification.user_id == user.id, Notification.target_role == user.role)
+    )
+    if unread_only:
+        q = q.where(Notification.is_read.is_(False))
+    rows = db.scalars(q.order_by(Notification.id.desc()).limit(max(1, min(limit, 100)))).all()
+    return [
+        {
+            "id": n.id,
+            "title": n.title,
+            "message": n.message,
+            "is_read": bool(n.is_read),
+            "created_at": n.created_at.isoformat() if n.created_at else None,
+        }
+        for n in rows
+    ]
+
+
+@router.post("/me/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    row = db.get(Notification, notification_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    if row.user_id is not None and row.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if row.target_role is not None and row.target_role != user.role:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    row.is_read = True
+    db.commit()
+    return {"ok": True}

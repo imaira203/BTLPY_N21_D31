@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QDateEdit, QGridLayout, QGroupBox,
     QFileDialog,
     QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
-    QMessageBox, QMenu, QPlainTextEdit, QPushButton, QScrollArea,
+    QMessageBox, QInputDialog, QPlainTextEdit, QPushButton, QScrollArea,
     QSizePolicy, QSpacerItem, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
@@ -153,6 +153,22 @@ def _circular_fill_pixmap(src: QPixmap, size: QSize) -> QPixmap:
 
 def _fmt_vnd(amount: int | float) -> str:
     return f"{int(amount):,}".replace(",", ".") + " đ"
+
+
+def _with_cache_buster(url: str) -> str:
+    raw = str(url or "").strip()
+    if not raw:
+        return raw
+    ts = int(datetime.now().timestamp() * 1000)
+    return f"{raw}&_ts={ts}" if "?" in raw else f"{raw}?_ts={ts}"
+
+
+def _fallback_checkout_url(invoice_code: str) -> str:
+    code = str(invoice_code or "").strip().lstrip("#")
+    if not code or not code.upper().startswith("INV-"):
+        return ""
+    base = str(jobhub_api._base()).rstrip("/")
+    return f"{base}/candidate/subscription/sepay/checkout/{code}"
 
 
 def _to_int(value) -> int:
@@ -768,8 +784,11 @@ class HRDashboard:
         self._billing_poll_invoice_code: str = ""
         self._billing_detail_invoice_code: str = ""
         self._billing_detail_refresh_cb = None
+        self._last_seen_notification_id: int = 0
+        self._notify_poll_timer: QTimer | None = None
         self._build()
         self._load_hr_identity()
+        self._start_notification_polling()
         self._go(0)
 
     # ── build window ──────────────────────────────────────────
@@ -2649,7 +2668,7 @@ class HRDashboard:
 
         # Status filter combo
         self._jobs_status_filter = _combo(
-            ["Tất cả TT", "Hiển thị", "Chờ duyệt", "Nháp", "Từ chối"]
+            ["Tất cả TT", "Hiển thị", "Chờ duyệt", "Nháp", "Từ chối", "Đang boost"]
         )
         self._jobs_status_filter.setFixedHeight(42)
         self._jobs_status_filter.setFixedWidth(148)
@@ -3151,7 +3170,7 @@ class HRDashboard:
 
         self.table_billing = QTableWidget(0, 8)
         self.table_billing.setHorizontalHeaderLabels(
-            ["Mã hóa đơn", "Công ty", "Ngày", "Kỳ thanh toán", "Hạn thanh toán", "Số tiền", "Trạng thái", "Thao tác"]
+            ["Mã hóa đơn", "Nội dung thanh toán", "Ngày", "Kỳ thanh toán", "Hạn thanh toán", "Số tiền", "Trạng thái", "Thao tác"]
         )
         self.table_billing.verticalHeader().setVisible(False)
         self.table_billing.verticalHeader().setDefaultSectionSize(58)
@@ -3165,7 +3184,7 @@ class HRDashboard:
         _bh = self.table_billing.horizontalHeader()
         # Responsive: cột dài co giãn theo chiều ngang cửa sổ
         _bh.setSectionResizeMode(0, QHeaderView.Stretch)  # Mã hóa đơn
-        _bh.setSectionResizeMode(1, QHeaderView.Stretch)  # Công ty
+        _bh.setSectionResizeMode(1, QHeaderView.Stretch)  # Nội dung thanh toán
         _bh.setSectionResizeMode(2, QHeaderView.Fixed)
         _bh.setSectionResizeMode(3, QHeaderView.Fixed)
         _bh.setSectionResizeMode(4, QHeaderView.Stretch)  # Hạn thanh toán
@@ -3209,8 +3228,8 @@ class HRDashboard:
         current_period = datetime.now().strftime("%m/%Y")
         period_ranges: list[tuple[datetime, datetime]] = []
         for inv in invoices:
+            inv_code = str(inv.get("invoice_code") or f"HD-{_to_int(inv.get('id')):05d}")
             amt = _to_int(inv.get("amount_vnd") or inv.get("amount") or 0)
-            total += amt
             created_raw = str(inv.get("created_at") or "")
             due_raw = str(inv.get("due_at") or "")
             try:
@@ -3222,6 +3241,8 @@ class HRDashboard:
             except Exception:
                 due_dt = None
             status_key = str(inv.get("status") or "pending").lower()
+            invoice_type = str(inv.get("invoice_type") or "candidate_contact_unlock")
+            is_boost_invoice = invoice_type == "job_boost"
             if status_key == "paid":
                 status_text = "Đã thanh toán"
             elif status_key == "overdue":
@@ -3230,8 +3251,14 @@ class HRDashboard:
                 status_text = "Đến hạn thanh toán"
             elif status_key == "cancelled":
                 status_text = "Đã hủy"
+            elif status_key == "expired":
+                status_text = "Hết hạn thanh toán"
             else:
                 status_text = "Đang chờ thanh toán"
+            fee_counted = amt
+            if is_boost_invoice and status_key != "paid":
+                fee_counted = 0
+            total += fee_counted
             period_text = str(inv.get("period") or (due_dt.strftime("%m/%Y") if due_dt else current_period))
             period_start_raw = str(inv.get("period_start") or "").strip()
             period_end_raw = str(inv.get("period_end") or "").strip()
@@ -3251,14 +3278,15 @@ class HRDashboard:
                 period_ranges.append((period_start_dt, period_end_dt))
 
             rows.append({
-                "invoice_id": f"#{str(inv.get('invoice_code') or f'HD-{_to_int(inv.get('id')):05d}')}",
-                "candidate": "—",
-                "job": "Hóa đơn tuyển dụng theo kỳ",
+                "invoice_id": f"#{inv_code}",
+                "candidate": str(inv.get("note") or ("Hóa đơn boost tin tuyển dụng" if is_boost_invoice else "Hóa đơn tuyển dụng theo kỳ")),
+                "job": str(inv.get("note") or ("Hóa đơn boost tin tuyển dụng" if is_boost_invoice else "Hóa đơn tuyển dụng theo kỳ")),
                 "date": created_dt.strftime("%d/%m/%Y"),
                 "created_dt": created_dt,
                 "period": period_text,
                 "avg_salary": 0,
                 "fee": amt,
+                "fee_counted": fee_counted,
                 "status": status_text,
                 "due_date": due_dt.strftime("%d/%m/%Y") if due_dt else "—",
                 "note": str(inv.get("note") or ""),
@@ -3272,8 +3300,17 @@ class HRDashboard:
                     f"{str(inv.get('payment_window_start') or '—')} - {str(inv.get('payment_window_end') or '—')}"
                 ),
                 "can_pay_now": bool(inv.get("can_pay_now")),
-                "payment_url": str(inv.get("sepay_payment_url") or ""),
+                "payment_url": str(inv.get("sepay_payment_url") or _fallback_checkout_url(inv_code)),
+                "invoice_type": invoice_type,
             })
+            if is_boost_invoice and status_key in {"overdue", "expired", "cancelled"}:
+                rows[-1]["can_pay_now"] = False
+        rows.sort(
+            key=lambda r: (
+                0 if str(r.get("status") or "").lower() in {"đang chờ thanh toán", "đến hạn thanh toán"} else 1,
+                -int(getattr(r.get("created_dt"), "toordinal", lambda: 0)()),
+            )
+        )
         if period_ranges:
             earliest_start = min(x[0] for x in period_ranges)
             latest_end = max(x[1] for x in period_ranges)
@@ -3308,7 +3345,7 @@ class HRDashboard:
         elif status_idx == 2:
             rows = [r for r in rows if r["status"] in {"Đang chờ thanh toán", "Đến hạn thanh toán"}]
         elif status_idx == 3:
-            rows = [r for r in rows if r["status"] == "Quá hạn"]
+            rows = [r for r in rows if r["status"] in {"Quá hạn", "Hết hạn thanh toán"}]
         rows = [r for r in rows if _row_in_selected_cycle(r)]
 
         try:
@@ -3345,7 +3382,7 @@ class HRDashboard:
             if dt and _in_any_cycle(dt):
                 approved_count += 1
 
-        filtered_total = sum(_to_int(r.get("fee") or 0) for r in rows)
+        filtered_total = sum(_to_int(r.get("fee_counted") or 0) for r in rows)
         self._billing_labels["approved"].setText(str(approved_count))
         self._billing_labels["total"].setText(_fmt_vnd(filtered_total))
         self._billing_labels["period_range"].setText(period_range)
@@ -3355,7 +3392,7 @@ class HRDashboard:
             self.table_billing.setRowHeight(r, 58)
             values = [
                 row["invoice_id"],
-                "TechCorp HR",
+                str(row.get("candidate") or row.get("job") or "—"),
                 row["date"],
                 row["period"],
                 row.get("payment_window", "—"),
@@ -3376,7 +3413,7 @@ class HRDashboard:
                 _status_color = "#b45309"
                 if row["status"] == "Đã thanh toán":
                     _status_color = "#059669"
-                elif row["status"] == "Quá hạn":
+                elif row["status"] in {"Quá hạn", "Hết hạn thanh toán"}:
                     _status_color = "#dc2626"
                 status_item.setForeground(QColor(_status_color))
                 status_item.setTextAlignment(Qt.AlignCenter)
@@ -3507,7 +3544,11 @@ class HRDashboard:
                 it = pay_lo.takeAt(0)
                 if it.widget():
                     it.widget().deleteLater()
-            if current_row.get("can_pay_now") and current_row.get("payment_url"):
+            status_txt = str(current_row.get("status") or "").strip().lower()
+            is_boost = str(current_row.get("invoice_type") or "").strip().lower() == "job_boost"
+            boost_locked = is_boost and status_txt in {"quá hạn", "hết hạn thanh toán", "đã hủy"}
+            is_waiting = status_txt in {"đang chờ thanh toán", "dang cho thanh toan", "đến hạn thanh toán"}
+            if current_row.get("payment_url") and not boost_locked and (bool(current_row.get("can_pay_now")) or is_waiting):
                 btn_pay = QPushButton("Thanh toán")
                 btn_pay.setFixedHeight(38)
                 btn_pay.setCursor(Qt.PointingHandCursor)
@@ -3520,7 +3561,7 @@ class HRDashboard:
                     url = str(current_row.get("payment_url") or "").strip()
                     if url:
                         try:
-                            webbrowser.open(url)
+                            webbrowser.open(_with_cache_buster(url))
                         except Exception:
                             pass
                     inv_code = str(current_row.get("invoice_id") or "").lstrip("#").strip()
@@ -3621,6 +3662,7 @@ class HRDashboard:
                         except Exception:
                             pass
                 self._show_toast("Thanh toán thành công. Hóa đơn đã được cập nhật.", "ic_check.svg", "#10b981")
+                self._fill_jobs_table()
             return
 
     def _go(self, idx: int) -> None:
@@ -3660,6 +3702,37 @@ class HRDashboard:
             self._refresh_billing_page()
         elif idx == 5:
             self._load_hr_identity()
+
+    def _start_notification_polling(self) -> None:
+        if self._notify_poll_timer is None:
+            self._notify_poll_timer = QTimer(self.win)
+            self._notify_poll_timer.setInterval(7000)
+            self._notify_poll_timer.timeout.connect(self._poll_notifications)
+        self._notify_poll_timer.start()
+        self._poll_notifications()
+
+    def _poll_notifications(self) -> None:
+        try:
+            rows = list(jobhub_api.my_notifications(limit=10, unread_only=True))
+        except Exception:
+            return
+        if not rows:
+            return
+        newest_id = max(_to_int(r.get("id")) for r in rows)
+        if newest_id <= self._last_seen_notification_id:
+            return
+        latest = rows[0]
+        title = str(latest.get("title") or "Thông báo mới")
+        msg = str(latest.get("message") or "").strip()
+        self._show_toast(f"{title}: {msg}" if msg else title, "ic_alert.svg", "#2563eb", 3800)
+        for row in rows:
+            nid = _to_int(row.get("id"))
+            if nid > self._last_seen_notification_id and nid > 0:
+                try:
+                    jobhub_api.mark_notification_read(nid)
+                except Exception:
+                    pass
+        self._last_seen_notification_id = newest_id
 
     def _validate_salary_pair(self, min_text: str, max_text: str, parent=None) -> tuple[int, int] | None:
         parent = parent or self.win
@@ -3787,6 +3860,7 @@ class HRDashboard:
             2: "pending_approval",
             3: "draft",
             4: "rejected",
+            5: "__boosted__",
         }
         status_filter = _STATUS_MAP.get(
             self._jobs_status_filter.currentIndex()
@@ -3811,8 +3885,10 @@ class HRDashboard:
                         or kw in j.get("description",  "").lower()]
 
         if status_filter:
-            all_jobs = [j for j in all_jobs
-                        if j.get("status") == status_filter]
+            if status_filter == "__boosted__":
+                all_jobs = [j for j in all_jobs if bool(j.get("is_boosted"))]
+            else:
+                all_jobs = [j for j in all_jobs if j.get("status") == status_filter]
 
         if type_filter:
             all_jobs = [j for j in all_jobs
@@ -3895,10 +3971,23 @@ class HRDashboard:
         tbl.setRowCount(len(jobs))
 
         for row, j in enumerate(jobs):
+            boost_days_left = 0
+            try:
+                exp_raw = str(j.get("boost_expires_at") or "").strip()
+                if exp_raw:
+                    exp_dt = datetime.fromisoformat(exp_raw.replace("Z", "+00:00"))
+                    if exp_dt.tzinfo is not None:
+                        exp_dt = exp_dt.replace(tzinfo=None)
+                    boost_days_left = max(0, (exp_dt - datetime.utcnow()).days)
+            except Exception:
+                boost_days_left = 0
+
             # ── Title ────────────────────────────────────────
             t = QTableWidgetItem(j.get("title", ""))
             t.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             t.setForeground(QColor(TXT_H))
+            if bool(j.get("is_boosted")):
+                t.setText(f"🚀 {j.get('title', '')} (còn {boost_days_left} ngày boost)")
             tbl.setItem(row, 0, t)
 
             # ── Department ───────────────────────────────────
@@ -3943,6 +4032,16 @@ class HRDashboard:
                 "border-radius:13px;padding:0 12px;"
             )
             bw_lo.addWidget(badge)
+            if bool(j.get("is_boosted")):
+                boost_badge = QLabel("BOOST")
+                boost_badge.setAlignment(Qt.AlignCenter)
+                boost_badge.setFixedHeight(22)
+                boost_badge.setMinimumWidth(56)
+                boost_badge.setStyleSheet(
+                    "background:#ede9fe;color:#6d28d9;font-size:11px;font-weight:800;border-radius:11px;padding:0 8px;"
+                )
+                bw_lo.addSpacing(6)
+                bw_lo.addWidget(boost_badge)
             tbl.setCellWidget(row, 4, badge_wrap)
 
             # ── Action buttons ───────────────────────────────
@@ -4013,7 +4112,35 @@ class HRDashboard:
         btn_edit = _ic_btn("ic_edit.svg",   "#6366f1", "#ede9fe", "Chỉnh sửa tin")
         btn_view = _ic_btn("ic_view.svg",   "#0ea5e9", "#e0f2fe", "Xem chi tiết")
         btn_submit = _ic_btn("ic_check.svg", "#10b981", "#d1fae5", "Gửi Admin duyệt")
+        btn_boost = _ic_btn("ic_trend.svg", "#7c3aed", "#ede9fe", "Boost tin tuyển dụng")
         btn_del  = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Xoá tin")
+
+        def _do_boost(_jid=job_id, _title=job_title):
+            amount, ok = QInputDialog.getInt(
+                self.win,
+                "Boost tin tuyển dụng",
+                f"Nhập ngân sách boost cho tin '{_title or ('#' + str(_jid))}' (VND):",
+                500000,
+                1000,
+                500000000,
+                1000,
+            )
+            if not ok:
+                return
+            try:
+                inv = jobhub_api.hr_create_boost_invoice(_jid, int(amount))
+                pay_url = str(inv.get("sepay_payment_url") or "")
+                inv_code = str(inv.get("sepay_order_code") or "")
+                if pay_url:
+                    import webbrowser
+
+                    webbrowser.open(_with_cache_buster(pay_url))
+                if inv_code:
+                    self._start_billing_refresh_poll(inv_code)
+                self._show_toast("Đã tạo hóa đơn boost. Vui lòng hoàn tất thanh toán.", "ic_card.svg", "#7c3aed")
+                self._refresh_billing_page()
+            except ApiError as e:
+                self._show_toast(str(e), "ic_x.svg", "#ef4444")
 
         # ── Edit dialog ──────────────────────────────────────────
         def _do_edit(_jid=job_id):
@@ -4655,12 +4782,15 @@ class HRDashboard:
         btn_edit.clicked.connect(lambda _=False: _do_edit())
         btn_view.clicked.connect(lambda _=False: _do_view())
         btn_submit.clicked.connect(lambda _=False: _do_submit())
+        btn_boost.clicked.connect(lambda _=False: _do_boost())
         btn_del.clicked.connect(lambda _=False: _do_delete())
 
         lo.addWidget(btn_edit)
         lo.addWidget(btn_view)
         if status in {"draft", "rejected"}:
             lo.addWidget(btn_submit)
+        if status == "published":
+            lo.addWidget(btn_boost)
         lo.addWidget(btn_del)
         lo.addStretch()
         return wrap

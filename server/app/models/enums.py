@@ -39,6 +39,7 @@ class SubscriptionStatus(str, enum.Enum):
 class InvoiceType(str, enum.Enum):
     pro_upgrade = "pro_upgrade"
     candidate_contact_unlock = "candidate_contact_unlock"
+    job_boost = "job_boost"
 
 
 class InvoiceStatus(str, enum.Enum):

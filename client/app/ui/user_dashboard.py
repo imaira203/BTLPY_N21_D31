@@ -1583,6 +1583,8 @@ class UserDashboard:
         }
         self._pending_pro_invoice: dict | None = None
         self._subscription_poll_timer: QTimer | None = None
+        self._notify_poll_timer: QTimer | None = None
+        self._last_seen_notification_id: int = 0
         self._profile_views_total: int = 0
         self._profile_views_month: int = 0
         self._profile_views_filter: str = "all"
@@ -1653,6 +1655,7 @@ class UserDashboard:
         self._poll_timer.timeout.connect(self._poll_application_statuses)
         self._poll_timer.start()
         self._bootstrap_candidate_data()
+        self._start_notification_polling()
 
     def show(self) -> None:
         """Expose main window show() for app bootstrap code."""
@@ -5299,6 +5302,37 @@ class UserDashboard:
         self._sync_subscription()
         self._sync_saved_jobs()
         self._sync_application_history()
+
+    def _start_notification_polling(self) -> None:
+        if self._notify_poll_timer is None:
+            self._notify_poll_timer = QTimer(self.win)
+            self._notify_poll_timer.setInterval(7000)
+            self._notify_poll_timer.timeout.connect(self._poll_notifications)
+        self._notify_poll_timer.start()
+        self._poll_notifications()
+
+    def _poll_notifications(self) -> None:
+        try:
+            rows = list(jobhub_api.my_notifications(limit=8, unread_only=True))
+        except Exception:
+            return
+        if not rows:
+            return
+        newest_id = max(int(r.get("id") or 0) for r in rows)
+        if newest_id <= self._last_seen_notification_id:
+            return
+        latest = rows[0]
+        title = str(latest.get("title") or "Thông báo mới")
+        msg = str(latest.get("message") or "")
+        _Toast(self.win.centralWidget(), f"{title}: {msg}" if msg else title, accent="#2563eb", duration_ms=3200)
+        for row in rows:
+            nid = int(row.get("id") or 0)
+            if nid > self._last_seen_notification_id and nid > 0:
+                try:
+                    jobhub_api.mark_notification_read(nid)
+                except Exception:
+                    pass
+        self._last_seen_notification_id = newest_id
 
     def _sync_subscription(self) -> None:
         try:

@@ -11,6 +11,9 @@ from ..models import (
     CandidateSubscription,
     HRApprovalStatus,
     HRProfile,
+    Invoice,
+    InvoiceStatus,
+    InvoiceType,
     Job,
     JobApplication,
     JobStatus,
@@ -20,6 +23,7 @@ from ..models import (
     UserRole,
 )
 from ..runtime_cache import runtime_cache
+from ..notifications import notify_role, notify_user
 from ..schemas import AdminDecision, JobOut, StatsOut, UserOut
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -48,6 +52,11 @@ def _to_job_out(job: Job, db: Session, company_name: str | None = None) -> JobOu
     if raw_status not in {s.value for s in JobStatus}:
         raw_status = JobStatus.pending_approval.value
     app_count = db.scalar(select(func.count()).select_from(JobApplication).where(JobApplication.job_id == job.id)) or 0
+    is_boost_active = bool(
+        (job.boost_budget_vnd or 0) > 0
+        and job.boost_expires_at
+        and job.boost_expires_at > datetime.utcnow()
+    )
     return JobOut(
         id=job.id,
         hr_user_id=job.hr_user_id,
@@ -67,6 +76,10 @@ def _to_job_out(job: Job, db: Session, company_name: str | None = None) -> JobOu
         admin_note=job.admin_note,
         created_at=job.created_at,
         company_name=company_name,
+        boost_budget_vnd=int(job.boost_budget_vnd or 0),
+        is_boosted=is_boost_active,
+        boost_last_paid_at=job.boost_last_paid_at,
+        boost_expires_at=job.boost_expires_at,
     )
 
 
@@ -133,6 +146,18 @@ def approve_hr(
         raise HTTPException(status_code=404, detail="HR not found")
     target.hr_profile.approval_status = HRApprovalStatus.approved
     target.hr_profile.admin_note = body.note
+    notify_user(
+        db,
+        user_id=int(target.id),
+        title="HR đã được phê duyệt",
+        message="Tài khoản HR của bạn đã được admin phê duyệt.",
+    )
+    notify_role(
+        db,
+        role=UserRole.candidate,
+        title="Nhà tuyển dụng mới",
+        message=f"Nhà tuyển dụng '{target.hr_profile.company_name}' đã được xác minh.",
+    )
     db.commit()
     return {"ok": True}
 
@@ -150,6 +175,12 @@ def reject_hr(
         raise HTTPException(status_code=404, detail="HR not found")
     target.hr_profile.approval_status = HRApprovalStatus.rejected
     target.hr_profile.admin_note = body.note
+    notify_user(
+        db,
+        user_id=int(target.id),
+        title="HR bị từ chối",
+        message="Hồ sơ HR của bạn đã bị từ chối. Vui lòng cập nhật và gửi lại.",
+    )
     db.commit()
     return {"ok": True}
 
@@ -181,6 +212,18 @@ def approve_job(
         raise HTTPException(status_code=404, detail="Job not found")
     job.status = JobStatus.published
     job.admin_note = body.note
+    notify_user(
+        db,
+        user_id=int(job.hr_user_id),
+        title="Tin tuyển dụng đã được duyệt",
+        message=f"Tin '{job.title}' đã được admin phê duyệt và hiển thị công khai.",
+    )
+    notify_role(
+        db,
+        role=UserRole.candidate,
+        title="Tin mới vừa mở",
+        message=f"Có tin tuyển dụng mới: '{job.title}'.",
+    )
     db.commit()
     db.refresh(job)
     runtime_cache.upsert_job(job)
@@ -200,6 +243,12 @@ def reject_job(
         raise HTTPException(status_code=404, detail="Job not found")
     job.status = JobStatus.rejected
     job.admin_note = body.note
+    notify_user(
+        db,
+        user_id=int(job.hr_user_id),
+        title="Tin tuyển dụng bị từ chối",
+        message=f"Tin '{job.title}' đã bị admin từ chối.",
+    )
     db.commit()
     db.refresh(job)
     runtime_cache.upsert_job(job)
@@ -393,3 +442,127 @@ def job_detail(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return _to_job_out(job, db)
+
+
+@router.get("/payment-insights")
+def payment_insights(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = 100,
+    period: str = "all",
+) -> dict:
+    _require_admin(user)
+    max_limit = max(10, min(int(limit or 100), 500))
+
+    period_key = str(period or "all").strip().lower()
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    paid_filter = [Invoice.status == InvoiceStatus.paid]
+    if period_key in {"month", "this_month"}:
+        paid_filter.append(Invoice.paid_at >= month_start)
+
+    paid_invoices = db.scalars(
+        select(Invoice)
+        .where(*paid_filter)
+        .order_by(Invoice.paid_at.desc(), Invoice.id.desc())
+        .limit(max_limit)
+    ).all()
+    all_paid_count = int(
+        db.scalar(select(func.count()).select_from(Invoice).where(*paid_filter)) or 0
+    )
+    all_paid_amount = float(
+        db.scalar(select(func.coalesce(func.sum(Invoice.amount), 0)).where(*paid_filter)) or 0
+    )
+
+    role_stats_rows = db.execute(
+        select(
+            User.id,
+            User.role,
+            User.full_name,
+            User.email,
+            HRProfile.company_name,
+            func.count(Invoice.id),
+            func.coalesce(func.sum(Invoice.amount), 0),
+            func.max(Invoice.paid_at),
+        )
+        .join(Invoice, Invoice.owner_user_id == User.id)
+        .outerjoin(HRProfile, HRProfile.user_id == User.id)
+        .where(*paid_filter)
+        .group_by(User.id, User.role, User.full_name, User.email, HRProfile.company_name)
+        .order_by(func.count(Invoice.id).desc(), func.max(Invoice.paid_at).desc())
+        .limit(max_limit)
+    ).all()
+
+    candidate_paid_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Invoice)
+            .join(User, User.id == Invoice.owner_user_id)
+            .where(*paid_filter, User.role == UserRole.candidate)
+        )
+        or 0
+    )
+    hr_paid_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(Invoice)
+            .join(User, User.id == Invoice.owner_user_id)
+            .where(*paid_filter, User.role == UserRole.hr)
+        )
+        or 0
+    )
+
+    now_utc = datetime.utcnow()
+    boost_rows = db.execute(
+        select(Job, HRProfile.company_name)
+        .outerjoin(HRProfile, HRProfile.user_id == Job.hr_user_id)
+        .where(Job.boost_budget_vnd > 0)
+        .order_by(Job.boost_budget_vnd.desc(), Job.boost_last_paid_at.desc(), Job.id.desc())
+        .limit(max_limit)
+    ).all()
+
+    return {
+        "summary": {
+            "total_paid_invoices": all_paid_count,
+            "total_paid_amount_vnd": int(all_paid_amount),
+            "candidate_paid_count": candidate_paid_count,
+            "hr_paid_count": hr_paid_count,
+        },
+        "payment_by_account": [
+            {
+                "user_id": int(uid),
+                "role": role.value if hasattr(role, "value") else str(role),
+                "display_name": (full_name or email or company_name or f"User#{uid}"),
+                "email": email,
+                "company_name": company_name,
+                "paid_count": int(paid_count or 0),
+                "total_paid_amount_vnd": int(float(total_paid_amount or 0)),
+                "last_paid_at": last_paid_at.isoformat() if last_paid_at else None,
+            }
+            for uid, role, full_name, email, company_name, paid_count, total_paid_amount, last_paid_at in role_stats_rows
+        ],
+        "recent_payments": [
+            {
+                "invoice_id": int(inv.id),
+                "owner_user_id": int(inv.owner_user_id),
+                "invoice_type": inv.invoice_type.value if hasattr(inv.invoice_type, "value") else str(inv.invoice_type),
+                "amount_vnd": int(float(inv.amount or 0)),
+                "paid_at": inv.paid_at.isoformat() if inv.paid_at else None,
+                "job_id": int(inv.job_id) if inv.job_id else None,
+                "application_id": int(inv.application_id) if inv.application_id else None,
+            }
+            for inv in paid_invoices
+        ],
+        "boost_ranking": [
+            {
+                "job_id": int(job.id),
+                "job_title": job.title,
+                "company_name": company_name or "",
+                "hr_user_id": int(job.hr_user_id),
+                "boost_budget_vnd": int(job.boost_budget_vnd or 0),
+                "boost_last_paid_at": job.boost_last_paid_at.isoformat() if job.boost_last_paid_at else None,
+                "boost_expires_at": job.boost_expires_at.isoformat() if job.boost_expires_at else None,
+                "is_boost_active": bool(job.boost_expires_at and job.boost_expires_at > now_utc),
+            }
+            for job, company_name in boost_rows
+        ],
+    }

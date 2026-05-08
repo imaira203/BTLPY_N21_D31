@@ -170,6 +170,8 @@ class AdminDashboard:
 
     def __init__(self, on_logout: Callable[[], None]) -> None:
         self._on_logout = on_logout
+        self._notify_poll_timer: QTimer | None = None
+        self._last_seen_notification_id: int = 0
 
         win = load_ui(resource_ui("admin_dashboard.ui"))
         if not isinstance(win, QMainWindow):
@@ -193,6 +195,7 @@ class AdminDashboard:
         self._inject_pages()
         self._setup_nav()
         self._restyle_sidebar()
+        self._start_notification_polling()
         self._go(0)
 
     # ── Guarantee sidebar width ────────────────────────────────
@@ -413,6 +416,37 @@ class AdminDashboard:
          3: self._fill_hr_page,
          4: self._fill_reports_page,
         }.get(index, lambda: None)()
+
+    def _start_notification_polling(self) -> None:
+        if self._notify_poll_timer is None:
+            self._notify_poll_timer = QTimer(self.win)
+            self._notify_poll_timer.setInterval(7000)
+            self._notify_poll_timer.timeout.connect(self._poll_notifications)
+        self._notify_poll_timer.start()
+        self._poll_notifications()
+
+    def _poll_notifications(self) -> None:
+        try:
+            rows = list(jobhub_api.my_notifications(limit=8, unread_only=True))
+        except Exception:
+            return
+        if not rows:
+            return
+        newest_id = max(int(r.get("id") or 0) for r in rows)
+        if newest_id <= self._last_seen_notification_id:
+            return
+        latest = rows[0]
+        title = str(latest.get("title") or "Thông báo mới")
+        message = str(latest.get("message") or "")
+        _toast(self.win, f"{title}: {message}" if message else title, success=True)
+        for row in rows:
+            nid = int(row.get("id") or 0)
+            if nid > self._last_seen_notification_id and nid > 0:
+                try:
+                    jobhub_api.mark_notification_read(nid)
+                except Exception:
+                    pass
+        self._last_seen_notification_id = newest_id
 
     def _logout(self) -> None:
         clear_session()
@@ -1209,6 +1243,8 @@ class AdminDashboard:
             status_cb = w.findChild(QComboBox, "statusFilter")
             if status_cb:
                 self._jobs_status_cb = status_cb
+                if status_cb.findText("Đang boost") < 0:
+                    status_cb.addItem("Đang boost")
                 status_cb.setFixedHeight(40)
                 status_cb.setStyleSheet(_CB_SS)
                 status_cb.currentIndexChanged.connect(self._jobs_apply_filter)
@@ -1248,6 +1284,7 @@ class AdminDashboard:
         3: "closed",
         4: "rejected",
         5: "pending_approval",
+        6: "__boosted__",
     }
 
     def _jobs_apply_filter(self) -> None:
@@ -1260,7 +1297,9 @@ class AdminDashboard:
         sidx = status_cb.currentIndex() if status_cb else 0
         if sidx > 0:
             target = self._JOBS_STATUS_MAP.get(sidx, "")
-            if target:
+            if target == "__boosted__":
+                data = [j for j in data if bool(j.get("is_boosted"))]
+            elif target:
                 data = [j for j in data if
                         str(j.get("status","")).lower() == target]
 
@@ -1337,6 +1376,8 @@ class AdminDashboard:
             " background:transparent; border:none; }"
         )
         r1.addWidget(title_lbl, stretch=1)
+        if bool(j.get("is_boosted")):
+            r1.addWidget(_pill("BOOST", "#EDE9FE", "#6D28D9"))
         r1.addWidget(_pill(label_txt, s_bg, s_fg))
         v.addLayout(r1)
 
@@ -1377,6 +1418,23 @@ class AdminDashboard:
             " background:transparent; border:none; }"
         )
         v.addWidget(posted)
+        if bool(j.get("is_boosted")):
+            boost_days_left = 0
+            try:
+                exp_raw = str(j.get("boost_expires_at") or "").strip()
+                if exp_raw:
+                    exp_dt = datetime.fromisoformat(exp_raw.replace("Z", "+00:00"))
+                    if exp_dt.tzinfo is not None:
+                        exp_dt = exp_dt.replace(tzinfo=None)
+                    boost_days_left = max(0, (exp_dt - datetime.utcnow()).days)
+            except Exception:
+                boost_days_left = 0
+            boost_lbl = QLabel(f"  🚀 Còn {boost_days_left} ngày boost")
+            boost_lbl.setStyleSheet(
+                "QLabel { font-size:12px; color:#6D28D9; font-weight:700;"
+                " background:transparent; border:none; }"
+            )
+            v.addWidget(boost_lbl)
 
         # Applicants
         apps = QLabel(f"  {j.get('applicants_count', 0)} ứng viên")
@@ -2314,15 +2372,18 @@ class AdminDashboard:
             can_list = list(jobhub_api.admin_candidate_overview())
         except Exception:
             can_list = []
+        selected_period = str(getattr(self, "_reports_period", "all") or "all").lower()
+        try:
+            pay_insights = dict(jobhub_api.admin_payment_insights(limit=200, period=selected_period) or {})
+        except Exception:
+            pay_insights = {}
 
         total_hr  = int(cards.get("hr",  len(hr_list))  or 0)
         total_can = int(cards.get("users", len(can_list)) or 0)
-
-        HR_FEE  = 35_500_000
-        CAN_FEE = 850_000
-        hr_rev  = total_hr  * HR_FEE
-        can_rev = total_can * CAN_FEE
-        tot_rev = hr_rev + can_rev
+        pay_summary = dict(pay_insights.get("summary") or {})
+        tot_rev = int(pay_summary.get("total_paid_amount_vnd") or 0)
+        can_rev = int(pay_summary.get("candidate_paid_count") or 0)
+        hr_rev = int(pay_summary.get("hr_paid_count") or 0)
 
         # Smooth monthly data — spread total evenly then vary ±20%
         import random; random.seed(42)
@@ -2393,6 +2454,20 @@ class AdminDashboard:
             " border-radius:8px; font-size:13px; padding:0 14px; }}"
         )
         hdr_lo.addWidget(date_lbl)
+        period_cb = QComboBox()
+        period_cb.addItem("Tổng", userData="all")
+        period_cb.addItem("Tháng này", userData="month")
+        period_cb.setCurrentIndex(1 if selected_period == "month" else 0)
+        period_cb.setFixedHeight(36)
+        period_cb.setStyleSheet(
+            "QComboBox { background:#FFFFFF; border:1px solid #E5E7EB; border-radius:8px; padding:0 12px; font-size:12px; color:#374151; }"
+            "QComboBox::drop-down { border:none; width:20px; }"
+        )
+        def _on_period_changed():
+            self._reports_period = str(period_cb.currentData() or "all")
+            self._fill_reports_page()
+        period_cb.currentIndexChanged.connect(lambda _=0: _on_period_changed())
+        hdr_lo.addWidget(period_cb)
 
         hdr_lo.addStretch()
         page_lo.addWidget(hdr)
@@ -2429,9 +2504,9 @@ class AdminDashboard:
             fl.addWidget(lbl_t); fl.addWidget(lbl_v); fl.addWidget(lbl_p)
             return f
 
-        stat_row.addWidget(_stat("Tổng doanh thu", _fmt(tot_rev), "so kỳ trước",  12, "#2563EB"))
-        stat_row.addWidget(_stat("Candidate Pro",  _fmt(can_rev), "tăng trưởng",   8, "#06B6D4"))
-        stat_row.addWidget(_stat("Hóa đơn HR",     _fmt(hr_rev),  "so kỳ trước",  -2, "#8B5CF6"))
+        stat_row.addWidget(_stat("Tổng thanh toán", _fmt(tot_rev), "theo bộ lọc",  12, "#2563EB"))
+        stat_row.addWidget(_stat("Số lần Candidate trả phí",  str(can_rev), "theo bộ lọc",   8, "#06B6D4"))
+        stat_row.addWidget(_stat("Số lần HR thanh toán",     str(hr_rev),  "theo bộ lọc",  -2, "#8B5CF6"))
         page_lo.addLayout(stat_row)
 
         # ── CHART ─────────────────────────────────────────────────────
@@ -2645,31 +2720,43 @@ class AdminDashboard:
             dlg.exec()
 
         # ── Build row data ─────────────────────────────────────────
-        can_src = can_list or [
-            {"full_name":"Nguyễn Văn A","created_at":"2026-04-21"},
-            {"full_name":"Trần Thị B",  "created_at":"2026-04-19"},
-            {"full_name":"Lê Văn C",    "created_at":"2026-04-18"},
-        ]
-        hr_src = hr_list or [
-            {"company_name":"Pending Corp"},
-            {"company_name":"TechViet Solutions"},
-            {"company_name":"FPT Retail"},
-        ]
+        payment_accounts = list(pay_insights.get("payment_by_account") or [])
+        payment_accounts = sorted(payment_accounts, key=lambda r: int(r.get("paid_count") or 0), reverse=True)
+        candidate_paid_src = [r for r in payment_accounts if str(r.get("role")) == "candidate"]
+        hr_paid_src = [r for r in payment_accounts if str(r.get("role")) == "hr"]
 
-        can_rows_preview = _make_can_rows(can_src[:6])
-        hr_rows_preview  = _make_hr_rows(hr_src[:6])
+        def _make_candidate_paid_rows(src):
+            rows = []
+            for r in src:
+                name = str(r.get("display_name") or "—")[:22]
+                paid_count = int(r.get("paid_count") or 0)
+                paid_at = _fmt_date(str(r.get("last_paid_at") or ""))
+                rows.append((name, _pill_lbl(f"{paid_count} lần", "#DBEAFE", "#1D4ED8"), paid_at, f"{int(r.get('total_paid_amount_vnd') or 0):,}đ"))
+            return rows
 
-        can_headers = ["CANDIDATE","KẾ HOẠCH","NGÀY","SỐ TIỀN"]
-        hr_headers  = ["CÔNG TY","MÃ HÓA ĐƠN","TRẠNG THÁI","SỐ TIỀN"]
+        def _make_hr_paid_rows(src):
+            rows = []
+            for r in src:
+                company = str(r.get("company_name") or r.get("display_name") or "—")[:24]
+                paid_count = int(r.get("paid_count") or 0)
+                last_paid = _fmt_date(str(r.get("last_paid_at") or ""))
+                rows.append((company, f"{paid_count} lần", _pill_lbl("Đã thanh toán", "#D1FAE5", "#059669"), last_paid))
+            return rows
+
+        can_rows_preview = _make_candidate_paid_rows(candidate_paid_src[:6])
+        hr_rows_preview  = _make_hr_paid_rows(hr_paid_src[:6])
+
+        can_headers = ["CANDIDATE","SỐ LẦN THANH TOÁN","LẦN GẦN NHẤT","TỔNG ĐÃ THANH TOÁN"]
+        hr_headers  = ["CÔNG TY","SỐ LẦN THANH TOÁN","TRẠNG THÁI","LẦN GẦN NHẤT"]
 
         def _open_can_all():
             _view_all_dialog("Tất cả giao dịch Candidate Pro",
-                             can_headers, _make_can_rows(can_src),
+                             can_headers, _make_candidate_paid_rows(candidate_paid_src),
                              fixed_widths=[110, 130, 130])
 
         def _open_hr_all():
             _view_all_dialog("Tất cả hóa đơn HR",
-                             hr_headers, _make_hr_rows(hr_src),
+                             hr_headers, _make_hr_paid_rows(hr_paid_src),
                              fixed_widths=[130, 130, 130])
 
         bot.addWidget(_tbl_card("Giao dịch Candidate Pro",
@@ -2681,6 +2768,43 @@ class AdminDashboard:
                                 on_view_all=_open_hr_all,
                                 fixed_widths=[130, 130, 130]), 1)
         page_lo.addLayout(bot)
+
+        boost_headers = ["#","TIN TUYỂN DỤNG","CÔNG TY","NGÂN SÁCH BOOST","LẦN BOOST GẦN NHẤT"]
+        boost_ranking_src = list(pay_insights.get("boost_ranking") or [])
+        boost_rows_preview = []
+        for idx, row in enumerate(boost_ranking_src[:8], start=1):
+            active = bool(row.get("is_boost_active"))
+            boost_rows_preview.append(
+                (
+                    idx,
+                    str(row.get("job_title") or "—")[:34],
+                    str(row.get("company_name") or "—")[:20],
+                    f"{int(row.get('boost_budget_vnd') or 0):,}đ {'(active)' if active else '(hết hạn)'}",
+                    _fmt_date(str(row.get("boost_expires_at") or row.get("boost_last_paid_at") or "")),
+                )
+            )
+        boost_card = _tbl_card(
+            "Xếp hạng Boost Tin Tuyển Dụng",
+            boost_headers,
+            boost_rows_preview or [(1, "Chưa có dữ liệu boost", "—", "0đ", "—")],
+            on_view_all=lambda: _view_all_dialog(
+                "Xếp hạng boost đầy đủ",
+                boost_headers,
+                [
+                    (
+                        i,
+                        str(r.get("job_title") or "—"),
+                        str(r.get("company_name") or "—"),
+                        f"{int(r.get('boost_budget_vnd') or 0):,}đ {'(active)' if bool(r.get('is_boost_active')) else '(hết hạn)'}",
+                        _fmt_date(str(r.get("boost_expires_at") or r.get("boost_last_paid_at") or "")),
+                    )
+                    for i, r in enumerate(boost_ranking_src, start=1)
+                ] or [(1, "Chưa có dữ liệu boost", "—", "0đ", "—")],
+                fixed_widths=[70, 240, 170, 140],
+            ),
+            fixed_widths=[70, 220, 160, 140],
+        )
+        page_lo.addWidget(boost_card)
         page_lo.addStretch()
 
 
