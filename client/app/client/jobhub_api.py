@@ -378,6 +378,11 @@ def hr_view_application_cv(application_id: int) -> tuple[bytes, str | None]:
     return r.content, _filename_from_cd(r.headers.get("Content-Disposition"))
 
 
+def user_avatar_view(user_id: int) -> tuple[bytes, str | None]:
+    r = _request_raw("GET", f"/users/{user_id}/avatar/view")
+    return r.content, _filename_from_cd(r.headers.get("Content-Disposition"))
+
+
 def admin_dashboard() -> dict:
     return _request("GET", "/admin/dashboard")
 

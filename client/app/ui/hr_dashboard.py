@@ -8,7 +8,8 @@ from typing import Callable
 
 from PySide6.QtCore import (Qt, QSize, QPropertyAnimation,
                               QEasingCurve, QPoint, QByteArray,
-                              QEvent, QObject, QTimer, QRect, QDate)
+                              QEvent, QObject, QThread, QTimer, QRect, QDate,
+                              Signal)
 from PySide6.QtGui import (QIcon, QFont, QColor, QPainter, QPixmap,
                             QPainterPath, QLinearGradient, QPen)
 from PySide6.QtSvg import QSvgRenderer
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import (
     QFrame, QGraphicsDropShadowEffect,
     QDateEdit, QGridLayout, QGroupBox,
     QFileDialog,
-    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
+    QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow, QMenu,
     QMessageBox, QInputDialog, QPlainTextEdit, QPushButton, QScrollArea,
     QSizePolicy, QSpacerItem, QStackedWidget, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
@@ -146,7 +147,10 @@ def _circular_fill_pixmap(src: QPixmap, size: QSize) -> QPixmap:
     path = QPainterPath()
     path.addEllipse(0, 0, side, side)
     painter.setClipPath(path)
-    painter.drawPixmap(0, 0, scaled)
+    # Center the scaled image so cropping is even on all sides
+    x = (side - scaled.width()) // 2
+    y = (side - scaled.height()) // 2
+    painter.drawPixmap(x, y, scaled)
     painter.end()
     return out
 
@@ -190,6 +194,118 @@ def _shadow(w: QWidget, blur: int = 16, dy: int = 4, alpha: int = 18) -> QGraphi
     fx.setColor(QColor(0, 0, 0, alpha))
     w.setGraphicsEffect(fx)
     return fx
+
+
+# ══════════════════════════════════════════════════════════════
+#  AVATAR LABEL — QLabel that centers its pixmap properly
+# ══════════════════════════════════════════════════════════════
+class _AvatarLabel(QLabel):
+    """QLabel that draws its pixmap centered (QLabel normally draws at top-left)."""
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self._centered_pm: QPixmap | None = None
+
+    def setPixmap(self, pm: QPixmap) -> None:  # type: ignore[override]
+        self._centered_pm = pm
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        if self._centered_pm and not self._centered_pm.isNull():
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            w, h = self.width(), self.height()
+            pw, ph = self._centered_pm.width(), self._centered_pm.height()
+            x = (w - pw) // 2
+            y = (h - ph) // 2
+            painter.drawPixmap(x, y, self._centered_pm)
+            painter.end()
+        else:
+            super().paintEvent(event)
+
+
+# ══════════════════════════════════════════════════════════════
+#  AVATAR LOADER — background thread for fetching user avatars
+# ══════════════════════════════════════════════════════════════
+class _AvatarLoader(QThread):
+    """Load avatar image in background, emit finished with QPixmap."""
+    finished = Signal(QPixmap)
+
+    def __init__(self, user_id: int, size: int = 38, parent=None):
+        super().__init__(parent)
+        self._user_id = user_id
+        self._size = size
+
+    def run(self):
+        try:
+            data, _ = jobhub_api.user_avatar_view(self._user_id)
+            if data:
+                pm = QPixmap()
+                pm.loadFromData(data)
+                if not pm.isNull():
+                    s = self._size
+                    pm = pm.scaled(
+                        s, s,
+                        Qt.KeepAspectRatioByExpanding,
+                        Qt.SmoothTransformation,
+                    )
+                    pm = _circular_fill_pixmap(pm, QSize(s, s))
+                    self.finished.emit(pm)
+                    return
+        except Exception:
+            pass
+        self.finished.emit(QPixmap())
+
+
+_AVATAR_LOADERS: list[_AvatarLoader] = []  # prevent GC
+
+
+def _load_avatar_async(label: QLabel, user_id: int, size: int = 38):
+    """Start background avatar load; label shows initials until done."""
+    loader = _AvatarLoader(user_id, size, label)
+    _AVATAR_LOADERS.append(loader)
+
+    def _apply(pm: QPixmap, lbl: QLabel = label) -> None:
+        if not pm.isNull():
+            lbl.setText("")
+            lbl.setPixmap(pm)
+        try:
+            _AVATAR_LOADERS.remove(loader)
+        except ValueError:
+            pass
+
+    loader.finished.connect(_apply)
+    loader.start()
+
+
+def _make_avatar_circle(name: str, size: int = 38, user_id: int | None = None,
+                        load_async: bool = True) -> tuple[_AvatarLabel, dict]:
+    """Create a circular avatar QLabel with initials + optional async image load."""
+    _PALETTE = [
+        ("#3b82f6", "#60a5fa"), ("#f59e0b", "#fbbf24"),
+        ("#10b981", "#34d399"), ("#0ea5e9", "#38bdf8"),
+        ("#ec4899", "#f472b6"), ("#8b5cf6", "#a78bfa"),
+        ("#ef4444", "#fb7185"), ("#14b8a6", "#2dd4bf"),
+    ]
+    idx = sum(ord(c) for c in name) % len(_PALETTE)
+    bg1, bg2 = _PALETTE[idx]
+    initials = "".join(p[0].upper() for p in name.split()[:2]) if name else "?"
+
+    ava = _AvatarLabel(initials)
+    ava.setFixedSize(size, size)
+    ava.setAlignment(Qt.AlignCenter)
+    ava.setScaledContents(False)
+    r = size // 2
+    ava.setStyleSheet(
+        f"background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+        f"stop:0 {bg1},stop:1 {bg2});color:#fff;"
+        f"border-radius:{r}px;font-size:{max(11, size // 3)}px;font-weight:700;"
+        "border:none;"
+    )
+    ava.setAlignment(Qt.AlignCenter)
+    if user_id and load_async:
+        _load_avatar_async(ava, user_id, size)
+    return ava, {"bg1": bg1, "bg2": bg2, "initials": initials}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -449,17 +565,17 @@ class _MetricCard(QFrame):
 
         # Card base style
         self.setStyleSheet(
-            "QFrame{background:#ffffff;border:1px solid #f1f5f9;border-radius:18px;}"
+            "QFrame{background:#ffffff;border:1px solid #e0e7ff;border-radius:16px;}"
         )
         self.setMinimumWidth(180)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setFixedHeight(162)
+        self.setFixedHeight(150)
 
         # Shadow
         self._fx = QGraphicsDropShadowEffect(self)
-        self._fx.setBlurRadius(18)
+        self._fx.setBlurRadius(20)
         self._fx.setOffset(0, 4)
-        self._fx.setColor(QColor(r, g, b, 14))
+        self._fx.setColor(QColor(r, g, b, 16))
         self.setGraphicsEffect(self._fx)
 
         root = QVBoxLayout(self)
@@ -492,7 +608,7 @@ class _MetricCard(QFrame):
         # ── Number ────────────────────────────────────────────
         val_lbl = QLabel(value)
         val_lbl.setStyleSheet(
-            f"color:{self._NUM_COLOR};font-size:36px;font-weight:800;"
+            f"color:#1e1b4b;font-size:32px;font-weight:800;"
             "background:transparent;border:none;letter-spacing:-1px;"
         )
         root.addWidget(val_lbl)
@@ -514,8 +630,8 @@ class _MetricCard(QFrame):
         hint_pill = QLabel(hint)
         hint_pill.setStyleSheet(
             f"background:{badge_bg};color:{accent};"
-            "font-size:11px;font-weight:500;"
-            "border-radius:5px;padding:2px 9px;border:none;"
+            "font-size:11px;font-weight:600;"
+            "border-radius:6px;padding:3px 10px;border:none;"
         )
         pill_row.addWidget(hint_pill, 0, Qt.AlignLeft)
         pill_row.addStretch()
@@ -528,18 +644,18 @@ class _MetricCard(QFrame):
         self._fx.setColor(QColor(r, g, b, 35))
         self.setStyleSheet(
             f"QFrame{{background:#ffffff;border:1.5px solid rgba({r},{g},{b},0.35);"
-            "border-radius:18px;}"
+            "border-radius:16px;}"
         )
         super().enterEvent(e)
 
     def leaveEvent(self, e):
         r, g, b = self._ar, self._ag, self._ab
-        self._fx.setBlurRadius(18)
+        self._fx.setBlurRadius(20)
         self._fx.setOffset(0, 4)
-        self._fx.setColor(QColor(r, g, b, 14))
+        self._fx.setColor(QColor(r, g, b, 16))
         self.setStyleSheet(
-            "QFrame{background:#ffffff;border:1px solid #f1f5f9;"
-            "border-radius:18px;}"
+            "QFrame{background:#ffffff;border:1px solid #e0e7ff;"
+            "border-radius:16px;}"
         )
         super().leaveEvent(e)
 
@@ -671,24 +787,25 @@ def _pag_btn(text: str, active: bool = False,
              enabled: bool = True) -> QPushButton:
     """Pagination button — active = indigo pill, else ghost."""
     btn = QPushButton(text)
-    btn.setFixedSize(32, 32)
+    btn.setFixedSize(34, 34)
     btn.setEnabled(enabled)
     btn.setCursor(
         Qt.PointingHandCursor if (enabled and not active) else Qt.ArrowCursor
     )
     if active:
         btn.setStyleSheet(
-            f"QPushButton{{background:{P};color:#fff;"
-            "border:none;border-radius:8px;"
-            "font-size:13px;font-weight:700;}}"
+            "QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            "stop:0 #6366f1,stop:1 #818cf8);color:#fff;"
+            "border:none;border-radius:10px;"
+            "font-size:13px;font-weight:700;}"
         )
     else:
         btn.setStyleSheet(
-            f"QPushButton{{background:#f1f5f9;color:{TXT_S};"
-            "border:none;border-radius:8px;"
-            "font-size:13px;font-weight:500;}}"
-            "QPushButton:hover{background:#e2e8f0;}"
-            f"QPushButton:disabled{{color:#cbd5e1;background:#f8fafc;}}"
+            "QPushButton{background:#f3f4f6;color:#4b5563;"
+            "border:none;border-radius:10px;"
+            "font-size:13px;font-weight:500;}"
+            "QPushButton:hover{background:#e5e7eb;color:#1e1b4b;}"
+            "QPushButton:disabled{color:#d1d5db;background:#f9fafb;}"
         )
     return btn
 
@@ -1025,8 +1142,8 @@ class HRDashboard:
                 sub = f"{j.get('company_name','')}  ·  {j.get('location','')}  ·  {j.get('job_type','')}"
                 def _go_job(jid=j["id"], title=j["title"]):
                     self._hide_global_search_popup()
+                    self.search_input.setText(str(title or ""))
                     self._go(2)
-                    self._jobs_search.setText(title)
                 vlo.addWidget(_result_row("ic_jobs.svg", j.get("title",""), sub, _go_job))
 
         if cand_hits:
@@ -1035,8 +1152,8 @@ class HRDashboard:
                 sub = f"{a.get('job_title','')}  ·  {a.get('candidate_email','')}"
                 def _go_cand(name=a.get("candidate_name","")):
                     self._hide_global_search_popup()
+                    self.search_input.setText(str(name or ""))
                     self._go(3)
-                    self._cands_search.setText(name)
                 vlo.addWidget(_result_row("ic_user.svg", a.get("candidate_name",""), sub, _go_cand))
 
         # Footer "Tìm tất cả"
@@ -1085,6 +1202,17 @@ class HRDashboard:
             self._global_popup.deleteLater()
             self._global_popup = None
 
+    def _on_top_search_page_filters(self, _t: str) -> None:
+        """Khi đang ở Tin đăng / Ứng viên: lọc theo ô tìm trên header (topbar)."""
+        if not hasattr(self, "_stack"):
+            return
+        idx = self._stack.currentIndex()
+        if idx == 2:
+            self._filter_jobs(self.search_input.text())
+        elif idx == 3:
+            self._cands_kw_timer.stop()
+            self._cands_kw_timer.start()
+
     def _global_search_enter(self) -> None:
         """Navigate to best matching tab and apply search term."""
         kw = self.search_input.text().strip()
@@ -1095,13 +1223,11 @@ class HRDashboard:
         job_hits = [j for j in self._jobs_data
                     if kw.lower() in j.get("title","").lower()
                     or kw.lower() in j.get("company_name","").lower()]
+        self.search_input.setText(kw)
         if job_hits:
             self._go(2)
-            self._jobs_search.setText(kw)
         else:
             self._go(3)
-            self._cands_search.setText(kw)
-        self.search_input.clear()
 
     # ── sidebar ───────────────────────────────────────────────
     def _build_sidebar(self) -> QFrame:
@@ -1307,6 +1433,13 @@ class HRDashboard:
                 self._global_search_timer.start(250) if t.strip() else self._hide_global_search_popup()
             )
         )
+        self._cands_kw_timer = QTimer(self.win)
+        self._cands_kw_timer.setSingleShot(True)
+        self._cands_kw_timer.setInterval(320)
+        self._cands_kw_timer.timeout.connect(
+            lambda: self._filter_cands(self.search_input.text())
+        )
+        self.search_input.textChanged.connect(self._on_top_search_page_filters)
         self.search_input.returnPressed.connect(self._global_search_enter)
         # Store reference for popup positioning
         self._search_outer_ref = search_outer
@@ -1400,13 +1533,14 @@ class HRDashboard:
 
         # ── Quick stats divider bar ──────────────────────────
         stats_bar = QFrame()
-        stats_bar.setFixedHeight(52)
+        stats_bar.setFixedHeight(56)
         stats_bar.setStyleSheet(
-            f"QFrame{{background:{CARD_BG};border:none;"
-            "border-radius:12px;}"
+            "QFrame{background:#ffffff;border:1px solid #e0e7ff;"
+            "border-radius:14px;}"
         )
+        _shadow(stats_bar, blur=16, dy=3, alpha=10)
         stats_lo = QHBoxLayout(stats_bar)
-        stats_lo.setContentsMargins(20, 0, 20, 0)
+        stats_lo.setContentsMargins(24, 0, 24, 0)
         stats_lo.setSpacing(0)
         self._quick_stats_values: dict[str, QLabel] = {}
         quick_defs = [
@@ -1418,7 +1552,7 @@ class HRDashboard:
             if i > 0:
                 sep = QFrame()
                 sep.setFixedSize(1, 28)
-                sep.setStyleSheet(f"background:{BORDER};border:none;")
+                sep.setStyleSheet("background:#e0e7ff;border:none;")
                 stats_lo.addWidget(sep)
 
             stat_w = QWidget()
@@ -1465,8 +1599,9 @@ class HRDashboard:
         # ── Chart card with period filter tabs ───────────────
         chart_frame, chart_lo = _card_frame()
         chart_frame.setStyleSheet(
-            f"QFrame{{background:{CARD_BG};border:none;border-radius:16px;}}"
+            "QFrame{background:#ffffff;border:1px solid #e0e7ff;border-radius:16px;}"
         )
+        _shadow(chart_frame, blur=20, dy=4, alpha=12)
         chart_lo.setSpacing(12)
 
         chart_header_row = QHBoxLayout()
@@ -1493,17 +1628,17 @@ class HRDashboard:
         filter_row.setSpacing(4)
         for period, label in [("week", "Tuần"), ("month", "Tháng"), ("quarter", "Quý")]:
             btn = QPushButton(label)
-            btn.setFixedHeight(28)
-            btn.setMinimumWidth(56)
+            btn.setFixedHeight(30)
+            btn.setMinimumWidth(60)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setCheckable(True)
             btn.setChecked(period == "week")
             btn.setStyleSheet(
-                f"QPushButton{{background:#f1f5f9;color:{TXT_M};"
-                "border:none;border-radius:6px;"
-                "font-size:12px;font-weight:600;padding:0 12px;}}"
-                f"QPushButton:checked{{background:{P};color:white;}}"
-                "QPushButton:hover:!checked{background:#e2e8f0;}"
+                "QPushButton{background:#f3f4f6;color:#6b7280;"
+                "border:none;border-radius:8px;"
+                "font-size:12px;font-weight:600;padding:0 14px;}"
+                "QPushButton:checked{background:#6366f1;color:white;}"
+                "QPushButton:hover:!checked{background:#e5e7eb;}"
             )
             btn.clicked.connect(
                 lambda checked, p=period: self._switch_chart_period(p)
@@ -1524,8 +1659,9 @@ class HRDashboard:
         # ── Activity feed card ───────────────────────────────
         act_frame, act_lo = _card_frame()
         act_frame.setStyleSheet(
-            f"QFrame{{background:{CARD_BG};border:none;border-radius:16px;}}"
+            "QFrame{background:#ffffff;border:1px solid #e0e7ff;border-radius:16px;}"
         )
+        _shadow(act_frame, blur=20, dy=4, alpha=12)
         act_lo.setSpacing(0)
 
         act_header = QHBoxLayout()
@@ -1535,13 +1671,13 @@ class HRDashboard:
         act_ic.setStyleSheet("background:transparent;")
         act_title_lbl = QLabel("Hoạt động gần đây")
         act_title_lbl.setStyleSheet(
-            f"color:{TXT_H};font-size:15px;font-weight:600;"
+            "color:#1e1b4b;font-size:15px;font-weight:700;"
             "background:transparent;border:none;letter-spacing:-0.2px;"
         )
         self._act_count = QLabel("  0 sự kiện  ")
         self._act_count.setStyleSheet(
-            f"background:#ede9fe;color:{P};font-size:11px;font-weight:600;"
-            "border-radius:10px;padding:2px 0;"
+            "background:#ecfdf5;color:#059669;font-size:11px;font-weight:700;"
+            "border-radius:8px;padding:3px 10px;"
         )
         act_header.addWidget(act_ic)
         act_header.addWidget(act_title_lbl, 1)
@@ -2265,7 +2401,7 @@ class HRDashboard:
         row.setCursor(Qt.PointingHandCursor)
 
         def _on_enter(e, w=row):
-            w.setStyleSheet("QWidget{background:#f8fafc;border-radius:8px;}")
+            w.setStyleSheet("QWidget{background:#f5f3ff;border-radius:8px;}")
             super(QWidget, w).enterEvent(e)  # noqa
 
         def _on_leave(e, w=row):
@@ -2281,11 +2417,11 @@ class HRDashboard:
 
         # Type icon badge — SVG rendered into tinted rounded square
         badge = QLabel()
-        badge.setFixedSize(32, 32)
+        badge.setFixedSize(34, 34)
         badge.setAlignment(Qt.AlignCenter)
-        badge.setPixmap(_svg_pm(act_svg, 14, type_fg))
+        badge.setPixmap(_svg_pm(act_svg, 15, type_fg))
         badge.setStyleSheet(
-            f"background:{type_bg};border-radius:8px;border:none;"
+            f"background:{type_bg};border-radius:10px;border:none;"
         )
 
         # Text column
@@ -2295,14 +2431,14 @@ class HRDashboard:
 
         main_lbl = QLabel(text)
         main_lbl.setWordWrap(True)
-        weight = "600" if bold else "400"
+        weight = "700" if bold else "500"
         main_lbl.setStyleSheet(
-            f"color:{TXT_S};font-size:12px;font-weight:{weight};"
+            f"color:#1e1b4b;font-size:12px;font-weight:{weight};"
             "background:transparent;border:none;"
         )
         time_lbl = QLabel(time_str)
         time_lbl.setStyleSheet(
-            f"color:{TXT_M};font-size:10px;font-weight:400;"
+            "color:#6b7280;font-size:11px;font-weight:400;"
             "background:transparent;border:none;"
         )
         txt_col.addWidget(main_lbl)
@@ -2314,13 +2450,13 @@ class HRDashboard:
         # Quick-action button
         if act_label:
             qa_btn = QPushButton(act_label)
-            qa_btn.setFixedHeight(24)
-            qa_btn.setMinimumWidth(64)
+            qa_btn.setFixedHeight(26)
+            qa_btn.setMinimumWidth(68)
             qa_btn.setCursor(Qt.PointingHandCursor)
             qa_btn.setStyleSheet(
                 f"QPushButton{{background:{type_bg};color:{type_fg};"
-                "border:none;border-radius:6px;"
-                "font-size:10px;font-weight:700;padding:0 8px;}}"
+                "border:none;border-radius:8px;"
+                "font-size:10px;font-weight:700;padding:0 10px;}}"
                 f"QPushButton:hover{{background:{dot_color};color:white;}}"
             )
             qa_btn.clicked.connect(lambda _, p=act_page: self._go(p))
@@ -2618,187 +2754,229 @@ class HRDashboard:
         pg = QWidget()
         pg.setStyleSheet(f"background:{CONTENT_BG};")
         outer = QVBoxLayout(pg)
-        outer.setContentsMargins(28, 24, 28, 28)
-        outer.setSpacing(20)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        # ── Local toolbar: search + action button ────────────
-        toolbar = QHBoxLayout()
-        toolbar.setSpacing(12)
+        blue = "#6366f1"
+        blue_dark = "#4f46e5"
+        _ACCENT_LIGHT = "#eef2ff"
 
-        # Search bar (with inline clear button)
-        search_wrap = QFrame()
-        search_wrap.setFixedHeight(42)
-        search_wrap.setStyleSheet(
-            f"QFrame{{background:{CARD_BG};border:1.5px solid {BORDER};"
-            "border-radius:21px;}}"
-        )
-        sw_lo = QHBoxLayout(search_wrap)
-        sw_lo.setContentsMargins(14, 0, 8, 0)
-        sw_lo.setSpacing(8)
-        s_ic = QLabel()
-        s_ic.setPixmap(_svg_pm("ic_search.svg", 16, "#94a3b8"))
-        s_ic.setStyleSheet("background:transparent;border:none;")
-        self._jobs_search = QLineEdit()
-        self._jobs_search.setPlaceholderText(
-            "Tìm tiêu đề, vị trí, địa điểm, lương..."
-        )
-        self._jobs_search.setFrame(False)
-        self._jobs_search.setStyleSheet(
-            f"background:transparent;border:none;"
-            f"font-size:13px;color:{TXT_H};"
-        )
-        # Clear button inside search bar
-        self._jobs_search_clear = QPushButton("×")
-        self._jobs_search_clear.setFixedSize(22, 22)
-        self._jobs_search_clear.setCursor(Qt.PointingHandCursor)
-        self._jobs_search_clear.setVisible(False)
-        self._jobs_search_clear.setStyleSheet(
-            f"QPushButton{{background:#e2e8f0;color:{TXT_M};"
-            "border:none;border-radius:11px;font-size:14px;font-weight:700;}}"
-            f"QPushButton:hover{{background:#cbd5e1;color:{TXT_H};}}"
-        )
-        self._jobs_search_clear.clicked.connect(
-            lambda: self._jobs_search.clear()
-        )
-        self._jobs_search.textChanged.connect(self._on_jobs_search_changed)
-        sw_lo.addWidget(s_ic)
-        sw_lo.addWidget(self._jobs_search, 1)
-        sw_lo.addWidget(self._jobs_search_clear)
-        toolbar.addWidget(search_wrap, 1)
+        _combo_filter_ss = f"""
+            QComboBox {{
+                background:#f8fafc;border:1.5px solid #e5e7eb;border-radius:10px;
+                padding:0 36px 0 14px;min-height:22px;
+                font-size:12px;font-weight:600;color:#374151;
+            }}
+            QComboBox:hover {{ background:#f3f4f6;border-color:#c7d2fe; }}
+            QComboBox:focus {{ border-color:{blue};background:#ffffff; }}
+            QComboBox::drop-down {{
+                border:none;width:34px;subcontrol-origin:padding;
+                subcontrol-position:top right;
+            }}
+            QComboBox QAbstractItemView {{
+                background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;
+                selection-background-color:#eef2ff;selection-color:{blue_dark};
+                padding:4px;font-size:12px;outline:none;min-width:220px;
+            }}
+        """
 
-        # Status filter combo
+        # ── Table card (bộ lọc trong card — tránh trùng tiêu đề với topbar) ──
+        frame = QFrame()
+        frame.setStyleSheet(
+            "QFrame{background:#ffffff;border:1px solid #e0e7ff;"
+            "border-radius:16px;}"
+        )
+        _shadow(frame, blur=24, dy=6, alpha=14)
+        flo = QVBoxLayout(frame)
+        flo.setContentsMargins(20, 16, 20, 12)
+        flo.setSpacing(10)
+
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(10)
+        filter_row.addStretch(1)
+
         self._jobs_status_filter = _combo(
             ["Tất cả TT", "Hiển thị", "Chờ duyệt", "Nháp", "Từ chối", "Đang boost"]
         )
-        self._jobs_status_filter.setFixedHeight(42)
-        self._jobs_status_filter.setFixedWidth(148)
-        self._jobs_status_filter.currentIndexChanged.connect(
-            lambda: self._filter_jobs(self._jobs_search.text())
+        self._jobs_status_filter.setFixedHeight(40)
+        self._jobs_status_filter.setMinimumWidth(168)
+        self._jobs_status_filter.setSizePolicy(
+            QSizePolicy.MinimumExpanding, QSizePolicy.Fixed
         )
-        toolbar.addWidget(self._jobs_status_filter)
+        self._jobs_status_filter.setStyleSheet(_combo_filter_ss)
+        self._jobs_status_filter.currentIndexChanged.connect(
+            lambda: self._filter_jobs(self.search_input.text())
+        )
+        filter_row.addWidget(self._jobs_status_filter)
 
-        # Job type filter combo
         self._jobs_type_filter = _combo(
             ["Tất cả loại", "Full-time", "Part-time", "Remote", "Hybrid", "Contract"]
         )
-        self._jobs_type_filter.setFixedHeight(42)
-        self._jobs_type_filter.setFixedWidth(148)
-        self._jobs_type_filter.currentIndexChanged.connect(
-            lambda: self._filter_jobs(self._jobs_search.text())
+        self._jobs_type_filter.setFixedHeight(40)
+        self._jobs_type_filter.setMinimumWidth(148)
+        self._jobs_type_filter.setSizePolicy(
+            QSizePolicy.MinimumExpanding, QSizePolicy.Fixed
         )
-        toolbar.addWidget(self._jobs_type_filter)
+        self._jobs_type_filter.setStyleSheet(_combo_filter_ss)
+        self._jobs_type_filter.currentIndexChanged.connect(
+            lambda: self._filter_jobs(self.search_input.text())
+        )
+        filter_row.addWidget(self._jobs_type_filter)
 
         btn_jobs_reset = QPushButton("Xóa lọc")
-        btn_jobs_reset.setFixedHeight(42)
+        btn_jobs_reset.setIcon(QIcon(_svg_pm("ic_x.svg", 12, "#ef4444")))
+        btn_jobs_reset.setIconSize(QSize(12, 12))
+        btn_jobs_reset.setFixedHeight(40)
         btn_jobs_reset.setCursor(Qt.PointingHandCursor)
-        btn_jobs_reset.setIcon(QIcon(_svg_pm("ic_x.svg", 14, TXT_M)))
-        btn_jobs_reset.setIconSize(QSize(14, 14))
         btn_jobs_reset.setStyleSheet(
-            f"QPushButton{{background:#f1f5f9;color:{TXT_S};"
-            "border:none;border-radius:10px;padding:0 14px;font-size:13px;}}"
-            "QPushButton:hover{background:#e2e8f0;}"
+            "QPushButton{background:transparent;color:#ef4444;"
+            "border:none;border-radius:8px;padding:0 12px;font-size:12px;"
+            "font-weight:700;}"
+            "QPushButton:hover{background:#fef2f2;color:#dc2626;}"
         )
+
         def _reset_jobs():
-            self._jobs_search.clear()
+            self.search_input.clear()
             self._jobs_status_filter.setCurrentIndex(0)
             self._jobs_type_filter.setCurrentIndex(0)
             self._filter_jobs("")
+
         btn_jobs_reset.clicked.connect(_reset_jobs)
-        toolbar.addWidget(btn_jobs_reset)
+        filter_row.addWidget(btn_jobs_reset)
 
-        # "+ Đăng tin mới" button
-        btn_new = _btn_primary("+ Đăng tin mới")
-        btn_new.setIcon(QIcon(_svg_pm("ic_edit.svg", 16, "#ffffff")))
-        btn_new.setIconSize(QSize(16, 16))
-        btn_new.setFixedHeight(42)
-        btn_new.setMinimumWidth(150)
+        btn_new = QPushButton("+ Đăng tin mới")
+        btn_new.setIcon(QIcon(_svg_pm("ic_edit.svg", 14, "#ffffff")))
+        btn_new.setIconSize(QSize(14, 14))
+        btn_new.setFixedHeight(40)
+        btn_new.setMinimumWidth(168)
+        btn_new.setCursor(Qt.PointingHandCursor)
+        btn_new.setStyleSheet(
+            f"QPushButton{{background:{blue};color:#fff;border:none;"
+            f"border-radius:10px;font-size:12px;font-weight:700;padding:0 16px;}}"
+            f"QPushButton:hover{{background:{blue_dark};}}"
+            f"QPushButton:pressed{{background:#4338ca;}}"
+        )
         btn_new.clicked.connect(lambda: self._go(1))
-        toolbar.addWidget(btn_new)
-        outer.addLayout(toolbar)
+        filter_row.addWidget(btn_new)
 
-        # ── Table card ────────────────────────────────────────
-        frame, flo = _card_frame()
-        flo.setSpacing(16)
+        flo.addLayout(filter_row)
 
-        # Card header
         hdr_row = QHBoxLayout()
-        hdr_ic  = QLabel()
-        hdr_ic.setPixmap(_svg_pm("ic_doc.svg", 18, P))
-        hdr_ic.setStyleSheet("background:transparent;")
+        hdr_row.setSpacing(10)
+        hdr_ic = QLabel()
+        hdr_ic.setFixedSize(34, 34)
+        hdr_ic.setAlignment(Qt.AlignCenter)
+        hdr_ic.setPixmap(_svg_pm("ic_jobs.svg", 17, blue))
+        hdr_ic.setStyleSheet(
+            f"background:{_ACCENT_LIGHT};border:none;border-radius:10px;"
+        )
         hdr_lbl = QLabel("Tin đăng của bạn")
         hdr_lbl.setStyleSheet(
-            f"color:{TXT_H};font-size:15px;font-weight:600;"
-            "background:transparent;border:none;letter-spacing:-0.2px;"
+            f"color:#1e1b4b;font-size:15px;font-weight:800;"
+            "background:transparent;border:none;letter-spacing:-0.3px;"
         )
         self._lbl_job_count = QLabel()
         self._lbl_job_count.setStyleSheet(
-            f"background:#ede9fe;color:{P};font-size:11px;"
-            "font-weight:600;border-radius:10px;padding:2px 10px;"
+            f"background:{_ACCENT_LIGHT};color:{blue_dark};font-size:11px;"
+            "font-weight:700;border-radius:8px;padding:2px 8px;"
         )
         hdr_row.addWidget(hdr_ic)
-        hdr_row.addSpacing(8)
         hdr_row.addWidget(hdr_lbl)
-        hdr_row.addSpacing(10)
+        hdr_row.addSpacing(8)
         hdr_row.addWidget(self._lbl_job_count, 0, Qt.AlignVCenter)
         hdr_row.addStretch()
         flo.addLayout(hdr_row)
 
-        # Table
         self.table_jobs = QTableWidget()
-        _style_table(self.table_jobs)
-        self.table_jobs.verticalHeader().setDefaultSectionSize(54)
+        self.table_jobs.setStyleSheet("""
+            QTableWidget {
+                background:#ffffff;border:none;gridline-color:#f3f4f6;
+                font-size:12px;color:#374151;outline:none;
+                alternate-background-color:#fafbff;
+                selection-background-color:#eef2ff;selection-color:#3730a3;
+            }
+            QTableWidget::item {
+                padding:10px 12px;border:none;border-bottom:1px solid #f3f4f6;
+            }
+            QTableWidget::item:hover { background:#f5f3ff; }
+            QTableWidget::item:selected { background:#eef2ff;color:#3730a3; }
+            QHeaderView::section {
+                background:#f8fafc;
+                border:none;border-bottom:2px solid #e0e7ff;
+                padding:10px 12px;font-size:11px;font-weight:700;
+                color:#6b7280;
+            }
+        """)
+        self.table_jobs.setAlternatingRowColors(True)
+        self.table_jobs.setShowGrid(False)
+        self.table_jobs.verticalHeader().setVisible(False)
+        self.table_jobs.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table_jobs.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_jobs.horizontalHeader().setStretchLastSection(False)
+        self.table_jobs.setFrameShape(QFrame.NoFrame)
+        self.table_jobs.setMouseTracking(True)
+        self.table_jobs.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table_jobs.verticalHeader().setDefaultSectionSize(52)
         self.table_jobs.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
-        flo.addWidget(self.table_jobs)
+        self.table_jobs.setMinimumHeight(200)
+        flo.addWidget(self.table_jobs, 1)
 
-        # "No results" placeholder
-        _nr_jobs = QWidget()
-        _nr_jobs.setFixedHeight(56)
-        _nr_jobs.setStyleSheet("background:transparent;")
+        _nr_jobs = QFrame()
+        _nr_jobs.setFixedHeight(100)
+        _nr_jobs.setStyleSheet(
+            "QFrame{background:#fafbff;border:1.5px dashed #c7d2fe;"
+            "border-radius:12px;}"
+        )
         _nr_lo = QHBoxLayout(_nr_jobs)
-        _nr_lo.setContentsMargins(0, 0, 0, 0)
-        _nr_lo.setSpacing(8)
+        _nr_lo.setContentsMargins(16, 0, 16, 0)
+        _nr_lo.setSpacing(12)
         _nr_lo.setAlignment(Qt.AlignCenter)
-        _nr_ic = QLabel(); _nr_ic.setPixmap(_svg_pm("ic_search.svg", 14, TXT_M))
-        _nr_ic.setStyleSheet("background:transparent;border:none;")
-        _nr_txt = QLabel("Không tìm thấy tin đăng nào khớp với bộ lọc.")
-        _nr_txt.setStyleSheet(f"color:{TXT_M};font-size:13px;background:transparent;border:none;")
-        _nr_lo.addWidget(_nr_ic); _nr_lo.addWidget(_nr_txt)
+        _nr_ic = QLabel()
+        _nr_ic.setFixedSize(38, 38)
+        _nr_ic.setAlignment(Qt.AlignCenter)
+        _nr_ic.setPixmap(_svg_pm("ic_search.svg", 17, blue))
+        _nr_ic.setStyleSheet(
+            f"background:{_ACCENT_LIGHT};border:none;border-radius:19px;"
+        )
+        _nr_col = QVBoxLayout()
+        _nr_col.setSpacing(2)
+        _nr_title = QLabel("Không có tin phù hợp")
+        _nr_title.setStyleSheet(
+            "color:#1e1b4b;font-size:13px;font-weight:700;"
+            "background:transparent;border:none;"
+        )
+        _nr_txt = QLabel("Thử bỏ bớt bộ lọc hoặc từ khóa tìm kiếm.")
+        _nr_txt.setStyleSheet(
+            "color:#6b7280;font-size:11px;background:transparent;border:none;"
+        )
+        _nr_col.addWidget(_nr_title)
+        _nr_col.addWidget(_nr_txt)
+        _nr_lo.addWidget(_nr_ic)
+        _nr_lo.addLayout(_nr_col)
         self._jobs_no_result_lbl = _nr_jobs
         self._jobs_no_result_lbl.setVisible(False)
         flo.addWidget(self._jobs_no_result_lbl)
 
-        # ── Pagination ────────────────────────────────────────
-        pag_div = QFrame()
-        pag_div.setFrameShape(QFrame.HLine)
-        pag_div.setStyleSheet(
-            f"background:{BORDER};max-height:1px;border:none;"
-        )
-        flo.addWidget(pag_div)
-
         self._jobs_pag_wrap = QWidget()
-        self._jobs_pag_wrap.setFixedHeight(44)
+        self._jobs_pag_wrap.setFixedHeight(40)
         self._jobs_pag_wrap.setStyleSheet("background:transparent;")
         self._jobs_pag_lo = QHBoxLayout(self._jobs_pag_wrap)
         self._jobs_pag_lo.setContentsMargins(4, 4, 4, 4)
         self._jobs_pag_lo.setSpacing(4)
         flo.addWidget(self._jobs_pag_wrap)
 
-        # Pagination state
         self._jobs_page: int = 0
         self._jobs_data: list = []
 
-        # Proportional resizer: Title 62% — Dept 38% of flexible space
-        # Fixed cols: Date(120)+Applied(108)+Status(146)+Actions(168) = 542
+        # Title 55% — Dept 45%; cột cố định: 188+84+124+180
         self._jobs_resizer = _ColResizeFilter(
-            self.table_jobs, 0, 1, 0.62, 542
+            self.table_jobs, 0, 1, 0.55, 576
         )
 
-        # Card wraps content — space distributed 1:2 above:below
-        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        outer.addWidget(frame)
-        outer.addStretch(2)
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        outer.addWidget(frame, 1)
         return pg
 
     # ── PAGE 3: CANDIDATES ────────────────────────────────────
@@ -2806,171 +2984,119 @@ class HRDashboard:
         pg = QWidget()
         pg.setStyleSheet(f"background:{CONTENT_BG};")
         outer = QVBoxLayout(pg)
-        outer.setContentsMargins(32, 24, 32, 32)
-        outer.setSpacing(18)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        blue = "#3b82f6"
-        blue_dark = "#2563eb"
+        blue = "#6366f1"
+        blue_dark = "#4f46e5"
+        _ACCENT_LIGHT = "#eef2ff"
 
-        # ── Header card: title + single search + filters ──────
-        header = QFrame()
-        header.setStyleSheet(
-            "QFrame{background:#ffffff;border:1px solid #eef2f7;"
-            "border-radius:14px;}"
-        )
-        _shadow(header, blur=18, dy=4, alpha=10)
-        h_lo = QVBoxLayout(header)
-        h_lo.setContentsMargins(24, 22, 24, 22)
-        h_lo.setSpacing(18)
+        _combo_filter_ss = f"""
+            QComboBox {{
+                background:#f8fafc;border:1.5px solid #e5e7eb;border-radius:10px;
+                padding:0 36px 0 14px;min-height:22px;
+                font-size:12px;font-weight:600;color:#374151;
+            }}
+            QComboBox:hover {{ background:#f3f4f6;border-color:#c7d2fe; }}
+            QComboBox:focus {{ border-color:{blue};background:#ffffff; }}
+            QComboBox::drop-down {{
+                border:none;width:34px;subcontrol-origin:padding;
+                subcontrol-position:top right;
+            }}
+            QComboBox QAbstractItemView {{
+                background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;
+                selection-background-color:#eef2ff;selection-color:{blue_dark};
+                padding:4px;font-size:12px;outline:none;min-width:220px;
+            }}
+        """
 
-        title_row = QHBoxLayout()
-        title_row.setSpacing(16)
-        title_col = QVBoxLayout()
-        title_col.setSpacing(3)
-        page_title = QLabel("Đơn ứng tuyển")
-        page_title.setStyleSheet(
-            "color:#0f172a;font-size:24px;font-weight:800;"
-            "background:transparent;border:none;letter-spacing:-0.4px;"
+        # ── Table card (bộ lọc trong card — tránh trùng tiêu đề với topbar) ──
+        frame = QFrame()
+        frame.setStyleSheet(
+            "QFrame{background:#ffffff;border:1px solid #e0e7ff;"
+            "border-radius:16px;}"
         )
-        page_sub = QLabel("Quản lý các ứng viên đã ứng tuyển")
-        page_sub.setStyleSheet(
-            "color:#64748b;font-size:13px;font-weight:500;"
-            "background:transparent;border:none;"
-        )
-        title_col.addWidget(page_title)
-        title_col.addWidget(page_sub)
-        title_row.addLayout(title_col, 1)
+        _shadow(frame, blur=24, dy=6, alpha=14)
+        flo = QVBoxLayout(frame)
+        flo.setContentsMargins(20, 16, 20, 12)
+        flo.setSpacing(10)
 
-        search_wrap = QFrame()
-        search_wrap.setMinimumWidth(420)
-        search_wrap.setFixedHeight(44)
-        search_wrap.setStyleSheet(
-            "QFrame{background:#f8fafc;border:1px solid #dbe3ef;"
-            "border-radius:22px;}"
-            f"QFrame:focus-within{{border-color:{blue};background:#ffffff;}}"
-        )
-        sw_lo = QHBoxLayout(search_wrap)
-        sw_lo.setContentsMargins(14, 0, 14, 0)
-        sw_lo.setSpacing(8)
-        s_ic = QLabel()
-        s_ic.setPixmap(_svg_pm("ic_search.svg", 16, "#94a3b8"))
-        s_ic.setStyleSheet("background:transparent;border:none;")
-        self._cands_search = QLineEdit()
-        self._cands_search.setPlaceholderText(
-            "Tìm kiếm ứng viên, email, vị trí ứng tuyển..."
-        )
-        self._cands_search.setFrame(False)
-        self._cands_search.setStyleSheet(
-            f"background:transparent;border:none;"
-            f"font-size:13px;color:{TXT_H};"
-        )
-        self._cands_search.textChanged.connect(self._on_cands_search_changed)
-
-        self._cands_search_clear = QPushButton("×")
-        self._cands_search_clear.setFixedSize(22, 22)
-        self._cands_search_clear.setCursor(Qt.PointingHandCursor)
-        self._cands_search_clear.setVisible(False)
-        self._cands_search_clear.setStyleSheet(
-            f"QPushButton{{background:#e2e8f0;color:{TXT_M};"
-            "border:none;border-radius:11px;font-size:14px;font-weight:700;}}"
-            f"QPushButton:hover{{background:#cbd5e1;color:{TXT_H};}}"
-        )
-        self._cands_search_clear.clicked.connect(
-            lambda: self._cands_search.clear()
-        )
-        sw_lo.addWidget(s_ic)
-        sw_lo.addWidget(self._cands_search, 1)
-        sw_lo.addWidget(self._cands_search_clear)
-        title_row.addWidget(search_wrap, 2)
-        h_lo.addLayout(title_row)
-
-        filter_row = QHBoxLayout()
-        filter_row.setSpacing(10)
+        c_filt = QHBoxLayout()
+        c_filt.setSpacing(10)
+        c_filt.addStretch(1)
 
         self._cands_status_filter = _combo(
             ["Tất cả trạng thái", "Chờ xét duyệt",
              "Đã xem xét", "Phê duyệt", "Từ chối"]
         )
-        self._cands_status_filter.setFixedHeight(38)
-        self._cands_status_filter.setFixedWidth(178)
-        self._cands_status_filter.setStyleSheet(f"""
-            QComboBox {{
-                background:#f8fafc;border:1px solid #dbe3ef;border-radius:19px;
-                padding:0 16px;font-size:13px;font-weight:600;color:#334155;
-            }}
-            QComboBox:hover {{ background:#f1f5f9;border-color:#bfdbfe; }}
-            QComboBox:focus {{ border-color:{blue};background:#ffffff; }}
-            QComboBox::drop-down {{ border:none;width:30px; }}
-            QComboBox QAbstractItemView {{
-                background:#ffffff;border:1px solid #dbe3ef;border-radius:10px;
-                selection-background-color:#eff6ff;selection-color:{blue_dark};
-                padding:6px;font-size:13px;
-            }}
-        """)
-        self._cands_status_filter.currentIndexChanged.connect(
-            lambda: self._filter_cands(self._cands_search.text())
+        self._cands_status_filter.setFixedHeight(40)
+        self._cands_status_filter.setMinimumWidth(200)
+        self._cands_status_filter.setSizePolicy(
+            QSizePolicy.MinimumExpanding, QSizePolicy.Fixed
         )
-        filter_row.addWidget(self._cands_status_filter)
+        self._cands_status_filter.setStyleSheet(_combo_filter_ss)
+        self._cands_status_filter.currentIndexChanged.connect(
+            lambda: self._filter_cands(self.search_input.text())
+        )
+        c_filt.addWidget(self._cands_status_filter)
 
         self._cands_sort = _combo(
             ["Mới nhất trước", "Cũ nhất trước", "Tên A→Z", "Tên Z→A"]
         )
-        self._cands_sort.setFixedHeight(38)
-        self._cands_sort.setFixedWidth(158)
-        self._cands_sort.setStyleSheet(self._cands_status_filter.styleSheet())
-        self._cands_sort.currentIndexChanged.connect(
-            lambda: self._filter_cands(self._cands_search.text())
+        self._cands_sort.setFixedHeight(40)
+        self._cands_sort.setMinimumWidth(176)
+        self._cands_sort.setSizePolicy(
+            QSizePolicy.MinimumExpanding, QSizePolicy.Fixed
         )
-        filter_row.addWidget(self._cands_sort)
+        self._cands_sort.setStyleSheet(_combo_filter_ss)
+        self._cands_sort.currentIndexChanged.connect(
+            lambda: self._filter_cands(self.search_input.text())
+        )
+        c_filt.addWidget(self._cands_sort)
 
         btn_reset = QPushButton("Xóa lọc")
-        btn_reset.setIcon(QIcon(_svg_pm("ic_x.svg", 14, "#ef4444")))
-        btn_reset.setIconSize(QSize(14, 14))
-        btn_reset.setFixedHeight(38)
+        btn_reset.setIcon(QIcon(_svg_pm("ic_x.svg", 12, "#ef4444")))
+        btn_reset.setIconSize(QSize(12, 12))
+        btn_reset.setFixedHeight(40)
         btn_reset.setCursor(Qt.PointingHandCursor)
         btn_reset.setStyleSheet(
             "QPushButton{background:transparent;color:#ef4444;"
-            "border:none;border-radius:19px;padding:0 14px;font-size:13px;"
+            "border:none;border-radius:8px;padding:0 12px;font-size:12px;"
             "font-weight:700;}"
             "QPushButton:hover{background:#fef2f2;color:#dc2626;}"
         )
+
         def _reset_cands():
-            self._cands_search.clear()
+            if getattr(self, "_cands_kw_timer", None):
+                self._cands_kw_timer.stop()
+            self.search_input.clear()
             self._cands_status_filter.setCurrentIndex(0)
             self._cands_sort.setCurrentIndex(0)
-        btn_reset.clicked.connect(_reset_cands)
-        filter_row.addWidget(btn_reset)
-        filter_row.addStretch()
-        h_lo.addLayout(filter_row)
-        outer.addWidget(header)
+            self._filter_cands("")
 
-        # ── Table card ────────────────────────────────────────
-        frame = QFrame()
-        frame.setStyleSheet(
-            "QFrame{background:#ffffff;border:1px solid #eef2f7;"
-            "border-radius:14px;}"
-        )
-        _shadow(frame, blur=20, dy=5, alpha=12)
-        flo = QVBoxLayout(frame)
-        flo.setContentsMargins(24, 20, 24, 20)
-        flo.setSpacing(16)
+        btn_reset.clicked.connect(_reset_cands)
+        c_filt.addWidget(btn_reset)
+
+        flo.addLayout(c_filt)
 
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(10)
         hdr_ic = QLabel()
-        hdr_ic.setFixedSize(32, 32)
+        hdr_ic.setFixedSize(34, 34)
         hdr_ic.setAlignment(Qt.AlignCenter)
         hdr_ic.setPixmap(_svg_pm("ic_users.svg", 17, blue))
-        hdr_ic.setStyleSheet("background:transparent;")
+        hdr_ic.setStyleSheet(
+            f"background:#eef2ff;border:none;border-radius:10px;"
+        )
         hdr_lbl = QLabel("Danh sách ứng viên")
         hdr_lbl.setStyleSheet(
-            f"color:{TXT_H};font-size:16px;font-weight:800;"
-            "background:transparent;border:none;letter-spacing:-0.2px;"
+            "color:#1e1b4b;font-size:15px;font-weight:800;"
+            "background:transparent;border:none;letter-spacing:-0.3px;"
         )
         self._lbl_cand_count = QLabel()
         self._lbl_cand_count.setStyleSheet(
-            "background:#eff6ff;color:#2563eb;font-size:11px;"
-            "font-weight:800;border-radius:10px;padding:3px 10px;"
+            f"background:#eef2ff;color:{blue_dark};font-size:11px;"
+            "font-weight:700;border-radius:8px;padding:2px 8px;"
         )
         hdr_row.addWidget(hdr_ic)
         hdr_row.addWidget(hdr_lbl)
@@ -2982,20 +3108,20 @@ class HRDashboard:
         self.table_cands = QTableWidget()
         self.table_cands.setStyleSheet("""
             QTableWidget {
-                background:#ffffff;border:none;gridline-color:#eef2f7;
-                font-size:13px;color:#334155;outline:none;
-                alternate-background-color:#fbfdff;
-                selection-background-color:#eff6ff;selection-color:#1d4ed8;
+                background:#ffffff;border:none;gridline-color:#f3f4f6;
+                font-size:12px;color:#374151;outline:none;
+                alternate-background-color:#fafbff;
+                selection-background-color:#eef2ff;selection-color:#3730a3;
             }
             QTableWidget::item {
-                padding:10px 14px;border:none;border-bottom:1px solid #eef2f7;
+                padding:14px 14px;border:none;border-bottom:1px solid #f3f4f6;
             }
-            QTableWidget::item:hover { background:#f1f5f9; }
-            QTableWidget::item:selected { background:#eff6ff;color:#1d4ed8; }
+            QTableWidget::item:hover { background:#f5f3ff; }
+            QTableWidget::item:selected { background:#eef2ff;color:#3730a3; }
             QHeaderView::section {
-                background:#f8fafc;border:none;border-bottom:1px solid #e2e8f0;
-                padding:12px 10px;font-size:11px;font-weight:800;
-                color:#64748b;letter-spacing:0.3px;
+                background:#f8fafc;border:none;border-bottom:2px solid #e0e7ff;
+                padding:10px 12px;font-size:11px;font-weight:700;
+                color:#6b7280;
             }
         """)
         self.table_cands.setAlternatingRowColors(True)
@@ -3007,13 +3133,14 @@ class HRDashboard:
         self.table_cands.setFrameShape(QFrame.NoFrame)
         self.table_cands.setMouseTracking(True)
         self.table_cands.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.table_cands.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.table_cands.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.table_cands.setTextElideMode(Qt.ElideNone)
         self.table_cands.cellClicked.connect(self._on_cand_row_clicked)
-        self.table_cands.verticalHeader().setDefaultSectionSize(64)
+        self.table_cands.verticalHeader().setDefaultSectionSize(90)
         self.table_cands.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
-        flo.addWidget(self.table_cands)
+        flo.addWidget(self.table_cands, 1)
 
         _nr_cands = QFrame()
         _nr_cands.setFixedHeight(118)
@@ -3047,9 +3174,10 @@ class HRDashboard:
         flo.addWidget(self._cands_no_result_lbl)
 
         # Proportional resizer: Ứng viên 36% — Vị trí 64% of flexible space
-        # Fixed cols: Date(140)+Status(172)+Actions(96) = 408
+        # Fixed cols: Date + Status pill + Actions (phải khớp tổng _render_cands)
+        self._cands_fixed_cols_total = 432
         self._cands_resizer = _ColResizeFilter(
-            self.table_cands, 0, 1, 0.36, 408
+            self.table_cands, 0, 1, 0.36, self._cands_fixed_cols_total
         )
 
         # ── Pagination bar ─────────────────────────────────────
@@ -3690,14 +3818,26 @@ class HRDashboard:
         self.lbl_page_sub.setText(subs[idx])
         if hasattr(self, "_search_outer_ref"):
             self._hide_global_search_popup()
-            self._search_outer_ref.setVisible(idx != 3)
+            self._search_outer_ref.setVisible(True)
+
+        _search_ph = {
+            2: "Tìm tiêu đề, vị trí, địa điểm, lương...",
+            3: "Tìm ứng viên, email, vị trí ứng tuyển...",
+        }
+        if hasattr(self, "search_input"):
+            self.search_input.setPlaceholderText(
+                _search_ph.get(idx, "Tìm kiếm ứng viên, tin đăng...")
+            )
+
+        if getattr(self, "_cands_kw_timer", None) and self._cands_kw_timer.isActive():
+            self._cands_kw_timer.stop()
 
         if idx == 0:
             self._load_dash()
         elif idx == 2:
             self._fill_jobs_table()
         elif idx == 3:
-            self._fill_cands_table()
+            self._filter_cands(self.search_input.text())
         elif idx == 4:
             self._refresh_billing_page()
         elif idx == 5:
@@ -3840,14 +3980,8 @@ class HRDashboard:
         except ApiError as e:
             QMessageBox.warning(self.win, "Lỗi", str(e))
             self._jobs_all_data = []
-        self._jobs_data = list(self._jobs_all_data)
         self._jobs_page = 0
-        self._render_jobs_page()
-
-    def _on_jobs_search_changed(self, text: str) -> None:
-        """Show/hide clear button + trigger filter."""
-        self._jobs_search_clear.setVisible(bool(text))
-        self._filter_jobs(text)
+        self._filter_jobs(self.search_input.text())
 
     def _filter_jobs(self, text: str) -> None:
         kw = text.strip().lower()
@@ -3909,7 +4043,10 @@ class HRDashboard:
         start   = self._jobs_page * _PAGE_SIZE
         self._render_jobs(self._jobs_data[start: start + _PAGE_SIZE])
         # Badge shows TOTAL filtered count
-        self._lbl_job_count.setText(f"  {total} tin  ")
+        n = int(total)
+        self._lbl_job_count.setText(
+            f"  {n} tin đăng  " if n else "  Chưa có tin  "
+        )
         self._jobs_no_result_lbl.setVisible(total == 0)
         self._update_jobs_pag(n_pages, total)
 
@@ -3934,7 +4071,7 @@ class HRDashboard:
         e = min((self._jobs_page + 1) * _PAGE_SIZE, total)
         info = QLabel(f"Hiển thị {s}–{e} trong {total} tin")
         info.setStyleSheet(
-            f"color:{TXT_M};font-size:12px;"
+            "color:#6b7280;font-size:12px;font-weight:500;"
             "background:transparent;border:none;"
         )
         lo.addWidget(info)
@@ -3969,6 +4106,7 @@ class HRDashboard:
         tbl.setColumnCount(len(COLS))
         tbl.setHorizontalHeaderLabels(COLS)
         tbl.setRowCount(len(jobs))
+        tbl.setTextElideMode(Qt.ElideNone)
 
         for row, j in enumerate(jobs):
             boost_days_left = 0
@@ -3983,30 +4121,64 @@ class HRDashboard:
                 boost_days_left = 0
 
             # ── Title ────────────────────────────────────────
-            t = QTableWidgetItem(j.get("title", ""))
-            t.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-            t.setForeground(QColor(TXT_H))
+            title_txt = str(j.get("title", "") or "")
             if bool(j.get("is_boosted")):
-                t.setText(f"🚀 {j.get('title', '')} (còn {boost_days_left} ngày boost)")
-            tbl.setItem(row, 0, t)
+                title_w = QWidget()
+                title_w.setStyleSheet("background:transparent;")
+                title_lo = QHBoxLayout(title_w)
+                title_lo.setContentsMargins(4, 0, 4, 0)
+                title_lo.setSpacing(5)
+                title_lo.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                t = QLabel(title_txt)
+                t.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
+                t.setStyleSheet("color:#4f46e5;background:transparent;border:none;")
+                title_lo.addWidget(t)
+                boost_ic = QLabel()
+                boost_ic.setPixmap(_svg_pm("ic_boost.svg", 13, "#7c3aed"))
+                boost_ic.setStyleSheet("background:transparent;border:none;")
+                boost_ic.setFixedSize(14, 14)
+                title_lo.addWidget(boost_ic)
+                boost_days_lbl = QLabel(f"{boost_days_left} ngày")
+                boost_days_lbl.setStyleSheet(
+                    "color:#7c3aed;font-size:11px;font-weight:600;"
+                    "background:transparent;border:none;"
+                )
+                title_lo.addWidget(boost_days_lbl)
+                title_lo.addStretch()
+                tbl.setCellWidget(row, 0, title_w)
+            else:
+                t = QTableWidgetItem(title_txt)
+                t.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
+                t.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                t.setForeground(QColor("#1e1b4b"))
+                tbl.setItem(row, 0, t)
 
             # ── Department ───────────────────────────────────
             dept = QTableWidgetItem(j.get("department", "—"))
-            dept.setForeground(QColor(TXT_S))
+            dept.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            dept.setForeground(QColor("#374151"))
             tbl.setItem(row, 1, dept)
 
             # ── Date ─────────────────────────────────────────
-            dt = QTableWidgetItem(j.get("created_at", "—"))
-            dt.setTextAlignment(Qt.AlignCenter)
-            dt.setForeground(QColor(TXT_M))
+            raw_date = str(j.get("created_at") or "").strip()
+            display_date = "—"
+            if raw_date:
+                try:
+                    dt_obj = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                    display_date = dt_obj.strftime("%d/%m/%Y")
+                except Exception:
+                    display_date = raw_date[:10]
+            dt = QTableWidgetItem(display_date)
+            dt.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            dt.setForeground(QColor("#6b7280"))
             tbl.setItem(row, 2, dt)
 
             # ── Applicants count ─────────────────────────────
             cnt = j.get("applicants_count", 0)
             cnt_item = QTableWidgetItem(str(cnt))
-            cnt_item.setTextAlignment(Qt.AlignCenter)
+            cnt_item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             cnt_item.setForeground(
-                QColor(P) if cnt > 0 else QColor(TXT_M)
+                QColor("#6366f1") if cnt > 0 else QColor("#9ca3af")
             )
             if cnt > 0:
                 cnt_item.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
@@ -4025,51 +4197,41 @@ class HRDashboard:
             badge = QLabel(txt)
             badge.setAlignment(Qt.AlignCenter)
             badge.setFixedHeight(26)
-            badge.setMinimumWidth(90)
+            badge.setMinimumWidth(80)
             badge.setStyleSheet(
                 f"background:{bg_c};color:{fg};"
-                "font-size:12px;font-weight:700;"
-                "border-radius:13px;padding:0 12px;"
+                "font-size:10px;font-weight:700;"
+                "border-radius:13px;padding:0 10px;"
+                f"border:1px solid {bg_c};"
             )
             bw_lo.addWidget(badge)
-            if bool(j.get("is_boosted")):
-                boost_badge = QLabel("BOOST")
-                boost_badge.setAlignment(Qt.AlignCenter)
-                boost_badge.setFixedHeight(22)
-                boost_badge.setMinimumWidth(56)
-                boost_badge.setStyleSheet(
-                    "background:#ede9fe;color:#6d28d9;font-size:11px;font-weight:800;border-radius:11px;padding:0 8px;"
-                )
-                bw_lo.addSpacing(6)
-                bw_lo.addWidget(boost_badge)
             tbl.setCellWidget(row, 4, badge_wrap)
 
             # ── Action buttons ───────────────────────────────
             tbl.setCellWidget(row, 5, self._make_job_actions(_to_int(j.get("id")), j.get("status", ""), j.get("title", "")))
 
         hh = tbl.horizontalHeader()
-        # Cols 0+1 managed proportionally by _jobs_resizer (62 : 38)
+        # Cols 0+1 managed proportionally by _jobs_resizer (55 : 45)
         hh.setSectionResizeMode(0, QHeaderView.Interactive)
         hh.setSectionResizeMode(1, QHeaderView.Interactive)
         hh.setSectionResizeMode(2, QHeaderView.Fixed)
         hh.setSectionResizeMode(3, QHeaderView.Fixed)
         hh.setSectionResizeMode(4, QHeaderView.Fixed)
         hh.setSectionResizeMode(5, QHeaderView.Fixed)
-        tbl.setColumnWidth(2, 120)
-        tbl.setColumnWidth(3, 108)
-        tbl.setColumnWidth(4, 146)
-        tbl.setColumnWidth(5, 168)
-        # Keep table visually stable and aligned on wide screens
-        tbl.setMinimumHeight(360)
+        tbl.setColumnWidth(2, 188)
+        tbl.setColumnWidth(3, 84)
+        tbl.setColumnWidth(4, 124)
+        tbl.setColumnWidth(5, 180)
+        tbl.setMinimumHeight(200)
         tbl.setMaximumHeight(16777215)
-        self._jobs_resizer._apply()   # set proportional widths immediately
+        self._jobs_resizer._apply()
 
     def _make_job_actions(self, job_id: int, status: str = "", job_title: str = "") -> QWidget:
         """Three icon-only action buttons per row with tooltip labels + toasts."""
         wrap = QWidget()
         wrap.setStyleSheet("background:transparent;")
         lo = QHBoxLayout(wrap)
-        lo.setContentsMargins(8, 0, 8, 0)
+        lo.setContentsMargins(6, 0, 6, 0)
         lo.setSpacing(6)
         lo.setAlignment(Qt.AlignVCenter)
 
@@ -4079,24 +4241,22 @@ class HRDashboard:
             h = color.lstrip("#")
             r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
             btn = QPushButton()
-            btn.setFixedSize(36, 36)
+            btn.setFixedSize(30, 30)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setToolTip(tooltip)
-            # Render icon with duotone (auto-lightened softColor)
-            btn.setIcon(QIcon(_svg_pm(svg, 18, color)))
-            btn.setIconSize(QSize(18, 18))
+            btn.setIcon(QIcon(_svg_pm(svg, 14, color)))
+            btn.setIconSize(QSize(14, 14))
             btn.setStyleSheet(
                 "QPushButton{"
-                "background:qlineargradient(x1:0,y1:0,x2:0,y2:1,"
-                "stop:0 #ffffff,stop:1 #f5f7ff);"
-                f"border:1px solid {BORDER};"
-                "border-radius:11px;}"
+                "background:#fafbff;"
+                f"border:1.5px solid #e0e7ff;"
+                "border-radius:8px;}"
                 "QPushButton:hover{"
-                f"background:rgba({r},{g},{b},0.09);"
-                f"border:1.5px solid rgba({r},{g},{b},0.38);}}"
+                f"background:rgba({r},{g},{b},0.10);"
+                f"border:1.5px solid rgba({r},{g},{b},0.35);}}"
                 "QPushButton:pressed{"
-                f"background:rgba({r},{g},{b},0.16);"
-                f"border:1.5px solid rgba({r},{g},{b},0.55);}}"
+                f"background:rgba({r},{g},{b},0.18);"
+                f"border:1.5px solid rgba({r},{g},{b},0.50);}}"
             )
             return btn
 
@@ -4116,15 +4276,85 @@ class HRDashboard:
         btn_del  = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Xoá tin")
 
         def _do_boost(_jid=job_id, _title=job_title):
-            amount, ok = QInputDialog.getInt(
-                self.win,
-                "Boost tin tuyển dụng",
-                f"Nhập ngân sách boost cho tin '{_title or ('#' + str(_jid))}' (VND):",
-                500000,
-                1000,
-                500000000,
-                1000,
+            dlg = QDialog(self.win)
+            dlg.setWindowTitle("Boost tin tuyển dụng")
+            dlg.setFixedSize(420, 220)
+            dlg.setStyleSheet("""
+                QDialog{background:#ffffff;border:1px solid #e0e7ff;border-radius:16px;}
+                QLabel{color:#1e1b4b;background:transparent;border:none;}
+                QSpinBox{
+                    background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;
+                    padding:8px 12px;font-size:14px;font-weight:600;color:#1e1b4b;
+                    min-height:20px;
+                }
+                QSpinBox:focus{border-color:#6366f1;background:#ffffff;}
+                QSpinBox::up-button, QSpinBox::down-button{
+                    border:none;width:20px;
+                }
+                QPushButton#btn_ok{
+                    background:#6366f1;color:#fff;border:none;border-radius:10px;
+                    font-size:13px;font-weight:700;padding:10px 28px;
+                }
+                QPushButton#btn_ok:hover{background:#4f46e5;}
+                QPushButton#btn_cancel{
+                    background:#f3f4f6;color:#4b5563;border:none;border-radius:10px;
+                    font-size:13px;font-weight:600;padding:10px 28px;
+                }
+                QPushButton#btn_cancel:hover{background:#e5e7eb;}
+            """)
+            lo = QVBoxLayout(dlg)
+            lo.setContentsMargins(24, 20, 24, 20)
+            lo.setSpacing(6)
+
+            ic_row = QHBoxLayout()
+            ic_badge = QLabel()
+            ic_badge.setFixedSize(40, 40)
+            ic_badge.setAlignment(Qt.AlignCenter)
+            ic_badge.setPixmap(_svg_pm("ic_boost.svg", 20, "#7c3aed"))
+            ic_badge.setStyleSheet(
+                "background:#f5f3ff;border:none;border-radius:12px;"
             )
+            ic_row.addWidget(ic_badge)
+            ic_row.addStretch()
+            lo.addLayout(ic_row)
+
+            lbl_title = QLabel(f"Boost tin '{_title or '#' + str(_jid)}'")
+            lbl_title.setStyleSheet(
+                "font-size:15px;font-weight:700;color:#1e1b4b;"
+            )
+            lo.addWidget(lbl_title)
+            lo.addSpacing(2)
+
+            lbl_sub = QLabel("Nhập ngân sách boost (VND)")
+            lbl_sub.setStyleSheet("font-size:12px;color:#6b7280;")
+            lo.addWidget(lbl_sub)
+            lo.addSpacing(6)
+
+            spin = QSpinBox()
+            spin.setRange(1000, 500000000)
+            spin.setValue(500000)
+            spin.setSingleStep(1000)
+            spin.setGroupSeparatorShown(True)
+            lo.addWidget(spin)
+            lo.addSpacing(12)
+
+            btn_row = QHBoxLayout()
+            btn_row.addStretch()
+            btn_cancel = QPushButton("Hủy")
+            btn_cancel.setObjectName("btn_cancel")
+            btn_cancel.setCursor(Qt.PointingHandCursor)
+            btn_cancel.clicked.connect(dlg.reject)
+            btn_row.addWidget(btn_cancel)
+            btn_ok = QPushButton("Xác nhận")
+            btn_ok.setObjectName("btn_ok")
+            btn_ok.setCursor(Qt.PointingHandCursor)
+            btn_ok.clicked.connect(dlg.accept)
+            btn_row.addWidget(btn_ok)
+            lo.addLayout(btn_row)
+
+            if dlg.exec() != QDialog.Accepted:
+                return
+            amount = spin.value()
             if not ok:
                 return
             try:
@@ -4805,11 +5035,6 @@ class HRDashboard:
         self._cands_page = 0
         self._fetch_cands_page()
 
-    def _on_cands_search_changed(self, text: str) -> None:
-        """Show/hide clear button + trigger filter."""
-        self._cands_search_clear.setVisible(bool(text))
-        self._filter_cands(text)
-
     def _filter_cands(self, text: str) -> None:
         st_map = {
             0: None, 1: "pending", 2: "reviewed",
@@ -4868,6 +5093,8 @@ class HRDashboard:
         self._cands_no_result_lbl.setVisible(total == 0)
 
         for row, a in enumerate(page_apps):
+            app_id = int(a.get("application_id") or 0)
+
             # Col 0: Avatar + name + email
             tbl.setCellWidget(
                 row, 0,
@@ -4875,18 +5102,23 @@ class HRDashboard:
                     a.get("candidate_name", ""),
                     a.get("candidate_email", ""),
                     bool(a.get("is_pro_active")),
+                    user_id=a.get("candidate_user_id"),
                 )
             )
 
             # Col 1: Job title
-            jt = QTableWidgetItem(a.get("job_title", ""))
+            job_title = str(a.get("job_title", "") or "")
+            jt = QTableWidgetItem(job_title)
             jt.setForeground(QColor(TXT_S))
+            jt.setToolTip(job_title)
             tbl.setItem(row, 1, jt)
 
             # Col 2: Applied date
-            dt = QTableWidgetItem(a.get("applied_at", "—"))
+            applied = str(a.get("applied_at") or "—")
+            dt = QTableWidgetItem(applied)
             dt.setTextAlignment(Qt.AlignCenter)
             dt.setForeground(QColor(TXT_M))
+            dt.setToolTip(applied)
             tbl.setItem(row, 2, dt)
 
             # Col 3: Status pill
@@ -4907,8 +5139,8 @@ class HRDashboard:
             bw_lo.setAlignment(Qt.AlignCenter)
             badge = QFrame()
             badge.setFixedHeight(26)
-            badge.setMinimumWidth(132)
-            badge.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+            badge.setMinimumWidth(176)
+            badge.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
             badge.setStyleSheet(
                 f"background:{bg_c};color:{fg};"
                 "border-radius:13px;border:none;"
@@ -4927,6 +5159,7 @@ class HRDashboard:
                 f"color:{fg};font-size:12px;font-weight:800;"
                 "background:transparent;border:none;"
             )
+            b_txt.setToolTip(txt)
             b_lo.addWidget(b_ic)
             b_lo.addWidget(b_txt)
             bw_lo.addWidget(badge)
@@ -4936,8 +5169,8 @@ class HRDashboard:
             tbl.setCellWidget(
                 row, 4,
                 self._make_cand_actions(
-                    a["application_id"],
-                    a.get("cv_name", ""),
+                    app_id,
+                    a.get("cv_name", "") or "",
                     a.get("status", ""),
                     a,
                 )
@@ -4950,9 +5183,9 @@ class HRDashboard:
         hh.setSectionResizeMode(2, QHeaderView.Fixed)
         hh.setSectionResizeMode(3, QHeaderView.Fixed)
         hh.setSectionResizeMode(4, QHeaderView.Fixed)
-        tbl.setColumnWidth(2, 140)
-        tbl.setColumnWidth(3, 172)
-        tbl.setColumnWidth(4, 96)
+        tbl.setColumnWidth(2, 128)
+        tbl.setColumnWidth(3, 204)
+        tbl.setColumnWidth(4, 100)
         # Fix height to exactly fit rows — no empty space
         tbl.setMinimumHeight(320)
         tbl.setMaximumHeight(16777215)
@@ -4961,34 +5194,17 @@ class HRDashboard:
 
         self._update_cands_pagination(n_pages, total, page_size)
 
-    def _make_cand_info(self, name: str, email: str, is_pro_active: bool = False) -> QWidget:
-        """Colored avatar circle + name + email stacked."""
-        _PALETTE = [
-            ("#3b82f6", "#60a5fa", "#fff"), ("#f59e0b", "#fbbf24", "#fff"),
-            ("#10b981", "#34d399", "#fff"), ("#0ea5e9", "#38bdf8", "#fff"),
-            ("#ec4899", "#f472b6", "#fff"), ("#8b5cf6", "#a78bfa", "#fff"),
-            ("#ef4444", "#fb7185", "#fff"), ("#14b8a6", "#2dd4bf", "#fff"),
-        ]
-        idx = sum(ord(c) for c in name) % len(_PALETTE)
-        av_bg, av_bg_2, av_fg = _PALETTE[idx]
-        initials = "".join(p[0].upper() for p in name.split()[:2]) if name else "?"
-
+    def _make_cand_info(self, name: str, email: str, is_pro_active: bool = False,
+                        user_id: int | None = None) -> QWidget:
+        """Avatar circle (loads real image) + name + email stacked."""
         wrap = QWidget()
         wrap.setStyleSheet("background:transparent;")
         lo = QHBoxLayout(wrap)
-        lo.setContentsMargins(12, 6, 8, 6)
-        lo.setSpacing(12)
+        lo.setContentsMargins(14, 12, 12, 12)
+        lo.setSpacing(14)
         lo.setAlignment(Qt.AlignVCenter)
 
-        ava = QLabel(initials)
-        ava.setFixedSize(38, 38)
-        ava.setAlignment(Qt.AlignCenter)
-        ava.setStyleSheet(
-            "background:qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-            f"stop:0 {av_bg},stop:1 {av_bg_2});color:{av_fg};"
-            "border-radius:19px;font-size:13px;font-weight:700;"
-            "border:none;"
-        )
+        ava, _ = _make_avatar_circle(name, size=42, user_id=user_id)
 
         txt_col = QVBoxLayout()
         txt_col.setSpacing(2)
@@ -5035,6 +5251,9 @@ class HRDashboard:
         btn_menu.setFixedSize(36, 34)
         btn_menu.setCursor(Qt.PointingHandCursor)
         btn_menu.setToolTip("Thao tác")
+        if app_id <= 0:
+            btn_menu.setEnabled(False)
+            btn_menu.setToolTip("Không xác định được đơn ứng tuyển")
         btn_menu.setStyleSheet(
             "QPushButton{background:#f8fafc;color:#475569;border:1px solid #e2e8f0;"
             "border-radius:10px;font-size:18px;font-weight:800;padding-bottom:3px;}"
@@ -5139,10 +5358,13 @@ class HRDashboard:
             "font-size:11px; font-weight:700; padding:3px 10px;"
         )
         header = QHBoxLayout()
-        title = QLabel("Hồ sơ ứng viên")
-        title.setStyleSheet(f"color:{TXT_H}; font-size:18px; font-weight:800;")
-        header.addWidget(title)
-        header.addSpacing(8)
+        bid = QLabel(f"Đơn #{app_id}")
+        bid.setStyleSheet(
+            f"color:{TXT_M}; font-size:13px; font-weight:700;"
+            "letter-spacing:-0.2px;"
+        )
+        header.addWidget(bid)
+        header.addSpacing(10)
         header.addWidget(status_badge, 0, Qt.AlignVCenter)
         header.addStretch()
         root.addLayout(header)
@@ -5157,18 +5379,22 @@ class HRDashboard:
         _shadow(left_card, 10, 3, 10)
         left_lo = QVBoxLayout(left_card)
         left_lo.setContentsMargins(18, 20, 18, 18)
-        left_lo.setSpacing(8)
+        left_lo.setSpacing(10)
 
-        initials = "".join(part[:1].upper() for part in name.split()[:2]) or "UV"
-        avatar = QLabel(initials)
-        avatar.setFixedSize(88, 88)
-        avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet(
-            "background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #1e3a8a,stop:1 #2563eb);"
-            "border-radius:44px; color:white; font-size:28px; font-weight:800;"
-            "border:3px solid #10b981;"
+        cand_user_id = app_data.get("candidate_user_id")
+        avatar, _ = _make_avatar_circle(name, size=84, user_id=cand_user_id)
+
+        av_wrap = QWidget()
+        av_wrap.setFixedSize(96, 96)
+        av_wrap.setStyleSheet("background:transparent;")
+        glow = QLabel(av_wrap)
+        glow.setGeometry(0, 0, 96, 96)
+        glow.setStyleSheet(
+            "border-radius:48px; border:3px solid #10b981; background:transparent;"
         )
-        left_lo.addWidget(avatar, 0, Qt.AlignHCenter)
+        avatar.setParent(av_wrap)
+        avatar.setGeometry(6, 6, 84, 84)
+        left_lo.addWidget(av_wrap, 0, Qt.AlignHCenter)
 
         nm = QLabel(name)
         nm.setAlignment(Qt.AlignCenter)
@@ -5196,7 +5422,8 @@ class HRDashboard:
 
         def _contact_line(icon: str, text_val: str) -> None:
             row = QHBoxLayout()
-            row.setSpacing(6)
+            row.setContentsMargins(0, 4, 0, 4)
+            row.setSpacing(8)
             ic = QLabel()
             ic.setFixedSize(14, 14)
             ic.setPixmap(_svg_pm(icon, 14, TXT_M))

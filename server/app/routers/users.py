@@ -63,6 +63,21 @@ def view_my_avatar(user: Annotated[User, Depends(get_current_user)]) -> FileResp
     return FileResponse(path=str(path), media_type="image/*", filename=path.name)
 
 
+@router.get("/{user_id}/avatar/view")
+def view_user_avatar(
+    user_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    target = db.get(User, user_id)
+    if not target or not target.avatar_storage_key:
+        raise HTTPException(status_code=404, detail="Avatar not found")
+    path = resolve_existing_file(settings, target.avatar_storage_key)
+    if not path or not path.is_file():
+        raise HTTPException(status_code=404, detail="Avatar file not found")
+    return FileResponse(path=str(path), media_type="image/*", filename=path.name)
+
+
 @router.get("/me/hr-profile", response_model=HRProfileOut | None)
 def my_hr_profile(user: Annotated[User, Depends(get_current_user)]) -> HRProfileOut | None:
     if user.role.value != "hr" or user.hr_profile is None:

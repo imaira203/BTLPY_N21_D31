@@ -590,6 +590,7 @@ def list_applications_for_hr(
             {
                 "application_id": app.id,
                 "job_title": job.title,
+                "candidate_user_id": cand.id,
                 "candidate_name": cand.full_name or cand.email,
                 "candidate_email": cand.email if can_view_private else "",
                 "contact_unlocked": bool(app.contact_unlocked_at),

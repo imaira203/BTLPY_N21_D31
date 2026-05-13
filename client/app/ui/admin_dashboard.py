@@ -42,6 +42,7 @@ from .charts import (
     make_revenue_trend_chart,
     make_dept_bar_chart,
 )
+from .hr_dashboard import _AvatarLabel, _make_avatar_circle, _load_avatar_async
 from .ui_loader import load_ui
 from .quanly_enhanced import apply_search_icon, enhance_table
 
@@ -1047,14 +1048,7 @@ class AdminDashboard:
             cell_h = QHBoxLayout(cell_w)
             cell_h.setContentsMargins(14, 0, 14, 0); cell_h.setSpacing(12)
 
-            initials = "".join(w[0].upper() for w in name.split()[:2]) or "?"
-            bg, fg = _AVATAR_COLORS[uid % len(_AVATAR_COLORS)]
-            av = QLabel(initials)
-            av.setFixedSize(36, 36); av.setAlignment(Qt.AlignCenter)
-            av.setStyleSheet(
-                f"QLabel {{ background:{bg}; color:{fg}; font-size:12px;"
-                " font-weight:700; border-radius:18px; border:none; }}"
-            )
+            av, _ = _make_avatar_circle(name, size=36, user_id=uid)
             info_v = QVBoxLayout(); info_v.setSpacing(1)
             lbl_n = QLabel(name)
             lbl_n.setStyleSheet(
@@ -2851,13 +2845,8 @@ class AdminDashboard:
         hero_lo.setContentsMargins(32, 0, 32, 0); hero_lo.setSpacing(20)
 
         initials = "".join(w[0].upper() for w in name.split()[:2]) or "?"
-        bg, fg = _AVATAR_COLORS[user_id % len(_AVATAR_COLORS)]
-        av_big = QLabel(initials)
-        av_big.setFixedSize(72, 72); av_big.setAlignment(Qt.AlignCenter)
-        av_big.setStyleSheet(
-            f"QLabel {{ background:{bg}; color:{fg}; font-size:22px; font-weight:800;"
-            " border-radius:36px; border:3px solid rgba(255,255,255,0.4); }}"
-        )
+        av_big, _ = _make_avatar_circle(name, size=72, user_id=user_id)
+        av_big.setStyleSheet(av_big.styleSheet() + "border:3px solid rgba(255,255,255,0.4);")
         hero_lo.addWidget(av_big)
 
         hero_info = QVBoxLayout(); hero_info.setSpacing(4)
@@ -3085,13 +3074,8 @@ class AdminDashboard:
         hero_lo.setContentsMargins(32, 0, 32, 0); hero_lo.setSpacing(20)
 
         initials = (company[:2].upper()) if company not in ("—","") else "?"
-        bg, fg = _AVATAR_COLORS[hr_id % len(_AVATAR_COLORS)]
-        av_big = QLabel(initials)
-        av_big.setFixedSize(76, 76); av_big.setAlignment(Qt.AlignCenter)
-        av_big.setStyleSheet(
-            f"QLabel {{ background:{bg}; color:{fg}; font-size:22px; font-weight:800;"
-            " border-radius:38px; border:3px solid rgba(255,255,255,0.4); }}"
-        )
+        av_big, _ = _make_avatar_circle(company, size=76, user_id=hr_id)
+        av_big.setStyleSheet(av_big.styleSheet() + "border:3px solid rgba(255,255,255,0.4);")
         hero_lo.addWidget(av_big)
 
         hero_info = QVBoxLayout(); hero_info.setSpacing(4)
