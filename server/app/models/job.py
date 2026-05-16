@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..db import Base
@@ -19,14 +19,14 @@ class Job(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     department: Mapped[Optional[str]] = mapped_column(String(128))
     level: Mapped[Optional[str]] = mapped_column(String(64))
-    min_salary: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    max_salary: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_salary: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    max_salary: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     location: Mapped[Optional[str]] = mapped_column(String(128))
     job_type: Mapped[Optional[str]] = mapped_column(String(64))
     headcount: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     deadline_text: Mapped[Optional[str]] = mapped_column(String(32))
     view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    boost_budget_vnd: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    boost_budget_vnd: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     boost_last_paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     boost_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     boost_paused_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

@@ -462,7 +462,7 @@ class AdminDashboard:
         unread_count = len(rows)
         # Update badge
         if hasattr(self, "_bell_badge") and self._bell_badge:
-            if unread_count > 0:
+            if unread_count > 0 and not self._notif_panel.isVisible():
                 self._bell_badge.setText(str(min(unread_count, 99)))
                 self._bell_badge.setVisible(True)
                 # Position badge on top-right of bell button
@@ -560,13 +560,31 @@ class AdminDashboard:
             self._close_notif_panel()
             return
         self._refresh_notif_panel()
+        if hasattr(self, "_bell_badge") and self._bell_badge:
+            self._bell_badge.setVisible(False)
         self._notif_overlay.show()
 
     def _close_notif_panel(self) -> None:
         self._notif_overlay.close()
+        self._poll_notifications()
 
     def _build_notif_item(self, row: dict) -> QWidget:
         return NotificationCard(row, self._open_notification)
+
+    def _open_notification_target(self, row: dict) -> bool:
+        target_screen = str(row.get("target_screen") or "").strip().lower()
+        if not target_screen:
+            return False
+        target_map = {
+            "admin_jobs": 2,
+            "admin_hr": 3,
+            "admin_reports": 4,
+        }
+        target_index = target_map.get(target_screen)
+        if target_index is None:
+            return False
+        self._go(target_index)
+        return True
 
     def _open_notification(self, row: dict) -> None:
         nid = int(row.get("id") or 0)
@@ -575,15 +593,16 @@ class AdminDashboard:
                 jobhub_api.mark_notification_read(nid)
             except Exception:
                 pass
-        category = str(row.get("category") or "").lower()
-        action = str(row.get("action") or "").lower()
-        entity_type = str(row.get("entity_type") or "").lower()
-        if category == "hr" or entity_type == "hr_profile":
-            self._go(3)
-        elif category in {"job", "application"} or entity_type in {"job", "application"}:
-            self._go(2)
-        elif action.startswith("report_"):
-            self._go(4)
+        if not self._open_notification_target(row):
+            category = str(row.get("category") or "").lower()
+            action = str(row.get("action") or "").lower()
+            entity_type = str(row.get("entity_type") or "").lower()
+            if category == "hr" or entity_type == "hr_profile":
+                self._go(3)
+            elif category in {"job", "application"} or entity_type in {"job", "application"}:
+                self._go(2)
+            elif action.startswith("report_"):
+                self._go(4)
         self._refresh_notif_panel()
         self._poll_notifications()
         return
@@ -1101,7 +1120,8 @@ class AdminDashboard:
         total = len(getattr(self, "_user_filtered", []))
         ps    = getattr(self, "_user_page_size", 10)
         pages = max(1, (total + ps - 1) // ps)
-        idx   = getattr(self, "_user_page_idx", 0)
+        idx   = max(0, min(getattr(self, "_user_page_idx", 0), pages - 1))
+        self._user_page_idx = idx
         start = idx * ps + 1
         end   = min((idx + 1) * ps, total)
 
@@ -1112,6 +1132,9 @@ class AdminDashboard:
                 info_lbl.setText("Không có kết quả")
             else:
                 info_lbl.setText(f"Hiển thị {start}–{end} trong tổng số {total} người dùng")
+
+        if info_lbl and total > 0:
+            info_lbl.setText(f"{info_lbl.text()}  |  Trang {idx + 1}/{pages}")
 
         _PAGE_SS = (
             "QPushButton { background:#FFFFFF; color:#374151;"
@@ -1132,9 +1155,7 @@ class AdminDashboard:
     def _user_prev_page(self) -> None:
         if getattr(self, "_user_page_idx", 0) > 0:
             self._user_page_idx -= 1
-            ps = self._user_page_size
-            page = self._user_filtered[self._user_page_idx*ps:(self._user_page_idx+1)*ps]
-            self._populate_user_table(page)
+            self._populate_user_table(self._user_filtered)
             self._user_update_pagination()
 
     def _user_next_page(self) -> None:
@@ -1143,8 +1164,7 @@ class AdminDashboard:
         pages = max(1, (total + ps - 1) // ps)
         if getattr(self, "_user_page_idx", 0) < pages - 1:
             self._user_page_idx += 1
-            page = self._user_filtered[self._user_page_idx*ps:(self._user_page_idx+1)*ps]
-            self._populate_user_table(page)
+            self._populate_user_table(self._user_filtered)
             self._user_update_pagination()
 
     def _populate_user_table(self, users: list) -> None:
@@ -1154,7 +1174,9 @@ class AdminDashboard:
 
         # Slice to current page
         ps    = getattr(self, "_user_page_size", 10)
-        idx   = getattr(self, "_user_page_idx", 0)
+        pages = max(1, (len(users) + ps - 1) // ps)
+        idx   = max(0, min(getattr(self, "_user_page_idx", 0), pages - 1))
+        self._user_page_idx = idx
         page  = users[idx*ps:(idx+1)*ps]
 
         table.setRowCount(len(page))
@@ -2159,6 +2181,15 @@ class AdminDashboard:
         ]
         for ct,cv,ca,cr,cc in chip_defs:
             chips_grid.addWidget(_info_chip(ct,cv,ca), cr, cc)
+        chips_grid.addWidget(
+            _info_chip(
+                "Ngân sách boost",
+                f"{_fmt_vnd_admin(int(j.get('boost_budget_vnd') or 0))} ({'active' if bool(j.get('is_boosted')) else 'inactive'})",
+                "#7C3AED",
+            ),
+            3,
+            0,
+        )
         hero_lo.addLayout(chips_grid)
         body_lo.addWidget(hero)
 
@@ -2360,6 +2391,7 @@ class AdminDashboard:
 
         # ── RIGHT: Admin Actions Card ──────────────────────────────────
         act_card = QFrame()
+        act_card.setAttribute(Qt.WA_StyledBackground, True)
         if st_raw == "pending_approval":
             act_card.setStyleSheet(
                 "QFrame{background:#1E3A8A; border-radius:16px; border:none;}"
@@ -2466,6 +2498,8 @@ class AdminDashboard:
         if st_raw == "pending_approval":
             btn_approve2 = QPushButton("  Phê duyệt tin này")
             btn_approve2.setCursor(Qt.PointingHandCursor)
+            btn_approve2.setAttribute(Qt.WA_StyledBackground, True)
+            btn_approve2.setFocusPolicy(Qt.StrongFocus)
             btn_approve2.setIcon(QIcon(str(resource_icon("ic_check.svg"))))
             btn_approve2.setIconSize(QSize(16,16))
             btn_approve2.setFixedHeight(44)
@@ -2479,6 +2513,8 @@ class AdminDashboard:
 
             btn_reject2 = QPushButton("  Từ chối tin này")
             btn_reject2.setCursor(Qt.PointingHandCursor)
+            btn_reject2.setAttribute(Qt.WA_StyledBackground, True)
+            btn_reject2.setFocusPolicy(Qt.StrongFocus)
             btn_reject2.setIcon(QIcon(str(resource_icon("ic_x.svg"))))
             btn_reject2.setIconSize(QSize(16,16))
             btn_reject2.setFixedHeight(44)
@@ -2490,6 +2526,9 @@ class AdminDashboard:
             )
             act_lo.addWidget(btn_reject2)
             btn_reject2.clicked.connect(_do_reject)
+            act_card.raise_()
+            btn_approve2.raise_()
+            btn_reject2.raise_()
 
             if btn_hdr_approve: btn_hdr_approve.clicked.connect(_do_approve)
             if btn_hdr_reject:  btn_hdr_reject.clicked.connect(_do_reject)
@@ -2685,9 +2724,16 @@ class AdminDashboard:
         )
         _DATE_EDIT_SS = (
             "QDateEdit { background:#FFFFFF; border:1px solid #E5E7EB; border-radius:8px;"
-            " padding:0 10px; font-size:12px; color:#374151; height:36px; }"
+            " padding:0 34px 0 10px; font-size:12px; color:#374151; height:36px; }"
             "QDateEdit:hover { border-color:#2563EB; }"
-            "QDateEdit::drop-down { border:none; width:20px; }"
+            "QDateEdit:focus { border-color:#2563EB; background:#F8FAFF; }"
+            "QDateEdit::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width:26px; border:none; }"
+            f"QDateEdit::down-arrow {{ image:url({str(resource_icon('ic_clock.svg')).replace(chr(92), '/')}); width:14px; height:14px; }}"
+            "QCalendarWidget QWidget { alternate-background-color:#F8FAFC; }"
+            "QCalendarWidget QToolButton { background:#FFFFFF; color:#111827; border:none; font-weight:700; height:28px; }"
+            "QCalendarWidget QMenu { background:#FFFFFF; color:#111827; }"
+            "QCalendarWidget QSpinBox { background:#FFFFFF; color:#111827; border:1px solid #E5E7EB; border-radius:6px; padding:2px 6px; }"
+            "QCalendarWidget QAbstractItemView:enabled { color:#111827; background:#FFFFFF; selection-background-color:#2563EB; selection-color:#FFFFFF; }"
         )
 
         period_cb = QComboBox()
@@ -2700,6 +2746,7 @@ class AdminDashboard:
         # Custom date range widgets
         dt_from = QDateEdit()
         dt_from.setCalendarPopup(True)
+        dt_from.setKeyboardTracking(False)
         dt_from.setDate(QDate(today.year, 1, 1))
         dt_from.setDisplayFormat("dd/MM/yyyy")
         dt_from.setFixedHeight(36)
@@ -2707,6 +2754,7 @@ class AdminDashboard:
         dt_from.setStyleSheet(_DATE_EDIT_SS)
         dt_to = QDateEdit()
         dt_to.setCalendarPopup(True)
+        dt_to.setKeyboardTracking(False)
         dt_to.setDate(QDate(today.year, today.month, today.day))
         dt_to.setDisplayFormat("dd/MM/yyyy")
         dt_to.setFixedHeight(36)
@@ -2719,12 +2767,16 @@ class AdminDashboard:
         # Restore custom dates if set
         if custom_from:
             try:
-                dt_from.setDate(QDate.fromString(custom_from, "yyyy-MM-dd"))
+                _d = QDate.fromString(custom_from, "yyyy-MM-dd")
+                if _d.isValid():
+                    dt_from.setDate(_d)
             except Exception:
                 pass
         if custom_to:
             try:
-                dt_to.setDate(QDate.fromString(custom_to, "yyyy-MM-dd"))
+                _d = QDate.fromString(custom_to, "yyyy-MM-dd")
+                if _d.isValid():
+                    dt_to.setDate(_d)
             except Exception:
                 pass
 
@@ -2740,10 +2792,14 @@ class AdminDashboard:
                 self._reports_date_from = None
                 self._reports_date_to = None
             else:
-                self._apply_custom_date_range()
-            self._fill_reports_page()
+                _apply_custom_date_range()
+            QTimer.singleShot(0, self._fill_reports_page)
 
         def _apply_custom_date_range():
+            if dt_from.date() > dt_to.date():
+                dt_to.blockSignals(True)
+                dt_to.setDate(dt_from.date())
+                dt_to.blockSignals(False)
             self._reports_date_from = dt_from.date().toString("yyyy-MM-dd")
             self._reports_date_to = dt_to.date().toString("yyyy-MM-dd")
             date_lbl.setText(f"  {self._reports_date_from} – {self._reports_date_to}")
@@ -2751,7 +2807,7 @@ class AdminDashboard:
         def _on_custom_date_changed():
             if str(period_cb.currentData() or "") == "custom":
                 _apply_custom_date_range()
-                self._fill_reports_page()
+                QTimer.singleShot(0, self._fill_reports_page)
 
         dt_from.dateChanged.connect(lambda _: _on_custom_date_changed())
         dt_to.dateChanged.connect(lambda _: _on_custom_date_changed())
@@ -3676,6 +3732,8 @@ class AdminDashboard:
             "QPushButton:hover { background:#1D4ED8; }"
         )
         r1.addWidget(btn_export); r1.addWidget(btn_schedule)
+        btn_export.setParent(None)
+        btn_schedule.setParent(None)
         tb_v.addLayout(r1)
 
         r2 = QHBoxLayout(); r2.setSpacing(8)

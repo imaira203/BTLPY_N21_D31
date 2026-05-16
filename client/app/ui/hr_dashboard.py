@@ -1460,9 +1460,10 @@ class HRDashboard:
 
         # ── Bell notification button ────────────────────────
         bell_wrap = QWidget()
+        bell_wrap.setFixedSize(46, 46)
         bell_wrap.setStyleSheet("background:transparent;")
         bell_lo = QVBoxLayout(bell_wrap)
-        bell_lo.setContentsMargins(0, 0, 0, 0)
+        bell_lo.setContentsMargins(3, 3, 3, 3)
         bell_lo.setSpacing(0)
         bell_lo.setAlignment(Qt.AlignCenter)
 
@@ -1485,6 +1486,7 @@ class HRDashboard:
             "background:#EF4444;color:white;font-size:10px;font-weight:700;"
             "border-radius:9px;border:2px solid white;"
         )
+        self._bell_badge.move(24, 0)
         self._bell_badge.setVisible(False)
         self._bell_badge.raise_()
         lo.addWidget(bell_wrap)
@@ -3718,8 +3720,9 @@ class HRDashboard:
             status_txt = str(current_row.get("status") or "").strip().lower()
             is_boost = str(current_row.get("invoice_type") or "").strip().lower() == "job_boost"
             boost_locked = is_boost and status_txt in {"quá hạn", "hết hạn thanh toán", "đã hủy"}
-            is_waiting = status_txt in {"đang chờ thanh toán", "dang cho thanh toan", "đến hạn thanh toán"}
-            if current_row.get("payment_url") and not boost_locked and (bool(current_row.get("can_pay_now")) or is_waiting):
+            # Payment button visibility must be driven by backend rule only.
+            # `can_pay_now=False` means invoice is outside payment window (e.g. not due yet / expired).
+            if current_row.get("payment_url") and not boost_locked and bool(current_row.get("can_pay_now")):
                 btn_pay = QPushButton("Thanh toán")
                 btn_pay.setFixedHeight(38)
                 btn_pay.setCursor(Qt.PointingHandCursor)
@@ -3902,7 +3905,7 @@ class HRDashboard:
         unread_count = len(rows)
         # Update badge
         if hasattr(self, "_bell_badge"):
-            if unread_count > 0:
+            if unread_count > 0 and not self._notif_panel.isVisible():
                 self._bell_badge.setText(str(min(unread_count, 99)))
                 self._bell_badge.setVisible(True)
             else:
@@ -3990,13 +3993,33 @@ class HRDashboard:
             self._close_notif_panel()
             return
         self._refresh_notif_panel()
+        if hasattr(self, "_bell_badge"):
+            self._bell_badge.setVisible(False)
         self._notif_overlay.show()
 
     def _close_notif_panel(self) -> None:
         self._notif_overlay.close()
+        self._poll_notifications()
 
     def _build_notif_item(self, row: dict) -> QWidget:
         return NotificationCard(row, self._open_notification)
+
+    def _open_notification_target(self, row: dict) -> bool:
+        target_screen = str(row.get("target_screen") or "").strip().lower()
+        if not target_screen:
+            return False
+        target_map = {
+            "hr_jobs": 2,
+            "hr_applications": 3,
+            "hr_billing": 4,
+            "hr_profile": 5,
+            "candidate_applications": 3,
+        }
+        target_index = target_map.get(target_screen)
+        if target_index is None:
+            return False
+        self._go(target_index)
+        return True
 
     def _open_notification(self, row: dict) -> None:
         nid = _to_int(row.get("id"))
@@ -4005,17 +4028,18 @@ class HRDashboard:
                 jobhub_api.mark_notification_read(nid)
             except Exception:
                 pass
-        category = str(row.get("category") or "").lower()
-        action = str(row.get("action") or "").lower()
-        entity_type = str(row.get("entity_type") or "").lower()
-        if category == "application" or entity_type == "application":
-            self._go(3)
-        elif category == "billing" or entity_type == "invoice":
-            self._go(4)
-        elif category == "job" or entity_type == "job":
-            self._go(2)
-        elif action == "hr_profile_rejected":
-            self._go(5)
+        if not self._open_notification_target(row):
+            category = str(row.get("category") or "").lower()
+            action = str(row.get("action") or "").lower()
+            entity_type = str(row.get("entity_type") or "").lower()
+            if category == "application" or entity_type == "application":
+                self._go(3)
+            elif category == "billing" or entity_type == "invoice":
+                self._go(4)
+            elif category == "job" or entity_type == "job":
+                self._go(2)
+            elif action == "hr_profile_rejected":
+                self._go(5)
         self._refresh_notif_panel()
         self._poll_notifications()
 
@@ -4434,67 +4458,110 @@ class HRDashboard:
         btn_del  = _ic_btn("ic_delete.svg", "#ef4444", "#fee2e2", "Xoá tin")
 
         def _do_boost(_jid=job_id, _title=job_title):
+            cur_boost_budget = 0
+            try:
+                _job_now = jobhub_api.hr_get_job(_jid)
+                cur_boost_budget = _to_int((_job_now or {}).get("boost_budget_vnd") or 0)
+            except ApiError:
+                cur_boost_budget = 0
+
             dlg = QDialog(self.win)
             dlg.setWindowTitle("Boost tin tuyển dụng")
-            dlg.setFixedSize(420, 220)
+            dlg.setFixedSize(460, 330)
             dlg.setStyleSheet("""
-                QDialog{background:#ffffff;border:1px solid #e0e7ff;border-radius:16px;}
-                QLabel{color:#1e1b4b;background:transparent;border:none;}
-                QSpinBox{
-                    background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;
-                    padding:8px 12px;font-size:14px;font-weight:600;color:#1e1b4b;
-                    min-height:20px;
+                QDialog{background:#ffffff;border:1px solid #e2e8f0;border-radius:18px;}
+                QLabel{color:#0f172a;background:transparent;border:none;}
+                QLineEdit#amount_input{
+                    background:#ffffff;
+                    border:1.5px solid #dbe4ff;
+                    border-radius:12px;
+                    padding:0 14px;
+                    font-size:16px;
+                    font-weight:700;
+                    color:#1e1b4b;
                 }
-                QSpinBox:focus{border-color:#6366f1;background:#ffffff;}
-                QSpinBox::up-button, QSpinBox::down-button{
-                    border:none;width:20px;
+                QLineEdit#amount_input:focus{
+                    border-color:#4f46e5;
+                    background:#f8faff;
+                }
+                QPushButton[class="preset"]{
+                    background:#f8fafc;
+                    border:1px solid #e2e8f0;
+                    border-radius:10px;
+                    color:#334155;
+                    font-size:12px;
+                    font-weight:600;
+                    padding:7px 11px;
+                }
+                QPushButton[class="preset"]:hover{
+                    background:#eef2ff;
+                    border-color:#c7d2fe;
+                    color:#3730a3;
                 }
                 QPushButton#btn_ok{
-                    background:#6366f1;color:#fff;border:none;border-radius:10px;
-                    font-size:13px;font-weight:700;padding:10px 28px;
+                    background:#4f46e5;color:#fff;border:none;border-radius:10px;
+                    font-size:13px;font-weight:700;padding:10px 26px;
                 }
-                QPushButton#btn_ok:hover{background:#4f46e5;}
+                QPushButton#btn_ok:hover{background:#4338ca;}
+                QPushButton#btn_ok:disabled{background:#a5b4fc;color:#eef2ff;}
                 QPushButton#btn_cancel{
-                    background:#f3f4f6;color:#4b5563;border:none;border-radius:10px;
-                    font-size:13px;font-weight:600;padding:10px 28px;
+                    background:#f1f5f9;color:#334155;border:none;border-radius:10px;
+                    font-size:13px;font-weight:600;padding:10px 22px;
                 }
-                QPushButton#btn_cancel:hover{background:#e5e7eb;}
+                QPushButton#btn_cancel:hover{background:#e2e8f0;}
             """)
             lo = QVBoxLayout(dlg)
             lo.setContentsMargins(24, 20, 24, 20)
-            lo.setSpacing(6)
+            lo.setSpacing(8)
 
             ic_row = QHBoxLayout()
             ic_badge = QLabel()
-            ic_badge.setFixedSize(40, 40)
+            ic_badge.setFixedSize(42, 42)
             ic_badge.setAlignment(Qt.AlignCenter)
-            ic_badge.setPixmap(_svg_pm("ic_boost.svg", 20, "#7c3aed"))
-            ic_badge.setStyleSheet(
-                "background:#f5f3ff;border:none;border-radius:12px;"
-            )
+            ic_badge.setPixmap(_svg_pm("ic_boost.svg", 20, "#6366f1"))
+            ic_badge.setStyleSheet("background:#eef2ff;border:none;border-radius:12px;")
             ic_row.addWidget(ic_badge)
             ic_row.addStretch()
             lo.addLayout(ic_row)
 
             lbl_title = QLabel(f"Boost tin '{_title or '#' + str(_jid)}'")
-            lbl_title.setStyleSheet(
-                "font-size:15px;font-weight:700;color:#1e1b4b;"
-            )
+            lbl_title.setStyleSheet("font-size:16px;font-weight:800;color:#0f172a;")
             lo.addWidget(lbl_title)
-            lo.addSpacing(2)
 
-            lbl_sub = QLabel("Nhập ngân sách boost (VND)")
-            lbl_sub.setStyleSheet("font-size:12px;color:#6b7280;")
+            lbl_sub = QLabel("Nhập ngân sách để ưu tiên hiển thị (VND)")
+            lbl_sub.setStyleSheet("font-size:12px;color:#64748b;")
             lo.addWidget(lbl_sub)
-            lo.addSpacing(6)
 
-            spin = QSpinBox()
-            spin.setRange(1000, 500000000)
-            spin.setValue(500000)
-            spin.setSingleStep(1000)
-            spin.setGroupSeparatorShown(True)
-            lo.addWidget(spin)
-            lo.addSpacing(12)
+            lbl_cur_budget = QLabel(f"Đã boost: {_fmt_vnd(cur_boost_budget)}")
+            lbl_cur_budget.setStyleSheet("font-size:12px;color:#4f46e5;font-weight:700;")
+            lo.addWidget(lbl_cur_budget)
+
+            amount_input = QLineEdit()
+            amount_input.setObjectName("amount_input")
+            amount_input.setFixedHeight(42)
+            amount_input.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+            amount_input.setPlaceholderText("Ví dụ: 1.000.000")
+            amount_input.setText("500.000")
+            lo.addWidget(amount_input)
+
+            hint = QLabel("")
+            hint.setStyleSheet("font-size:12px;color:#64748b;")
+            lo.addWidget(hint)
+            total_hint = QLabel("")
+            total_hint.setStyleSheet("font-size:12px;color:#0f766e;font-weight:600;")
+            lo.addWidget(total_hint)
+
+            preset_row = QHBoxLayout()
+            preset_row.setSpacing(8)
+            for val in (500000, 1000000, 2000000):
+                pbtn = QPushButton(_fmt_vnd(val))
+                pbtn.setProperty("class", "preset")
+                pbtn.setCursor(Qt.PointingHandCursor)
+                pbtn.clicked.connect(lambda _=False, _v=val: amount_input.setText(f"{_v:,}".replace(",", ".")))
+                preset_row.addWidget(pbtn)
+            preset_row.addStretch()
+            lo.addLayout(preset_row)
+            lo.addSpacing(8)
 
             btn_row = QHBoxLayout()
             btn_row.addStretch()
@@ -4503,17 +4570,54 @@ class HRDashboard:
             btn_cancel.setCursor(Qt.PointingHandCursor)
             btn_cancel.clicked.connect(dlg.reject)
             btn_row.addWidget(btn_cancel)
-            btn_ok = QPushButton("Xác nhận")
+            btn_ok = QPushButton("Tạo hóa đơn")
             btn_ok.setObjectName("btn_ok")
             btn_ok.setCursor(Qt.PointingHandCursor)
-            btn_ok.clicked.connect(dlg.accept)
             btn_row.addWidget(btn_ok)
             lo.addLayout(btn_row)
 
+            def _parse_amount() -> int:
+                raw = (amount_input.text() or "").strip()
+                digits = "".join(ch for ch in raw if ch.isdigit())
+                if not digits:
+                    return 0
+                return int(digits)
+
+            def _validate_amount() -> bool:
+                amt = _parse_amount()
+                ok_amt = amt >= 1000
+                btn_ok.setEnabled(ok_amt)
+                if not amt:
+                    hint.setText("Ngân sách tối thiểu 1.000 VND")
+                    return False
+                if amt < 1000:
+                    hint.setText("Ngân sách phải từ 1.000 VND")
+                    return False
+                hint.setText(f"Sẽ tạo hóa đơn: {_fmt_vnd(amt)}")
+                total_hint.setText(f"Tổng ngân sách boost sau thanh toán: {_fmt_vnd(cur_boost_budget + amt)}")
+                return True
+
+            def _format_live() -> None:
+                amt = _parse_amount()
+                if amt:
+                    cursor_pos = len(amount_input.text())
+                    amount_input.blockSignals(True)
+                    amount_input.setText(f"{amt:,}".replace(",", "."))
+                    amount_input.blockSignals(False)
+                    amount_input.setCursorPosition(min(cursor_pos, len(amount_input.text())))
+                else:
+                    total_hint.setText(f"Tổng ngân sách boost hiện tại: {_fmt_vnd(cur_boost_budget)}")
+                _validate_amount()
+
+            amount_input.textChanged.connect(lambda _=None: _format_live())
+            btn_ok.clicked.connect(lambda: dlg.accept() if _validate_amount() else None)
+            _format_live()
+
             if dlg.exec() != QDialog.Accepted:
                 return
-            amount = spin.value()
-            if not ok:
+            amount = _parse_amount()
+            if amount < 1000:
+                self._show_toast("Ngân sách boost không hợp lệ.", "ic_x.svg", "#ef4444")
                 return
             try:
                 inv = jobhub_api.hr_create_boost_invoice(_jid, int(amount))
@@ -5133,6 +5237,7 @@ class HRDashboard:
             _info_row("Hạn nộp", str(job.get("deadline", "—")), "#d97706")
             _info_row("Ngày đăng", created_at_text or "—")
             _info_row("Ứng viên", f"{applicants}")
+            _info_row("Ngân sách boost", _fmt_vnd(_to_int(job.get("boost_budget_vnd") or 0)), "#6d28d9")
             right_lo.addStretch()
 
             body_row.addLayout(left_col, 1)

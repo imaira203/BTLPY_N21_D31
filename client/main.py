@@ -23,6 +23,70 @@ from app.ui.user_dashboard import UserDashboard
 _FONTS_DIR = Path(__file__).resolve().parent / "resources" / "fonts"
 
 
+def _global_scrollbar_qss() -> str:
+    return """
+QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 2px 1px 2px 1px;
+    border: none;
+}
+QScrollBar::handle:vertical {
+    background: #cbd5e1;
+    min-height: 34px;
+    border-radius: 5px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #94a3b8;
+}
+QScrollBar::handle:vertical:pressed {
+    background: #64748b;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+    border: none;
+    background: transparent;
+}
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 10px;
+    margin: 1px 2px 1px 2px;
+    border: none;
+}
+QScrollBar::handle:horizontal {
+    background: #cbd5e1;
+    min-width: 34px;
+    border-radius: 5px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #94a3b8;
+}
+QScrollBar::handle:horizontal:pressed {
+    background: #64748b;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+    border: none;
+    background: transparent;
+}
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+
+QAbstractScrollArea {
+    background: transparent;
+}
+"""
+
+
 def _load_bundled_fonts() -> str:
     """
     Load Plus Jakarta Sans from resources/fonts/ if present.
@@ -73,6 +137,7 @@ class JobHubApp:
         # Force light theme globally
         self.qapp.setStyle("Fusion")  # Use Fusion style as base
         self._setup_light_palette()
+        self.qapp.setStyleSheet(_global_scrollbar_qss())
         
         self._auth: AuthWindow | None = None
         self._dash: UserDashboard | HRDashboard | AdminDashboard | None = None

@@ -18,7 +18,7 @@ class Invoice(Base):
     owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     invoice_type: Mapped[InvoiceType] = mapped_column(Enum(InvoiceType), nullable=False)
     status: Mapped[InvoiceStatus] = mapped_column(Enum(InvoiceStatus), default=InvoiceStatus.pending, nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(8), default="VND", nullable=False)
     due_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     sepay_order_code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)

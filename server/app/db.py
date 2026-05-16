@@ -63,12 +63,12 @@ def apply_mysql_schema_patches() -> None:
         add_column_if_missing("hr_profiles", "avatar_storage_key", "VARCHAR(512) NULL", after="company_name")
         add_column_if_missing("jobs", "department", "VARCHAR(128) NULL", after="description")
         add_column_if_missing("jobs", "level", "VARCHAR(64) NULL", after="department")
-        add_column_if_missing("jobs", "min_salary", "INT NULL", after="level")
-        add_column_if_missing("jobs", "max_salary", "INT NULL", after="min_salary")
+        add_column_if_missing("jobs", "min_salary", "BIGINT NULL", after="level")
+        add_column_if_missing("jobs", "max_salary", "BIGINT NULL", after="min_salary")
         add_column_if_missing("jobs", "headcount", "INT NULL", after="job_type")
         add_column_if_missing("jobs", "deadline_text", "VARCHAR(32) NULL", after="headcount")
         add_column_if_missing("jobs", "view_count", "INT NOT NULL DEFAULT 0", after="deadline_text")
-        add_column_if_missing("jobs", "boost_budget_vnd", "INT NOT NULL DEFAULT 0", after="view_count")
+        add_column_if_missing("jobs", "boost_budget_vnd", "BIGINT NOT NULL DEFAULT 0", after="view_count")
         add_column_if_missing("jobs", "boost_last_paid_at", "DATETIME NULL", after="boost_budget_vnd")
         add_column_if_missing("jobs", "boost_expires_at", "DATETIME NULL", after="boost_last_paid_at")
         add_column_if_missing("jobs", "boost_paused_at", "DATETIME NULL", after="boost_expires_at")
@@ -232,6 +232,14 @@ def apply_mysql_schema_patches() -> None:
                 conn.execute(
                     text(
                         "ALTER TABLE jobs "
+                        "MODIFY COLUMN min_salary BIGINT NULL, "
+                        "MODIFY COLUMN max_salary BIGINT NULL, "
+                        "MODIFY COLUMN boost_budget_vnd BIGINT NOT NULL DEFAULT 0"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE jobs "
                         "MODIFY COLUMN status "
                         "ENUM('draft','pending_approval','published','closed','rejected') "
                         "NOT NULL DEFAULT 'pending_approval'"
@@ -240,6 +248,12 @@ def apply_mysql_schema_patches() -> None:
             log.info("Đã chuẩn hóa enum jobs.status để hỗ trợ trạng thái 'closed'.")
         if dialect == "mysql" and insp.has_table("invoices"):
             with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE invoices "
+                        "MODIFY COLUMN amount DECIMAL(20,2) NOT NULL"
+                    )
+                )
                 conn.execute(
                     text(
                         "ALTER TABLE invoices "
@@ -260,6 +274,8 @@ def apply_mysql_schema_patches() -> None:
                 "action VARCHAR(64) NULL, "
                 "entity_type VARCHAR(64) NULL, "
                 "entity_id INT NULL, "
+                "target_screen VARCHAR(64) NULL, "
+                "target_params_json TEXT NULL, "
                 "is_read TINYINT(1) NOT NULL DEFAULT 0, "
                 "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
                 "INDEX idx_notifications_user (user_id), "
@@ -280,6 +296,25 @@ def apply_mysql_schema_patches() -> None:
             add_column_if_missing("notifications", "action", "VARCHAR(64) NULL", after="category")
             add_column_if_missing("notifications", "entity_type", "VARCHAR(64) NULL", after="action")
             add_column_if_missing("notifications", "entity_id", "INT NULL", after="entity_type")
+            add_column_if_missing("notifications", "target_screen", "VARCHAR(64) NULL", after="entity_id")
+            add_column_if_missing("notifications", "target_params_json", "TEXT NULL", after="target_screen")
+        if not insp.has_table("notification_reads"):
+            stmt = (
+                "CREATE TABLE notification_reads ("
+                "id INT AUTO_INCREMENT PRIMARY KEY, "
+                "notification_id INT NOT NULL, "
+                "user_id INT NOT NULL, "
+                "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                "UNIQUE KEY uq_notification_reads_notification_user (notification_id, user_id), "
+                "INDEX idx_notification_reads_notification (notification_id), "
+                "INDEX idx_notification_reads_user (user_id), "
+                "CONSTRAINT fk_notification_reads_notification FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE, "
+                "CONSTRAINT fk_notification_reads_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+                ")"
+            )
+            with engine.begin() as conn:
+                conn.execute(text(stmt))
+            log.info("ÄÃ£ táº¡o báº£ng notification_reads.")
         if insp.has_table("users") and insp.has_table("candidate_profiles"):
             stmt = (
                 "INSERT INTO candidate_profiles (user_id, updated_at) "

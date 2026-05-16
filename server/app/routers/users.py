@@ -5,13 +5,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
 from ..deps import get_current_user
-from ..models import CandidateProfile, HRApprovalStatus, HRProfile, Notification, User, UserRole
+from ..models import CandidateProfile, HRApprovalStatus, HRProfile, Notification, NotificationRead, User, UserRole
 from ..runtime_cache import runtime_cache
 from ..schemas import (
     CandidateProfileOut,
@@ -29,6 +29,16 @@ from ..storage_paths import absolute_path, relative_key, resolve_existing_file
 router = APIRouter(prefix="/users", tags=["users"])
 
 _AVATAR_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
+
+def _parse_notification_target_params(raw: str | None) -> dict | None:
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw)
+    except Exception:
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _to_candidate_profile_out(profile: CandidateProfile) -> CandidateProfileOut:
@@ -314,26 +324,46 @@ def my_notifications(
     limit: int = 30,
     unread_only: bool = False,
 ) -> list[dict]:
-    q = select(Notification).where(
-        or_(Notification.user_id == user.id, Notification.target_role == user.role)
+    q = (
+        select(Notification, NotificationRead.id.label("read_receipt_id"))
+        .outerjoin(
+            NotificationRead,
+            and_(
+                NotificationRead.notification_id == Notification.id,
+                NotificationRead.user_id == user.id,
+            ),
+        )
+        .where(
+            or_(Notification.user_id == user.id, Notification.target_role == user.role)
+        )
     )
     if unread_only:
-        q = q.where(Notification.is_read.is_(False))
-    rows = db.scalars(q.order_by(Notification.id.desc()).limit(max(1, min(limit, 100)))).all()
-    return [
-        {
-            "id": n.id,
-            "title": n.title,
-            "message": n.message,
-            "category": n.category,
-            "action": n.action,
-            "entity_type": n.entity_type,
-            "entity_id": n.entity_id,
-            "is_read": bool(n.is_read),
-            "created_at": n.created_at.isoformat() if n.created_at else None,
-        }
-        for n in rows
-    ]
+        q = q.where(
+            or_(
+                and_(Notification.user_id == user.id, Notification.is_read.is_(False)),
+                and_(Notification.target_role == user.role, NotificationRead.id.is_(None)),
+            )
+        )
+    rows = db.execute(q.order_by(Notification.id.desc()).limit(max(1, min(limit, 100)))).all()
+    out: list[dict] = []
+    for n, read_receipt_id in rows:
+        is_read = bool(n.is_read) if n.user_id is not None else bool(read_receipt_id)
+        out.append(
+            {
+                "id": n.id,
+                "title": n.title,
+                "message": n.message,
+                "category": n.category,
+                "action": n.action,
+                "entity_type": n.entity_type,
+                "entity_id": n.entity_id,
+                "target_screen": n.target_screen,
+                "target_params": _parse_notification_target_params(n.target_params_json),
+                "is_read": is_read,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+        )
+    return out
 
 
 @router.post("/me/notifications/{notification_id}/read")
@@ -349,6 +379,16 @@ def mark_notification_read(
         raise HTTPException(status_code=403, detail="Forbidden")
     if row.target_role is not None and row.target_role != user.role:
         raise HTTPException(status_code=403, detail="Forbidden")
-    row.is_read = True
+    if row.user_id is not None:
+        row.is_read = True
+    else:
+        exists = db.scalar(
+            select(NotificationRead).where(
+                NotificationRead.notification_id == row.id,
+                NotificationRead.user_id == user.id,
+            )
+        )
+        if not exists:
+            db.add(NotificationRead(notification_id=row.id, user_id=user.id))
     db.commit()
     return {"ok": True}

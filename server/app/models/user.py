@@ -31,6 +31,7 @@ class User(Base):
     applications: Mapped[List["JobApplication"]] = relationship(back_populates="candidate")
     invoices: Mapped[List["Invoice"]] = relationship(back_populates="owner")
     notifications: Mapped[List["Notification"]] = relationship(back_populates="user")
+    notification_reads: Mapped[List["NotificationRead"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
     @property
     def display_name(self) -> str:

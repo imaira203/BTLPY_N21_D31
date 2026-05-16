@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+import json
+
 from sqlalchemy.orm import Session
 
-from .models import Notification, User, UserRole
+from .models import Notification, UserRole
 
 
 def notify_user(
@@ -16,6 +17,8 @@ def notify_user(
     action: str | None = None,
     entity_type: str | None = None,
     entity_id: int | None = None,
+    target_screen: str | None = None,
+    target_params: dict | None = None,
 ) -> Notification:
     row = Notification(
         user_id=user_id,
@@ -25,6 +28,8 @@ def notify_user(
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,
+        target_screen=target_screen,
+        target_params_json=json.dumps(target_params, ensure_ascii=False) if target_params else None,
         is_read=False,
     )
     db.add(row)
@@ -41,24 +46,9 @@ def notify_role(
     action: str | None = None,
     entity_type: str | None = None,
     entity_id: int | None = None,
+    target_screen: str | None = None,
+    target_params: dict | None = None,
 ) -> Notification:
-    recipients = db.scalars(select(User).where(User.role == role, User.is_active.is_(True))).all()
-    first: Notification | None = None
-    for recipient in recipients:
-        row = notify_user(
-            db,
-            user_id=int(recipient.id),
-            title=title,
-            message=message,
-            category=category,
-            action=action,
-            entity_type=entity_type,
-            entity_id=entity_id,
-        )
-        if first is None:
-            first = row
-    if first is not None:
-        return first
     row = Notification(
         target_role=role,
         title=title,
@@ -67,6 +57,8 @@ def notify_role(
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,
+        target_screen=target_screen,
+        target_params_json=json.dumps(target_params, ensure_ascii=False) if target_params else None,
         is_read=False,
     )
     db.add(row)

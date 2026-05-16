@@ -117,24 +117,23 @@ def admin_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annota
 
     app_map = {str(ym): int(cnt or 0) for ym, cnt in monthly_app_rows}
     hired_map = {str(ym): int(cnt or 0) for ym, cnt in monthly_hired_rows}
-    all_months = sorted(set(app_map.keys()) | set(hired_map.keys()))
-    # Take last 6 months
-    trend_months = all_months[-6:] if len(all_months) > 6 else all_months
-    trend_labels = []
-    trend_apps = []
-    trend_hired = []
-    for ym in trend_months:
-        parts = ym.split("-")
-        month_num = int(parts[1]) if len(parts) == 2 else 1
-        trend_labels.append(f"Th.{month_num}")
-        trend_apps.append(app_map.get(ym, 0))
-        trend_hired.append(hired_map.get(ym, 0))
 
-    # Fallback if no data
-    if not trend_labels:
-        trend_labels = [f"Th.{i}" for i in range(1, 7)]
-        trend_apps = [0] * 6
-        trend_hired = [0] * 6
+    # Build a continuous 6-month timeline ending at current month.
+    # This avoids visual "month jump" when data spans across years.
+    def _shift_month(year: int, month: int, delta: int) -> tuple[int, int]:
+        idx = year * 12 + (month - 1) + delta
+        y = idx // 12
+        m = (idx % 12) + 1
+        return y, m
+
+    trend_months: list[str] = []
+    for d in range(-5, 1):
+        y, m = _shift_month(now_utc.year, now_utc.month, d)
+        trend_months.append(f"{y:04d}-{m:02d}")
+
+    trend_labels = [f"Th.{int(ym.split('-')[1])}/{ym.split('-')[0][2:]}" for ym in trend_months]
+    trend_apps = [app_map.get(ym, 0) for ym in trend_months]
+    trend_hired = [hired_map.get(ym, 0) for ym in trend_months]
 
     # Candidate status distribution (donut chart) — excluding "interview"
     status_counts = db.execute(
@@ -211,6 +210,8 @@ def approve_hr(
         action="hr_profile_approved",
         entity_type="hr_profile",
         entity_id=int(target.id),
+        target_screen="hr_profile",
+        target_params={"user_id": int(target.id)},
     )
     notify_role(
         db,
@@ -221,6 +222,8 @@ def approve_hr(
         action="hr_profile_verified",
         entity_type="hr_profile",
         entity_id=int(target.id),
+        target_screen="candidate_jobs",
+        target_params={"hr_user_id": int(target.id)},
     )
     db.commit()
     return {"ok": True}
@@ -248,6 +251,8 @@ def reject_hr(
         action="hr_profile_rejected",
         entity_type="hr_profile",
         entity_id=int(target.id),
+        target_screen="hr_profile",
+        target_params={"user_id": int(target.id)},
     )
     db.commit()
     return {"ok": True}
@@ -301,6 +306,8 @@ def approve_job(
         action="job_approved",
         entity_type="job",
         entity_id=int(job.id),
+        target_screen="hr_jobs",
+        target_params={"job_id": int(job.id)},
     )
     notify_role(
         db,
@@ -311,6 +318,8 @@ def approve_job(
         action="job_published",
         entity_type="job",
         entity_id=int(job.id),
+        target_screen="candidate_jobs",
+        target_params={"job_id": int(job.id)},
     )
     db.commit()
     db.refresh(job)
@@ -345,6 +354,8 @@ def reject_job(
         action="job_rejected",
         entity_type="job",
         entity_id=int(job.id),
+        target_screen="hr_jobs",
+        target_params={"job_id": int(job.id)},
     )
     db.commit()
     db.refresh(job)

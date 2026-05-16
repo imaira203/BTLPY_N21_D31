@@ -65,6 +65,35 @@ def _fmt_datetime_vi(raw: object) -> str:
     return cleaned
 
 
+def _notification_toast_payload(row: dict) -> tuple[str, str, str, str]:
+    title = str(row.get("title") or "").strip() or "Thông báo mới"
+    message = str(row.get("message") or "").strip()
+    action = str(row.get("action") or "").strip().lower()
+    category = str(row.get("category") or "").strip().lower()
+
+    accent = "#2563eb"
+    icon_char = "🔔"
+
+    if category == "application":
+        accent = "#10b981" if action in {"application_approved", "application_submitted"} else "#2563eb"
+        if action == "application_rejected":
+            accent = "#ef4444"
+        icon_char = "✓" if action in {"application_approved", "application_submitted"} else "!"
+        if action == "application_received":
+            icon_char = "👤"
+    elif category == "job":
+        accent = "#2563eb"
+        icon_char = "💼"
+    elif category == "billing":
+        accent = "#7c3aed"
+        icon_char = "💳"
+    elif category == "hr":
+        accent = "#f59e0b"
+        icon_char = "!"
+
+    return title, message, accent, icon_char
+
+
 _CONTENT_BG   = "#f8fafc"
 _TOPBAR_BG    = "#ffffff"
 _TOPBAR_H     = 72
@@ -400,7 +429,7 @@ class _Toast(QWidget):
 
     def __init__(self, parent: QWidget, message: str,
                  accent: str = "#10b981", duration_ms: int = 3500,
-                 title_text: str = "Nộp hồ sơ thành công!",
+                 title_text: str = "\u0054h\u00f4ng b\u00e1o",
                  icon_char: str = "✓"):
         super().__init__(parent)
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -1822,7 +1851,7 @@ class UserDashboard:
         bar = QWidget()
         bar.setFixedHeight(_TOPBAR_H)
         bar.setStyleSheet(
-            f"background:{_TOPBAR_BG}; border-bottom:1px solid {_BORDER};"
+            f"background:{_TOPBAR_BG}; border:none;"
         )
         lo = QHBoxLayout(bar)
         lo.setContentsMargins(24, 0, 24, 0)
@@ -1886,9 +1915,10 @@ class UserDashboard:
 
         # ── Bell notification button ────────────────────────
         bell_wrap = QWidget()
+        bell_wrap.setFixedSize(46, 46)
         bell_wrap.setStyleSheet("background:transparent;")
         bell_lo = QVBoxLayout(bell_wrap)
-        bell_lo.setContentsMargins(0, 0, 0, 0)
+        bell_lo.setContentsMargins(3, 3, 3, 3)
         bell_lo.setSpacing(0)
         bell_lo.setAlignment(Qt.AlignCenter)
 
@@ -1911,6 +1941,7 @@ class UserDashboard:
             "background:#EF4444;color:white;font-size:10px;font-weight:700;"
             "border-radius:9px;border:2px solid white;"
         )
+        self._bell_badge.move(24, 0)
         self._bell_badge.setVisible(False)
         self._bell_badge.raise_()
         lo.addWidget(bell_wrap)
@@ -5353,7 +5384,7 @@ class UserDashboard:
         unread_count = len(rows)
         # Update badge
         if hasattr(self, "_bell_badge"):
-            if unread_count > 0:
+            if unread_count > 0 and not self._notif_panel.isVisible():
                 self._bell_badge.setText(str(min(unread_count, 99)))
                 self._bell_badge.setVisible(True)
             else:
@@ -5364,9 +5395,15 @@ class UserDashboard:
         if newest_id <= self._last_seen_notification_id:
             return
         latest = rows[0]
-        title = str(latest.get("title") or "Thông báo mới")
-        msg = str(latest.get("message") or "")
-        _Toast(self.win.centralWidget(), f"{title}: {msg}" if msg else title, accent="#2563eb", duration_ms=3200)
+        title, msg, accent, icon_char = _notification_toast_payload(latest)
+        _Toast(
+            self.win.centralWidget(),
+            msg or title,
+            accent=accent,
+            duration_ms=3200,
+            title_text=title,
+            icon_char=icon_char,
+        )
         self._last_seen_notification_id = newest_id
 
     def _build_notif_panel(self) -> QWidget:
@@ -5442,13 +5479,31 @@ class UserDashboard:
             self._close_notif_panel()
             return
         self._refresh_notif_panel()
+        if hasattr(self, "_bell_badge"):
+            self._bell_badge.setVisible(False)
         self._notif_overlay.show()
 
     def _close_notif_panel(self) -> None:
         self._notif_overlay.close()
+        self._poll_notifications()
 
     def _build_notif_item(self, row: dict) -> QWidget:
         return NotificationCard(row, self._open_notification)
+
+    def _open_notification_target(self, row: dict) -> bool:
+        target_screen = str(row.get("target_screen") or "").strip().lower()
+        if not target_screen:
+            return False
+        target_map = {
+            "candidate_jobs": 0,
+            "candidate_applications": 1,
+            "candidate_billing": 4,
+        }
+        target_index = target_map.get(target_screen)
+        if target_index is None:
+            return False
+        self._go(target_index)
+        return True
 
     def _open_notification(self, row: dict) -> None:
         nid = int(row.get("id") or 0)
@@ -5457,14 +5512,15 @@ class UserDashboard:
                 jobhub_api.mark_notification_read(nid)
             except Exception:
                 pass
-        category = str(row.get("category") or "").lower()
-        entity_type = str(row.get("entity_type") or "").lower()
-        if category == "application" or entity_type == "application":
-            self._go(1)
-        elif category == "job" or entity_type == "job":
-            self._go(0)
-        elif category == "billing" or entity_type == "invoice":
-            self._go(4)
+        if not self._open_notification_target(row):
+            category = str(row.get("category") or "").lower()
+            entity_type = str(row.get("entity_type") or "").lower()
+            if category == "application" or entity_type == "application":
+                self._go(1)
+            elif category == "job" or entity_type == "job":
+                self._go(0)
+            elif category == "billing" or entity_type == "invoice":
+                self._go(4)
         self._refresh_notif_panel()
         self._poll_notifications()
         return

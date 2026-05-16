@@ -93,6 +93,15 @@ def make_recruitment_trend_chart(
                 annot.xy = (x, a)
                 lbl = labels[x] if x < len(labels) else str(x)
                 annot.set_text(f"  {lbl}  Ứng tuyển: {a}  Tuyển: {h}  ")
+                if len(labels) > 1 and x >= (len(labels) - 1):
+                    annot.set_position((-8, 14))
+                    annot.set_ha("right")
+                elif x <= 0:
+                    annot.set_position((8, 14))
+                    annot.set_ha("left")
+                else:
+                    annot.set_position((0, 14))
+                    annot.set_ha("center")
                 annot.set_visible(True)
                 canvas.draw_idle()
                 found = True

@@ -22,7 +22,10 @@ class Notification(Base):
     action: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     entity_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    target_screen: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    target_params_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
     user: Mapped[Optional["User"]] = relationship(back_populates="notifications")
+    read_receipts: Mapped[list["NotificationRead"]] = relationship(back_populates="notification", cascade="all, delete-orphan")

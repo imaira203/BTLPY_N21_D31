@@ -427,6 +427,8 @@ def apply_job(
         action="application_received",
         entity_type="application",
         entity_id=int(app.id),
+        target_screen="hr_applications",
+        target_params={"application_id": int(app.id), "job_id": int(job.id)},
     )
     notify_user(
         db,
@@ -437,6 +439,8 @@ def apply_job(
         action="application_submitted",
         entity_type="application",
         entity_id=int(app.id),
+        target_screen="candidate_applications",
+        target_params={"application_id": int(app.id), "job_id": int(job.id)},
     )
     notify_role(
         db,
@@ -447,6 +451,8 @@ def apply_job(
         action="application_created",
         entity_type="application",
         entity_id=int(app.id),
+        target_screen="admin_jobs",
+        target_params={"application_id": int(app.id), "job_id": int(job.id)},
     )
     db.commit()
     db.refresh(app)
@@ -517,6 +523,8 @@ async def apply_job_with_optional_new_cv(
         action="application_received",
         entity_type="application",
         entity_id=int(app.id),
+        target_screen="hr_applications",
+        target_params={"application_id": int(app.id), "job_id": int(job.id)},
     )
     notify_user(
         db,
@@ -527,6 +535,8 @@ async def apply_job_with_optional_new_cv(
         action="application_submitted",
         entity_type="application",
         entity_id=int(app.id),
+        target_screen="candidate_applications",
+        target_params={"application_id": int(app.id), "job_id": int(job.id)},
     )
     notify_role(
         db,
@@ -537,6 +547,8 @@ async def apply_job_with_optional_new_cv(
         action="application_created",
         entity_type="application",
         entity_id=int(app.id),
+        target_screen="admin_jobs",
+        target_params={"application_id": int(app.id), "job_id": int(job.id)},
     )
     db.commit()
     db.refresh(app)

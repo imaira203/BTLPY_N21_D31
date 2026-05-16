@@ -16,6 +16,7 @@ from .invoice import Invoice
 from .job import Job
 from .job_application import JobApplication
 from .notification import Notification
+from .notification_read import NotificationRead
 from .profile_view import ProfileView
 from .user import User
 
@@ -33,6 +34,7 @@ __all__ = [
     "Job",
     "JobApplication",
     "Notification",
+    "NotificationRead",
     "JobStatus",
     "ProfileView",
     "SubscriptionStatus",

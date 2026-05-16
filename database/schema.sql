@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   description TEXT NULL,
   department VARCHAR(128) NULL,
   level VARCHAR(64) NULL,
-  min_salary INT NULL,
-  max_salary INT NULL,
+  min_salary BIGINT NULL,
+  max_salary BIGINT NULL,
   location VARCHAR(128) NULL,
   job_type VARCHAR(64) NULL,
   headcount INT NULL,
@@ -152,6 +152,8 @@ CREATE TABLE IF NOT EXISTS notifications (
   action VARCHAR(64) NULL,
   entity_type VARCHAR(64) NULL,
   entity_id INT NULL,
+  target_screen VARCHAR(64) NULL,
+  target_params_json TEXT NULL,
   is_read TINYINT(1) NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -162,6 +164,18 @@ CREATE TABLE IF NOT EXISTS notifications (
   INDEX idx_notifications_entity (entity_type, entity_id),
   INDEX idx_notifications_read (is_read),
   INDEX idx_notifications_created (created_at)
+);
+
+CREATE TABLE IF NOT EXISTS notification_reads (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  notification_id INT NOT NULL,
+  user_id INT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_notification_reads_notification_user (notification_id, user_id),
+  INDEX idx_notification_reads_notification (notification_id),
+  INDEX idx_notification_reads_user (user_id)
 );
 
 CREATE TABLE IF NOT EXISTS profile_views (

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .models import (
     ApplicationStatus,
@@ -12,6 +12,9 @@ from .models import (
     SubscriptionStatus,
     UserRole,
 )
+
+
+_MYSQL_BIGINT_MAX = 9_223_372_036_854_775_807
 
 
 class TokenResponse(BaseModel):
@@ -176,13 +179,23 @@ class JobCreate(BaseModel):
     description: str | None = None
     department: str | None = None
     level: str | None = None
-    min_salary: int | None = Field(default=None, ge=0)
-    max_salary: int | None = Field(default=None, ge=0)
+    min_salary: int | None = Field(default=None, ge=0, le=_MYSQL_BIGINT_MAX)
+    max_salary: int | None = Field(default=None, ge=0, le=_MYSQL_BIGINT_MAX)
     location: str | None = None
     job_type: str | None = None
     count: int | None = Field(default=None, ge=1)
     deadline: str | None = None
     as_draft: bool = False
+
+    @model_validator(mode="after")
+    def _validate_salary_range(self) -> "JobCreate":
+        if (
+            self.min_salary is not None
+            and self.max_salary is not None
+            and self.min_salary > self.max_salary
+        ):
+            raise ValueError("Lương tối thiểu không được lớn hơn lương tối đa")
+        return self
 
 
 class JobOut(BaseModel):
@@ -213,7 +226,7 @@ class JobOut(BaseModel):
 
 
 class JobBoostInvoiceCreateIn(BaseModel):
-    amount_vnd: int = Field(ge=1000)
+    amount_vnd: int = Field(ge=1000, le=_MYSQL_BIGINT_MAX)
     note: str | None = None
 
 
@@ -324,5 +337,7 @@ class NotificationOut(BaseModel):
     action: str | None = None
     entity_type: str | None = None
     entity_id: int | None = None
+    target_screen: str | None = None
+    target_params: dict[str, Any] | None = None
     is_read: bool
     created_at: datetime

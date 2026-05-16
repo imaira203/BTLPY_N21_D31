@@ -407,6 +407,8 @@ def create_job(
         action="job_created",
         entity_type="job",
         entity_id=int(job.id),
+        target_screen="hr_jobs",
+        target_params={"job_id": int(job.id)},
     )
     notify_role(
         db,
@@ -417,6 +419,8 @@ def create_job(
         action="job_pending_approval",
         entity_type="job",
         entity_id=int(job.id),
+        target_screen="admin_jobs",
+        target_params={"job_id": int(job.id)},
     )
     db.commit()
     db.refresh(job)
@@ -789,6 +793,8 @@ def mark_hr_invoice_paid(
                 action="job_boosted",
                 entity_type="job",
                 entity_id=int(job.id),
+                target_screen="candidate_jobs",
+                target_params={"job_id": int(job.id)},
             )
     db.commit()
     db.refresh(invoice)
@@ -832,7 +838,8 @@ def list_hr_invoices(
             payment_window_end = boost_due.strftime("%d/%m/%Y %H:%M")
         else:
             # Invoice pending luôn được phép redirect thanh toán từ HR dashboard.
-            can_pay_now = bool(inv.status == InvoiceStatus.pending and checkout_url)
+            in_window = bool(pay_start and pay_end and pay_start <= now <= pay_end)
+            can_pay_now = bool(inv.status == InvoiceStatus.pending and checkout_url and in_window)
             payment_window_start = pay_start.strftime("%d/%m/%Y") if pay_start else None
             payment_window_end = pay_end.strftime("%d/%m/%Y") if pay_end else None
         out.append(
@@ -906,6 +913,8 @@ def create_job_boost_invoice(
         action="boost_invoice_created",
         entity_type="invoice",
         entity_id=int(inv.id),
+        target_screen="hr_billing",
+        target_params={"invoice_id": int(inv.id), "job_id": int(job.id)},
     )
     db.commit()
     db.refresh(inv)
@@ -955,6 +964,8 @@ def update_application_status(
             action="application_approved",
             entity_type="application",
             entity_id=int(app.id),
+            target_screen="candidate_applications",
+            target_params={"application_id": int(app.id), "job_id": int(job.id)},
         )
     elif body.status == ApplicationStatus.rejected:
         notify_user(
@@ -966,6 +977,8 @@ def update_application_status(
             action="application_rejected",
             entity_type="application",
             entity_id=int(app.id),
+            target_screen="candidate_applications",
+            target_params={"application_id": int(app.id), "job_id": int(job.id)},
         )
     db.commit()
     return {
