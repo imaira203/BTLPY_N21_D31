@@ -244,12 +244,17 @@
            </item>
            <item>
             <property name="text">
-             <string>Nháp</string>
+             <string>Đã đóng</string>
             </property>
            </item>
            <item>
             <property name="text">
-             <string>Đã đóng</string>
+             <string>Đã từ chối</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Chờ duyệt</string>
             </property>
            </item>
           </widget>

@@ -233,6 +233,10 @@ class AdminDecision(BaseModel):
     note: str | None = None
 
 
+class AdminRejectIn(BaseModel):
+    note: str
+
+
 class ApplicationDecisionIn(BaseModel):
     status: ApplicationStatus
 
@@ -242,6 +246,11 @@ class StatsOut(BaseModel):
     values: list[int]
     cards: dict[str, Any]
     recent_pending_applications: list[dict[str, Any]] = Field(default_factory=list)
+    trend_applications: list[int] = Field(default_factory=list)
+    trend_hired: list[int] = Field(default_factory=list)
+    donut_labels: list[str] = Field(default_factory=list)
+    donut_values: list[float] = Field(default_factory=list)
+    donut_colors: list[str] = Field(default_factory=list)
 
 
 class JobApplicationOut(BaseModel):
@@ -311,5 +320,9 @@ class NotificationOut(BaseModel):
     id: int
     title: str
     message: str
+    category: str | None = None
+    action: str | None = None
+    entity_type: str | None = None
+    entity_id: int | None = None
     is_read: bool
     created_at: datetime

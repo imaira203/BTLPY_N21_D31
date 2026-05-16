@@ -29,6 +29,7 @@ class Job(Base):
     boost_budget_vnd: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     boost_last_paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     boost_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    boost_paused_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus), default=JobStatus.pending_approval)
     admin_note: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

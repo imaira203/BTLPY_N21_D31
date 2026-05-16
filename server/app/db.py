@@ -71,6 +71,7 @@ def apply_mysql_schema_patches() -> None:
         add_column_if_missing("jobs", "boost_budget_vnd", "INT NOT NULL DEFAULT 0", after="view_count")
         add_column_if_missing("jobs", "boost_last_paid_at", "DATETIME NULL", after="boost_budget_vnd")
         add_column_if_missing("jobs", "boost_expires_at", "DATETIME NULL", after="boost_last_paid_at")
+        add_column_if_missing("jobs", "boost_paused_at", "DATETIME NULL", after="boost_expires_at")
         add_column_if_missing("job_applications", "accepted_at", "DATETIME NULL", after="status")
         add_column_if_missing("job_applications", "contact_unlocked_at", "DATETIME NULL", after="accepted_at")
         add_column_if_missing("job_applications", "cv_id", "INT NULL", after="candidate_id")
@@ -255,10 +256,17 @@ def apply_mysql_schema_patches() -> None:
                 "target_role ENUM('candidate','hr','admin') NULL, "
                 "title VARCHAR(255) NOT NULL, "
                 "message TEXT NOT NULL, "
+                "category VARCHAR(64) NULL, "
+                "action VARCHAR(64) NULL, "
+                "entity_type VARCHAR(64) NULL, "
+                "entity_id INT NULL, "
                 "is_read TINYINT(1) NOT NULL DEFAULT 0, "
                 "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
                 "INDEX idx_notifications_user (user_id), "
                 "INDEX idx_notifications_role (target_role), "
+                "INDEX idx_notifications_category (category), "
+                "INDEX idx_notifications_action (action), "
+                "INDEX idx_notifications_entity (entity_type, entity_id), "
                 "INDEX idx_notifications_read (is_read), "
                 "INDEX idx_notifications_created (created_at), "
                 "CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
@@ -267,6 +275,11 @@ def apply_mysql_schema_patches() -> None:
             with engine.begin() as conn:
                 conn.execute(text(stmt))
             log.info("Đã tạo bảng notifications.")
+        if insp.has_table("notifications"):
+            add_column_if_missing("notifications", "category", "VARCHAR(64) NULL", after="message")
+            add_column_if_missing("notifications", "action", "VARCHAR(64) NULL", after="category")
+            add_column_if_missing("notifications", "entity_type", "VARCHAR(64) NULL", after="action")
+            add_column_if_missing("notifications", "entity_id", "INT NULL", after="entity_type")
         if insp.has_table("users") and insp.has_table("candidate_profiles"):
             stmt = (
                 "INSERT INTO candidate_profiles (user_id, updated_at) "

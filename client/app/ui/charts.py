@@ -26,7 +26,7 @@ def make_recruitment_trend_chart(
     C_APP = "#2563EB"
     C_HIR = "#10B981"
 
-    fig = Figure(figsize=(8, 2.9), dpi=100, facecolor=bg)
+    fig = Figure(figsize=(8, 4.8), dpi=100, facecolor=bg)
     # Tighter top margin — legend is now a Qt widget above the canvas
     fig.subplots_adjust(left=0.07, right=0.93, top=0.93, bottom=0.20)
     ax = fig.add_subplot(111)
@@ -38,6 +38,8 @@ def make_recruitment_trend_chart(
             marker="o", markerfacecolor="#fff", markeredgecolor=C_APP,
             markersize=5, zorder=4, label="Ứng tuyển")
     ax.fill_between(xi, applications, alpha=0.10, color=C_APP, zorder=1)
+    app_max = max(applications) if applications else 0
+    ax.set_ylim(0, max(5, app_max * 1.28))
     ax.tick_params(axis="y", labelcolor=C_APP, labelsize=8, length=0)
 
     # ── Trục Y phải: Tuyển dụng (twin) ────────────────────────
@@ -47,6 +49,8 @@ def make_recruitment_trend_chart(
              marker="o", markerfacecolor="#fff", markeredgecolor=C_HIR,
              markersize=5, zorder=4, label="Tuyển dụng")
     ax2.fill_between(xi, hired, alpha=0.12, color=C_HIR, zorder=1)
+    hired_max = max(hired) if hired else 0
+    ax2.set_ylim(0, max(5, hired_max * 1.28))
     ax2.tick_params(axis="y", labelcolor=C_HIR, labelsize=8, length=0)
     for spine in ax2.spines.values():
         spine.set_visible(False)
@@ -69,10 +73,11 @@ def make_recruitment_trend_chart(
         "", xy=(0, 0), xytext=(0, 14), textcoords="offset points",
         bbox=dict(boxstyle="round,pad=0.4", fc="#1F2937", ec="none", alpha=0.95),
         color="#FFFFFF", fontsize=9, fontweight="600", zorder=10,
+        annotation_clip=False,
     )
     annot.set_visible(False)
     canvas = FigureCanvasQTAgg(fig)
-    canvas.setMinimumHeight(200)
+    canvas.setMinimumHeight(320)
     pts = list(zip(xi, applications, hired))
 
     def _hover(event):
@@ -109,7 +114,7 @@ def make_donut_chart(
     if colors is None:
         colors = ["#2563EB", "#10B981", "#06B6D4", "#8B5CF6"]
 
-    fig = Figure(figsize=(2.6, 3.4), dpi=100, facecolor=bg)
+    fig = Figure(figsize=(3.0, 4.2), dpi=100, facecolor=bg)
     # Place axes in top 68% of the figure; bottom 32% reserved for legend
     ax = fig.add_axes([0.05, 0.32, 0.90, 0.64])
     ax.set_facecolor(bg)
@@ -124,7 +129,8 @@ def make_donut_chart(
     # ax.pie() already calls axis("equal") internally; explicit call removed
     # to avoid clipping in a constrained axes box
 
-    legend_labels = [f"{l}  {int(v)}%" for l, v in zip(labels, values)]
+    total = sum(values) or 1
+    legend_labels = [f"{l}  {v/total*100:.0f}%" for l, v in zip(labels, values)]
     # Attach legend to the figure (not axes) so it sits in the 32% bottom area
     fig.legend(
         wedges, legend_labels,
@@ -344,7 +350,7 @@ def make_revenue_trend_chart(
     C_HR  = "#2563EB"
     C_CAN = "#9CA3AF"
 
-    fig = Figure(figsize=(8, 3.0), dpi=100, facecolor=bg)
+    fig = Figure(figsize=(8, 4.0), dpi=100, facecolor=bg)
     fig.subplots_adjust(left=0.09, right=0.97, top=0.92, bottom=0.18)
     ax = fig.add_subplot(111)
     ax.set_facecolor(bg)

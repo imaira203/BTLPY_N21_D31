@@ -451,5 +451,11 @@ def admin_job_detail(job_id: int) -> dict:
     return _request("GET", f"/admin/jobs/{job_id}")
 
 
-def admin_payment_insights(limit: int = 100, period: str = "all") -> dict:
-    return _request("GET", "/admin/payment-insights", params={"limit": int(limit), "period": period})
+def admin_payment_insights(limit: int = 100, period: str = "all",
+                           date_from: str | None = None, date_to: str | None = None) -> dict:
+    params: dict[str, str | int] = {"limit": int(limit), "period": period}
+    if date_from:
+        params["date_from"] = date_from
+    if date_to:
+        params["date_to"] = date_to
+    return _request("GET", "/admin/payment-insights", params=params)

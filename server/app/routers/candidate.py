@@ -417,23 +417,36 @@ def apply_job(
         raise HTTPException(status_code=400, detail="Đã ứng tuyển")
     app = JobApplication(job_id=job_id, candidate_id=user.id, cv_id=cv.id)
     db.add(app)
+    db.flush()
     notify_user(
         db,
         user_id=int(job.hr_user_id),
         title="Ứng viên mới",
         message=f"Có ứng viên mới ứng tuyển vào tin '{job.title}'.",
+        category="application",
+        action="application_received",
+        entity_type="application",
+        entity_id=int(app.id),
     )
     notify_user(
         db,
         user_id=int(user.id),
         title="Ứng tuyển thành công",
         message=f"Bạn đã ứng tuyển vào vị trí '{job.title}'.",
+        category="application",
+        action="application_submitted",
+        entity_type="application",
+        entity_id=int(app.id),
     )
     notify_role(
         db,
         role=UserRole.admin,
         title="Hoạt động ứng tuyển",
         message=f"Tin '{job.title}' vừa có ứng viên mới.",
+        category="application",
+        action="application_created",
+        entity_type="application",
+        entity_id=int(app.id),
     )
     db.commit()
     db.refresh(app)
@@ -494,23 +507,36 @@ async def apply_job_with_optional_new_cv(
 
     app = JobApplication(job_id=job_id, candidate_id=user.id, cv_id=cv.id)
     db.add(app)
+    db.flush()
     notify_user(
         db,
         user_id=int(job.hr_user_id),
         title="Ứng viên mới",
         message=f"Có ứng viên mới ứng tuyển vào tin '{job.title}'.",
+        category="application",
+        action="application_received",
+        entity_type="application",
+        entity_id=int(app.id),
     )
     notify_user(
         db,
         user_id=int(user.id),
         title="Ứng tuyển thành công",
         message=f"Bạn đã ứng tuyển vào vị trí '{job.title}'.",
+        category="application",
+        action="application_submitted",
+        entity_type="application",
+        entity_id=int(app.id),
     )
     notify_role(
         db,
         role=UserRole.admin,
         title="Hoạt động ứng tuyển",
         message=f"Tin '{job.title}' vừa có ứng viên mới.",
+        category="application",
+        action="application_created",
+        entity_type="application",
+        entity_id=int(app.id),
     )
     db.commit()
     db.refresh(app)

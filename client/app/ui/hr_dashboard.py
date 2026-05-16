@@ -8,7 +8,7 @@ from typing import Callable
 
 from PySide6.QtCore import (Qt, QSize, QPropertyAnimation,
                               QEasingCurve, QPoint, QByteArray,
-                              QEvent, QObject, QThread, QTimer, QRect, QDate,
+                              QEvent, QObject, QThread, QTimer, QDate,
                               Signal)
 from PySide6.QtGui import (QIcon, QFont, QColor, QPainter, QPixmap,
                             QPainterPath, QLinearGradient, QPen)
@@ -30,6 +30,7 @@ from ..client.jobhub_api import ApiError
 from ..paths import resource_icon
 from ..session_store import clear_session
 from .charts import make_bar_chart
+from .notification_overlay import NotificationCard, NotificationOverlayController, populate_notification_list
 
 _DESC_MARKER = "__JH_V1__"
 
@@ -931,7 +932,18 @@ class HRDashboard:
         rlo.setContentsMargins(0, 0, 0, 0)
         rlo.addWidget(self._build_sidebar())
         rlo.addWidget(self._build_main(), 1)
+
         win.setCentralWidget(root)
+
+        # Notification panel (hidden by default, right-side overlay)
+        self._notif_panel = self._build_notif_panel()
+        self._notif_panel.hide()
+        self._notif_overlay = NotificationOverlayController(
+            window=win,
+            host=root,
+            panel=self._notif_panel,
+            bell_button=getattr(self, "_btn_bell", None),
+        )
 
     # ── toast notification ────────────────────────────────────
     def _show_toast(self, text: str, icon: str = "ic_check.svg",
@@ -1445,6 +1457,37 @@ class HRDashboard:
         self._search_outer_ref = search_outer
         # Popup widget (created lazily)
         self._global_popup: QWidget | None = None
+
+        # ── Bell notification button ────────────────────────
+        bell_wrap = QWidget()
+        bell_wrap.setStyleSheet("background:transparent;")
+        bell_lo = QVBoxLayout(bell_wrap)
+        bell_lo.setContentsMargins(0, 0, 0, 0)
+        bell_lo.setSpacing(0)
+        bell_lo.setAlignment(Qt.AlignCenter)
+
+        self._btn_bell = QPushButton()
+        self._btn_bell.setFixedSize(40, 40)
+        self._btn_bell.setCursor(Qt.PointingHandCursor)
+        self._btn_bell.setIcon(QIcon(str(resource_icon("ic_bell.svg"))))
+        self._btn_bell.setIconSize(QSize(18, 18))
+        self._btn_bell.setStyleSheet(
+            "QPushButton{background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:20px;}"
+            "QPushButton:hover{background:#EFF6FF;border-color:#BFDBFE;}"
+        )
+        self._btn_bell.clicked.connect(self._show_notification_popup)
+        bell_lo.addWidget(self._btn_bell)
+
+        self._bell_badge = QLabel(bell_wrap)
+        self._bell_badge.setFixedSize(18, 18)
+        self._bell_badge.setAlignment(Qt.AlignCenter)
+        self._bell_badge.setStyleSheet(
+            "background:#EF4444;color:white;font-size:10px;font-weight:700;"
+            "border-radius:9px;border:2px solid white;"
+        )
+        self._bell_badge.setVisible(False)
+        self._bell_badge.raise_()
+        lo.addWidget(bell_wrap)
 
         # ── RIGHT: profile section ────────────────────────────
         profile_wrap = QWidget()
@@ -3853,9 +3896,17 @@ class HRDashboard:
 
     def _poll_notifications(self) -> None:
         try:
-            rows = list(jobhub_api.my_notifications(limit=10, unread_only=True))
+            rows = list(jobhub_api.my_notifications(limit=100, unread_only=True))
         except Exception:
-            return
+            rows = []
+        unread_count = len(rows)
+        # Update badge
+        if hasattr(self, "_bell_badge"):
+            if unread_count > 0:
+                self._bell_badge.setText(str(min(unread_count, 99)))
+                self._bell_badge.setVisible(True)
+            else:
+                self._bell_badge.setVisible(False)
         if not rows:
             return
         newest_id = max(_to_int(r.get("id")) for r in rows)
@@ -3865,14 +3916,121 @@ class HRDashboard:
         title = str(latest.get("title") or "Thông báo mới")
         msg = str(latest.get("message") or "").strip()
         self._show_toast(f"{title}: {msg}" if msg else title, "ic_alert.svg", "#2563eb", 3800)
+        self._last_seen_notification_id = newest_id
+
+    def _build_notif_panel(self) -> QWidget:
+        panel = QWidget()
+        panel.setObjectName("notifPanel")
+        panel.setFixedWidth(400)
+        panel.setStyleSheet(
+            "#notifPanel{background:#F8FAFC;border-left:1px solid #E2E8F0;}"
+        )
+        self._notif_list_lo = None
+
+        vlo = QVBoxLayout(panel)
+        vlo.setContentsMargins(0, 0, 0, 0)
+        vlo.setSpacing(0)
+
+        hdr = QWidget()
+        hdr.setObjectName("notifHdr")
+        hdr.setStyleSheet("#notifHdr{background:#FFFFFF;border-bottom:1px solid #E2E8F0;}")
+        hdr.setFixedHeight(62)
+        hdr_lo = QHBoxLayout(hdr)
+        hdr_lo.setContentsMargins(18, 0, 14, 0)
+        title_lbl = QLabel("Thông báo")
+        title_lbl.setStyleSheet("font-size:16px;font-weight:700;color:#111827;background:transparent;border:none;")
+        hdr_lo.addWidget(title_lbl)
+        hdr_lo.addStretch()
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(30, 30)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(
+            "QPushButton{background:transparent;color:#6B7280;font-size:15px;border:none;border-radius:15px;}"
+            "QPushButton:hover{background:#E5E7EB;}"
+        )
+        close_btn.clicked.connect(self._close_notif_panel)
+        hdr_lo.addWidget(close_btn)
+        vlo.addWidget(hdr)
+
+        self._notif_scroll_content = QWidget()
+        self._notif_scroll_content.setObjectName("notifListBg")
+        self._notif_scroll_content.setStyleSheet("#notifListBg{background:#F8FAFC;}")
+        self._notif_list_lo = QVBoxLayout(self._notif_scroll_content)
+        self._notif_list_lo.setContentsMargins(12, 8, 12, 12)
+        self._notif_list_lo.setSpacing(8)
+        self._notif_list_lo.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(self._notif_scroll_content)
+        scroll.setObjectName("notifScroll")
+        scroll.setStyleSheet("#notifScroll{background:#F8FAFC;border:none;}")
+        vlo.addWidget(scroll, 1)
+
+        return panel
+
+    def _refresh_notif_panel(self) -> None:
+        lo = self._notif_list_lo
+        if not lo:
+            return
+        try:
+            rows = list(jobhub_api.my_notifications(limit=20, unread_only=False))
+        except Exception:
+            rows = []
+        populate_notification_list(
+            lo,
+            rows,
+            build_item=self._build_notif_item,
+            mark_all_cb=lambda: self._mark_all_read(rows),
+        )
+
+    def _show_notification_popup(self) -> None:
+        if self._notif_panel.isVisible():
+            self._close_notif_panel()
+            return
+        self._refresh_notif_panel()
+        self._notif_overlay.show()
+
+    def _close_notif_panel(self) -> None:
+        self._notif_overlay.close()
+
+    def _build_notif_item(self, row: dict) -> QWidget:
+        return NotificationCard(row, self._open_notification)
+
+    def _open_notification(self, row: dict) -> None:
+        nid = _to_int(row.get("id"))
+        if nid > 0 and not bool(row.get("is_read")):
+            try:
+                jobhub_api.mark_notification_read(nid)
+            except Exception:
+                pass
+        category = str(row.get("category") or "").lower()
+        action = str(row.get("action") or "").lower()
+        entity_type = str(row.get("entity_type") or "").lower()
+        if category == "application" or entity_type == "application":
+            self._go(3)
+        elif category == "billing" or entity_type == "invoice":
+            self._go(4)
+        elif category == "job" or entity_type == "job":
+            self._go(2)
+        elif action == "hr_profile_rejected":
+            self._go(5)
+        self._refresh_notif_panel()
+        self._poll_notifications()
+
+    def _mark_all_read(self, rows: list) -> None:
         for row in rows:
             nid = _to_int(row.get("id"))
-            if nid > self._last_seen_notification_id and nid > 0:
+            if nid > 0:
                 try:
                     jobhub_api.mark_notification_read(nid)
                 except Exception:
                     pass
-        self._last_seen_notification_id = newest_id
+        self._last_seen_notification_id = max((_to_int(r.get("id")) for r in rows), default=0)
+        if hasattr(self, "_bell_badge"):
+            self._bell_badge.setVisible(False)
+        self._refresh_notif_panel()
 
     def _validate_salary_pair(self, min_text: str, max_text: str, parent=None) -> tuple[int, int] | None:
         parent = parent or self.win
@@ -3964,7 +4122,7 @@ class HRDashboard:
         "draft":            ("Bản nháp",    "#d97706", "#fef3c7"),
         "closed":           ("Đã đóng",     "#dc2626", "#fee2e2"),
         "pending_approval": ("Chờ duyệt",   "#2563eb", "#dbeafe"),
-        "rejected":         ("Vi phạm",     "#ef4444", "#fee2e2"),
+        "rejected":         ("Từ chối",     "#ef4444", "#fee2e2"),
     }
 
     _CAND_STATUS = {
@@ -4425,14 +4583,28 @@ class HRDashboard:
             vlo.addWidget(h_lbl)
             vlo.addWidget(h_sub)
 
-            banner = QLabel(
-                "ℹ️  Sau khi lưu chỉnh sửa, tin sẽ được chuyển về trạng thái chờ Admin duyệt lại."
-            )
-            banner.setWordWrap(True)
-            banner.setStyleSheet(
-                "background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;"
-                "color:#1d4ed8;font-size:13px;padding:10px 14px;"
-            )
+            job_status = job.get("status", "")
+            admin_note_val = str(job.get("admin_note") or "").strip()
+
+            if job_status == "rejected" and admin_note_val:
+                banner = QLabel(
+                    f"⚠️  Lý do từ chối: {admin_note_val}\n\n"
+                    "Vui lòng chỉnh sửa và gửi lại để Admin duyệt."
+                )
+                banner.setWordWrap(True)
+                banner.setStyleSheet(
+                    "background:#FEF2F2;border:1.5px solid #FECACA;border-radius:10px;"
+                    "color:#991B1B;font-size:13px;padding:10px 14px;"
+                )
+            else:
+                banner = QLabel(
+                    "Sau khi lưu chỉnh sửa, tin sẽ được chuyển về trạng thái chờ Admin duyệt lại."
+                )
+                banner.setWordWrap(True)
+                banner.setStyleSheet(
+                    "background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;"
+                    "color:#1d4ed8;font-size:13px;padding:10px 14px;"
+                )
             vlo.addWidget(banner)
 
             # SECTION 1: Thông tin cơ bản
@@ -4761,7 +4933,7 @@ class HRDashboard:
                 "published":        ("Đang tuyển", "#d1fae5", "#059669"),
                 "pending_approval": ("Chờ duyệt",  "#fef3c7", "#d97706"),
                 "draft":            ("Bản nháp",    "#f1f5f9", "#64748b"),
-                "rejected":         ("Vi phạm",     "#fee2e2", "#dc2626"),
+                "rejected":         ("Từ chối",     "#fee2e2", "#dc2626"),
                 "closed":           ("Đã đóng",     "#f1f5f9", "#374151"),
             }
             st = job.get("status", "")
@@ -4898,6 +5070,31 @@ class HRDashboard:
             left_col.addWidget(_content_card("Yêu cầu công việc", _list_block(_sd.get("requirements", []))))
             left_col.addWidget(_content_card("Kỹ năng mềm", _list_block(_sd.get("soft_skills", []))))
             left_col.addWidget(_content_card("Quyền lợi & Phúc lợi", _list_block(_sd.get("benefits", []))))
+
+            # Show rejection reason if rejected
+            admin_note = str(job.get("admin_note") or "").strip()
+            if st == "rejected" and admin_note:
+                reason_card = QFrame()
+                reason_card.setStyleSheet(
+                    "QFrame{background:#FEF2F2;border-radius:14px;border:1.5px solid #FECACA;}"
+                )
+                _shadow(reason_card, 8, 2, 8)
+                rc_lo = QVBoxLayout(reason_card)
+                rc_lo.setContentsMargins(16, 14, 16, 14)
+                rc_lo.setSpacing(6)
+                rc_hdr = QLabel("Lý do từ chối")
+                rc_hdr.setStyleSheet(
+                    "color:#DC2626;font-size:15px;font-weight:800;background:transparent;border:none;"
+                )
+                rc_txt = QLabel(admin_note)
+                rc_txt.setWordWrap(True)
+                rc_txt.setStyleSheet(
+                    "color:#991B1B;font-size:13px;background:transparent;border:none;"
+                )
+                rc_lo.addWidget(rc_hdr)
+                rc_lo.addWidget(rc_txt)
+                left_col.addWidget(reason_card)
+
             left_col.addStretch()
 
             right_card = QFrame()

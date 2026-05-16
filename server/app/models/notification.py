@@ -18,6 +18,10 @@ class Notification(Base):
     target_role: Mapped[Optional[UserRole]] = mapped_column(Enum(UserRole), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    action: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    entity_type: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 

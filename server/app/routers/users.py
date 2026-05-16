@@ -325,6 +325,10 @@ def my_notifications(
             "id": n.id,
             "title": n.title,
             "message": n.message,
+            "category": n.category,
+            "action": n.action,
+            "entity_type": n.entity_type,
+            "entity_id": n.entity_id,
             "is_read": bool(n.is_read),
             "created_at": n.created_at.isoformat() if n.created_at else None,
         }

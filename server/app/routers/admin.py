@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..deps import get_current_user
 from ..models import (
+    ApplicationStatus,
     CandidateSubscription,
     HRApprovalStatus,
     HRProfile,
@@ -24,7 +25,7 @@ from ..models import (
 )
 from ..runtime_cache import runtime_cache
 from ..notifications import notify_role, notify_user
-from ..schemas import AdminDecision, JobOut, StatsOut, UserOut
+from ..schemas import AdminDecision, AdminRejectIn, JobOut, StatsOut, UserOut
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -91,34 +92,89 @@ def admin_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annota
     total_jobs = db.scalar(select(func.count()).select_from(Job)) or 0
     since = datetime.utcnow() - timedelta(days=1)
     activity = db.scalar(select(func.count()).select_from(Job).where(Job.created_at >= since)) or 0
-    monthly_users = db.execute(
-        select(func.month(User.created_at), func.count())
-        .where(User.role == UserRole.candidate)
-        .group_by(func.month(User.created_at))
-        .order_by(func.month(User.created_at))
+
+    # Monthly recruitment trend: applications & hired per month (last 6 months)
+    now_utc = datetime.utcnow()
+    monthly_app_rows = db.execute(
+        select(
+            func.date_format(JobApplication.created_at, "%Y-%m").label("ym"),
+            func.count(JobApplication.id),
+        )
+        .group_by("ym")
+        .order_by("ym")
+        .limit(12)
     ).all()
-    monthly_jobs = db.execute(
-        select(func.month(Job.created_at), func.count()).group_by(func.month(Job.created_at)).order_by(func.month(Job.created_at))
+    monthly_hired_rows = db.execute(
+        select(
+            func.date_format(JobApplication.created_at, "%Y-%m").label("ym"),
+            func.count(JobApplication.id),
+        )
+        .where(JobApplication.status == ApplicationStatus.approved)
+        .group_by("ym")
+        .order_by("ym")
+        .limit(12)
     ).all()
-    labels = [f"T{max(1, min(12, i))}" for i in range(1, 7)]
-    u_vals = [0] * 6
-    j_vals = [0] * 6
-    for m, c in monthly_users:
-        idx = (int(m or 1) - 1) % 6
-        u_vals[idx] = int(c)
-    for m, c in monthly_jobs:
-        idx = (int(m or 1) - 1) % 6
-        j_vals[idx] = int(c)
-    values = [u + j for u, j in zip(u_vals, j_vals)]
+
+    app_map = {str(ym): int(cnt or 0) for ym, cnt in monthly_app_rows}
+    hired_map = {str(ym): int(cnt or 0) for ym, cnt in monthly_hired_rows}
+    all_months = sorted(set(app_map.keys()) | set(hired_map.keys()))
+    # Take last 6 months
+    trend_months = all_months[-6:] if len(all_months) > 6 else all_months
+    trend_labels = []
+    trend_apps = []
+    trend_hired = []
+    for ym in trend_months:
+        parts = ym.split("-")
+        month_num = int(parts[1]) if len(parts) == 2 else 1
+        trend_labels.append(f"Th.{month_num}")
+        trend_apps.append(app_map.get(ym, 0))
+        trend_hired.append(hired_map.get(ym, 0))
+
+    # Fallback if no data
+    if not trend_labels:
+        trend_labels = [f"Th.{i}" for i in range(1, 7)]
+        trend_apps = [0] * 6
+        trend_hired = [0] * 6
+
+    # Candidate status distribution (donut chart) — excluding "interview"
+    status_counts = db.execute(
+        select(JobApplication.status, func.count(JobApplication.id))
+        .group_by(JobApplication.status)
+    ).all()
+    status_map = {}
+    for st, cnt in status_counts:
+        status_map[st.value if hasattr(st, "value") else str(st)] = int(cnt or 0)
+
+    donut_labels = []
+    donut_values = []
+    donut_colors = []
+    _DONUT_CFG = {
+        "pending":  ("Đã nộp",    "#2563EB"),
+        "reviewed": ("Đã duyệt",  "#06B6D4"),
+        "approved": ("Tuyển dụng", "#10B981"),
+        "rejected": ("Từ chối",    "#8B5CF6"),
+    }
+    for st_key, (lbl, col) in _DONUT_CFG.items():
+        v = status_map.get(st_key, 0)
+        if v > 0:
+            donut_labels.append(lbl)
+            donut_values.append(float(v))
+            donut_colors.append(col)
+
     return StatsOut(
-        labels=labels,
-        values=values,
+        labels=trend_labels,
+        values=[a + h for a, h in zip(trend_apps, trend_hired)],
         cards={
             "users": int(total_users),
             "hr": int(total_hr),
             "jobs": int(total_jobs),
             "activity_today": int(activity),
         },
+        trend_applications=trend_apps,
+        trend_hired=trend_hired,
+        donut_labels=donut_labels,
+        donut_values=donut_values,
+        donut_colors=donut_colors,
     )
 
 
@@ -151,12 +207,20 @@ def approve_hr(
         user_id=int(target.id),
         title="HR đã được phê duyệt",
         message="Tài khoản HR của bạn đã được admin phê duyệt.",
+        category="hr",
+        action="hr_profile_approved",
+        entity_type="hr_profile",
+        entity_id=int(target.id),
     )
     notify_role(
         db,
         role=UserRole.candidate,
         title="Nhà tuyển dụng mới",
         message=f"Nhà tuyển dụng '{target.hr_profile.company_name}' đã được xác minh.",
+        category="hr",
+        action="hr_profile_verified",
+        entity_type="hr_profile",
+        entity_id=int(target.id),
     )
     db.commit()
     return {"ok": True}
@@ -180,6 +244,10 @@ def reject_hr(
         user_id=int(target.id),
         title="HR bị từ chối",
         message="Hồ sơ HR của bạn đã bị từ chối. Vui lòng cập nhật và gửi lại.",
+        category="hr",
+        action="hr_profile_rejected",
+        entity_type="hr_profile",
+        entity_id=int(target.id),
     )
     db.commit()
     return {"ok": True}
@@ -210,6 +278,18 @@ def approve_job(
     job = db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Restore remaining boost time if it was paused on rejection
+    now = datetime.utcnow()
+    if job.boost_paused_at and job.boost_expires_at is not None and job.boost_budget_vnd > 0:
+        remaining = job.boost_expires_at - job.boost_paused_at
+        if remaining.total_seconds() > 0:
+            job.boost_expires_at = now + remaining
+        else:
+            job.boost_expires_at = None
+            job.boost_budget_vnd = 0
+    job.boost_paused_at = None
+
     job.status = JobStatus.published
     job.admin_note = body.note
     notify_user(
@@ -217,12 +297,20 @@ def approve_job(
         user_id=int(job.hr_user_id),
         title="Tin tuyển dụng đã được duyệt",
         message=f"Tin '{job.title}' đã được admin phê duyệt và hiển thị công khai.",
+        category="job",
+        action="job_approved",
+        entity_type="job",
+        entity_id=int(job.id),
     )
     notify_role(
         db,
         role=UserRole.candidate,
         title="Tin mới vừa mở",
         message=f"Có tin tuyển dụng mới: '{job.title}'.",
+        category="job",
+        action="job_published",
+        entity_type="job",
+        entity_id=int(job.id),
     )
     db.commit()
     db.refresh(job)
@@ -233,7 +321,7 @@ def approve_job(
 @router.post("/jobs/{job_id}/reject", response_model=JobOut)
 def reject_job(
     job_id: int,
-    body: AdminDecision,
+    body: AdminRejectIn,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> Job:
@@ -241,13 +329,22 @@ def reject_job(
     job = db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Preserve remaining boost time by recording when it was paused
+    if job.boost_expires_at is not None and job.boost_budget_vnd > 0:
+        job.boost_paused_at = datetime.utcnow()
+
     job.status = JobStatus.rejected
     job.admin_note = body.note
     notify_user(
         db,
         user_id=int(job.hr_user_id),
         title="Tin tuyển dụng bị từ chối",
-        message=f"Tin '{job.title}' đã bị admin từ chối.",
+        message=f"Tin '{job.title}' đã bị admin từ chối. Lý do: {body.note}",
+        category="job",
+        action="job_rejected",
+        entity_type="job",
+        entity_id=int(job.id),
     )
     db.commit()
     db.refresh(job)
@@ -450,15 +547,31 @@ def payment_insights(
     db: Annotated[Session, Depends(get_db)],
     limit: int = 100,
     period: str = "all",
+    date_from: str | None = None,
+    date_to: str | None = None,
 ) -> dict:
     _require_admin(user)
     max_limit = max(10, min(int(limit or 100), 500))
 
     period_key = str(period or "all").strip().lower()
-    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     paid_filter = [Invoice.status == InvoiceStatus.paid]
-    if period_key in {"month", "this_month"}:
+
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+            paid_filter.append(Invoice.paid_at >= dt_from)
+        except ValueError:
+            pass
+    elif period_key in {"month", "this_month"}:
+        month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         paid_filter.append(Invoice.paid_at >= month_start)
+
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            paid_filter.append(Invoice.paid_at <= dt_to)
+        except ValueError:
+            pass
 
     paid_invoices = db.scalars(
         select(Invoice)
@@ -511,6 +624,37 @@ def payment_insights(
         or 0
     )
 
+    # Monthly revenue breakdown (last 12 months)
+    monthly_rows = db.execute(
+        select(
+            func.date_format(Invoice.paid_at, "%Y-%m").label("ym"),
+            User.role,
+            func.count(Invoice.id),
+            func.coalesce(func.sum(Invoice.amount), 0),
+        )
+        .join(User, User.id == Invoice.owner_user_id)
+        .where(*paid_filter)
+        .group_by("ym", User.role)
+        .order_by("ym")
+    ).all()
+
+    monthly_map: dict[str, dict[str, int]] = {}
+    for ym, role, cnt, amt in monthly_rows:
+        if ym not in monthly_map:
+            monthly_map[ym] = {"hr_amount": 0, "candidate_amount": 0, "hr_count": 0, "candidate_count": 0}
+        role_val = role.value if hasattr(role, "value") else str(role)
+        if role_val == "hr":
+            monthly_map[ym]["hr_amount"] = int(float(amt or 0))
+            monthly_map[ym]["hr_count"] = int(cnt or 0)
+        elif role_val == "candidate":
+            monthly_map[ym]["candidate_amount"] = int(float(amt or 0))
+            monthly_map[ym]["candidate_count"] = int(cnt or 0)
+
+    monthly_revenue = [
+        {"month": ym, **data}
+        for ym, data in sorted(monthly_map.items())
+    ]
+
     now_utc = datetime.utcnow()
     boost_rows = db.execute(
         select(Job, HRProfile.company_name)
@@ -527,6 +671,7 @@ def payment_insights(
             "candidate_paid_count": candidate_paid_count,
             "hr_paid_count": hr_paid_count,
         },
+        "monthly_revenue": monthly_revenue,
         "payment_by_account": [
             {
                 "user_id": int(uid),

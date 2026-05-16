@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Callable
 
-from PySide6.QtCore import QPropertyAnimation, QRect, QSize, Qt, QTimer
+from PySide6.QtCore import QPoint, QPropertyAnimation, QRect, QSize, Qt, QTimer  # noqa: QPoint/QPropertyAnimation/QRect used by _toast
 from PySide6.QtGui import QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -38,11 +38,11 @@ from ..paths import resource_icon, resource_ui
 from ..session_store import clear_session
 from .charts import (
     make_recruitment_trend_chart,
-    make_donut_chart,
     make_revenue_trend_chart,
     make_dept_bar_chart,
 )
 from .hr_dashboard import _AvatarLabel, _make_avatar_circle, _load_avatar_async
+from .notification_overlay import NotificationCard, NotificationOverlayController, populate_notification_list
 from .ui_loader import load_ui
 from .quanly_enhanced import apply_search_icon, enhance_table
 
@@ -193,6 +193,7 @@ class AdminDashboard:
         self._reports_widget = self._load_sub_ui("QuanLyReports.ui")
 
         self._bind_widgets()
+        self._install_notification_overlay()
         self._inject_pages()
         self._setup_nav()
         self._restyle_sidebar()
@@ -204,6 +205,7 @@ class AdminDashboard:
         """
         Tear down the centralwidget's QHBoxLayout and re-add sidebar +
         content area with explicit stretch so the sidebar is always 260 px.
+        Also inject a hidden notification panel on the right edge.
         """
         central = win.centralWidget()
         if not central:
@@ -224,10 +226,25 @@ class AdminDashboard:
             if w.objectName() == "sidebar":
                 w.setFixedWidth(260)
                 w.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-                layout.addWidget(w, 0)          # stretch = 0
+                layout.addWidget(w, 0)
             else:
                 w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                layout.addWidget(w, 1)          # stretch = 1
+                layout.addWidget(w, 1)
+
+        # ── Notification panel (hidden by default) ─────────────
+        self._notif_panel = self._build_notif_panel()
+        self._notif_panel.hide()
+
+    def _install_notification_overlay(self) -> None:
+        central = self.win.centralWidget()
+        if not central:
+            return
+        self._notif_overlay = NotificationOverlayController(
+            window=self.win,
+            host=central,
+            panel=self._notif_panel,
+            bell_button=self.win.findChild(QPushButton, "btnNotify"),
+        )
 
     # ── Sub-UI loader ──────────────────────────────────────────
     def _load_sub_ui(self, ui_name: str) -> QWidget:
@@ -297,7 +314,6 @@ class AdminDashboard:
         self.stack        = f(QStackedWidget, "stackedPages")
         self.cards_row    = f(QHBoxLayout, "horizontalLayout_cards")
         self.chart_ph     = f(QLabel, "chartPlaceholder")
-        self.donut_ph     = f(QLabel, "donutPlaceholder")
         self.activities_layout = f(QVBoxLayout, "activitiesLayout")
 
         # ── Topbar search ─────────────────────────────────────────
@@ -348,6 +364,18 @@ class AdminDashboard:
                 " border-radius:20px; }"
                 "QPushButton:hover { background:#EFF6FF; border-color:#BFDBFE; }"
             )
+            btn_notify.clicked.connect(self._show_notification_panel)
+
+        # ── Bell badge ─────────────────────────────────────────────
+        self._bell_badge = QLabel(self.win)
+        self._bell_badge.setFixedSize(18, 18)
+        self._bell_badge.setAlignment(Qt.AlignCenter)
+        self._bell_badge.setStyleSheet(
+            "background:#EF4444;color:white;font-size:10px;font-weight:700;"
+            "border-radius:9px;border:2px solid white;"
+        )
+        self._bell_badge.setVisible(False)
+        self._bell_badge.raise_()
 
         # ── Topbar avatar ──────────────────────────────────────────
         avatar = f(QLabel, "topBarAvatar")
@@ -428,9 +456,22 @@ class AdminDashboard:
 
     def _poll_notifications(self) -> None:
         try:
-            rows = list(jobhub_api.my_notifications(limit=8, unread_only=True))
+            rows = list(jobhub_api.my_notifications(limit=100, unread_only=True))
         except Exception:
-            return
+            rows = []
+        unread_count = len(rows)
+        # Update badge
+        if hasattr(self, "_bell_badge") and self._bell_badge:
+            if unread_count > 0:
+                self._bell_badge.setText(str(min(unread_count, 99)))
+                self._bell_badge.setVisible(True)
+                # Position badge on top-right of bell button
+                btn = self.win.findChild(QPushButton, "btnNotify")
+                if btn:
+                    bp = btn.mapTo(self.win, QPoint(28, 2))
+                    self._bell_badge.move(bp)
+            else:
+                self._bell_badge.setVisible(False)
         if not rows:
             return
         newest_id = max(int(r.get("id") or 0) for r in rows)
@@ -440,14 +481,125 @@ class AdminDashboard:
         title = str(latest.get("title") or "Thông báo mới")
         message = str(latest.get("message") or "")
         _toast(self.win, f"{title}: {message}" if message else title, success=True)
+        self._last_seen_notification_id = newest_id
+
+    def _build_notif_panel(self) -> QWidget:
+        """Build the notification panel widget (part of main layout)."""
+        panel = QWidget()
+        panel.setObjectName("notifPanel")
+        panel.setFixedWidth(400)
+        panel.setStyleSheet(
+            "#notifPanel{background:#F8FAFC;border-left:1px solid #E2E8F0;}"
+        )
+        self._notif_list_lo = None
+
+        vlo = QVBoxLayout(panel)
+        vlo.setContentsMargins(0, 0, 0, 0)
+        vlo.setSpacing(0)
+
+        # Header
+        hdr = QWidget()
+        hdr.setObjectName("notifHdr")
+        hdr.setStyleSheet("#notifHdr{background:#FFFFFF;border-bottom:1px solid #E2E8F0;}")
+        hdr.setFixedHeight(62)
+        hdr_lo = QHBoxLayout(hdr)
+        hdr_lo.setContentsMargins(18, 0, 14, 0)
+        title_lbl = QLabel("Thông báo")
+        title_lbl.setStyleSheet("font-size:16px;font-weight:700;color:#111827;background:transparent;border:none;")
+        hdr_lo.addWidget(title_lbl)
+        hdr_lo.addStretch()
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(30, 30)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(
+            "QPushButton{background:transparent;color:#6B7280;font-size:15px;border:none;border-radius:15px;}"
+            "QPushButton:hover{background:#E5E7EB;}"
+        )
+        close_btn.clicked.connect(self._close_notif_panel)
+        hdr_lo.addWidget(close_btn)
+        vlo.addWidget(hdr)
+
+        # Scroll area for notification list
+        self._notif_scroll_content = QWidget()
+        self._notif_scroll_content.setObjectName("notifListBg")
+        self._notif_scroll_content.setStyleSheet("#notifListBg{background:#F8FAFC;}")
+        self._notif_list_lo = QVBoxLayout(self._notif_scroll_content)
+        self._notif_list_lo.setContentsMargins(12, 8, 12, 12)
+        self._notif_list_lo.setSpacing(8)
+        self._notif_list_lo.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(self._notif_scroll_content)
+        scroll.setObjectName("notifScroll")
+        scroll.setStyleSheet("#notifScroll{background:#F8FAFC;border:none;}")
+        vlo.addWidget(scroll, 1)
+
+        return panel
+
+    def _refresh_notif_panel(self) -> None:
+        """Fetch latest notifications and rebuild the list inside the panel."""
+        lo = self._notif_list_lo
+        if not lo:
+            return
+        try:
+            rows = list(jobhub_api.my_notifications(limit=20, unread_only=False))
+        except Exception:
+            rows = []
+
+        populate_notification_list(
+            lo,
+            rows,
+            build_item=self._build_notif_item,
+            mark_all_cb=lambda: self._mark_all_read(rows),
+        )
+
+    def _show_notification_panel(self) -> None:
+        if self._notif_panel.isVisible():
+            self._close_notif_panel()
+            return
+        self._refresh_notif_panel()
+        self._notif_overlay.show()
+
+    def _close_notif_panel(self) -> None:
+        self._notif_overlay.close()
+
+    def _build_notif_item(self, row: dict) -> QWidget:
+        return NotificationCard(row, self._open_notification)
+
+    def _open_notification(self, row: dict) -> None:
+        nid = int(row.get("id") or 0)
+        if nid > 0 and not bool(row.get("is_read")):
+            try:
+                jobhub_api.mark_notification_read(nid)
+            except Exception:
+                pass
+        category = str(row.get("category") or "").lower()
+        action = str(row.get("action") or "").lower()
+        entity_type = str(row.get("entity_type") or "").lower()
+        if category == "hr" or entity_type == "hr_profile":
+            self._go(3)
+        elif category in {"job", "application"} or entity_type in {"job", "application"}:
+            self._go(2)
+        elif action.startswith("report_"):
+            self._go(4)
+        self._refresh_notif_panel()
+        self._poll_notifications()
+        return
+
+    def _mark_all_read(self, rows: list) -> None:
         for row in rows:
             nid = int(row.get("id") or 0)
-            if nid > self._last_seen_notification_id and nid > 0:
+            if nid > 0:
                 try:
                     jobhub_api.mark_notification_read(nid)
                 except Exception:
                     pass
-        self._last_seen_notification_id = newest_id
+        self._last_seen_notification_id = max((int(r.get("id") or 0) for r in rows), default=0)
+        if hasattr(self, "_bell_badge") and self._bell_badge:
+            self._bell_badge.setVisible(False)
+        self._refresh_notif_panel()
 
     def _logout(self) -> None:
         clear_session()
@@ -466,8 +618,7 @@ class AdminDashboard:
 
         cards_data = data.get("cards") or {}
         self._build_stat_cards(cards_data)
-        self._build_recruitment_chart()
-        self._build_donut()
+        self._build_recruitment_chart(data)
         self._build_recent_activities()
 
     def _build_stat_cards(self, cards_data: dict) -> None:
@@ -579,16 +730,17 @@ class AdminDashboard:
 
         return card
 
-    def _build_recruitment_chart(self) -> None:
+    def _build_recruitment_chart(self, dash_data: dict | None = None) -> None:
         chart_frame = self.win.findChild(QFrame, "chartFrame")
         if not chart_frame:
             return
+        chart_frame.setMinimumHeight(430)
+        chart_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
         layout = chart_frame.layout()
         if not layout:
             return
 
         # Remove old canvas / legend row / placeholder — keep only header block
-        # (chartHeaderLayout is a QHBoxLayout item, NOT a widget → survives loop)
         _KEEP = {"chartTitle", "chartSubTitle"}
         for i in range(layout.count() - 1, -1, -1):
             item = layout.itemAt(i)
@@ -599,9 +751,7 @@ class AdminDashboard:
                 layout.removeWidget(w)
                 w.deleteLater()
 
-        # ── Legend row (Qt widget, NOT matplotlib) ─────────────────
-        # Placed between the title block and the canvas so it is
-        # fully outside the chart's fill_between area.
+        # ── Legend row ─────────────────────────────────────────
         leg_row = QWidget()
         leg_row.setObjectName("_chartLegendRow")
         leg_row.setStyleSheet("background:transparent;")
@@ -628,38 +778,22 @@ class AdminDashboard:
         leg_h.addStretch()
         layout.addWidget(leg_row)
 
-        # ── Canvas ─────────────────────────────────────────────────
-        labels = ["Th.1", "Th.2", "Th.3", "Th.4", "Th.5", "Th.6"]
-        applications = [130, 160, 185, 170, 195, 240]
-        hired = [8, 12, 10, 9, 11, 14]
+        # ── Canvas (real data from API) ────────────────────────
+        data = dash_data or {}
+        labels = list(data.get("labels") or [])
+        applications = list(data.get("trend_applications") or data.get("values") or [])
+        hired = list(data.get("trend_hired") or [])
+
+        # Pad to 6 if needed
+        while len(labels) < 6:
+            idx = len(labels) + 1
+            labels.append(f"Th.{idx}")
+            applications.append(0)
+            hired.append(0)
+
         canvas = make_recruitment_trend_chart(labels, applications, hired)
-        canvas.setMinimumHeight(200)
-        layout.addWidget(canvas)
-
-    def _build_donut(self) -> None:
-        donut_frame = self.win.findChild(QFrame, "donutFrame")
-        if not donut_frame:
-            return
-        layout = donut_frame.layout()
-        if not layout:
-            return
-        # Remove old placeholder/canvas, keep header labels
-        _KEEP = {"donutTitle", "donutSubTitle"}
-        for i in range(layout.count() - 1, -1, -1):
-            item = layout.itemAt(i)
-            if not item:
-                continue
-            w = item.widget()
-            if w and w.objectName() not in _KEEP:
-                layout.removeWidget(w)
-                w.deleteLater()
-
-        labels = ["Đã nộp", "Phỏng vấn", "Tuyển dụng", "Từ chối"]
-        values = [45.0, 25.0, 18.0, 12.0]
-        colors = ["#2563EB", "#06B6D4", "#10B981", "#8B5CF6"]
-        canvas = make_donut_chart(labels, values, colors)
-        canvas.setMinimumHeight(210)
-        canvas.setMinimumWidth(200)
+        canvas.setMinimumHeight(340)
+        canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
         layout.addWidget(canvas)
 
     def _build_recent_activities(self) -> None:
@@ -1178,7 +1312,7 @@ class AdminDashboard:
             _toast(self.win, f"Lỗi tải dữ liệu: {e}", success=False)
             return
 
-        self._jobs_all_data = jobs
+        self._jobs_all_data = [j for j in jobs if j.get("status") != "draft"]
 
         if not getattr(self, "_jobs_signals_connected", False):
             self._jobs_signals_connected = True
@@ -1242,6 +1376,8 @@ class AdminDashboard:
                 status_cb.setFixedHeight(40)
                 status_cb.setStyleSheet(_CB_SS)
                 status_cb.currentIndexChanged.connect(self._jobs_apply_filter)
+                # Reset to "Tất cả" on page load
+                status_cb.setCurrentIndex(0)
 
             # ── Pagination bar — add below scroll area ────────────────
             self._jobs_page_idx  = 0
@@ -1271,14 +1407,13 @@ class AdminDashboard:
 
         self._jobs_apply_filter()
 
-    # Status index → API value mapping
+    # Status index → API value mapping (Nháp removed — admin doesn't manage drafts)
     _JOBS_STATUS_MAP = {
         1: "published",
-        2: "draft",
-        3: "closed",
-        4: "rejected",
-        5: "pending_approval",
-        6: "__boosted__",
+        2: "closed",
+        3: "rejected",
+        4: "pending_approval",
+        5: "__boosted__",
     }
 
     def _jobs_apply_filter(self) -> None:
@@ -1305,7 +1440,7 @@ class AdminDashboard:
                     or text in str(j.get("location","")).lower()]
 
         # Sort: pending_approval đầu, rejected cuối
-        _ORDER = {"pending_approval":0,"published":1,"draft":2,"closed":3,"rejected":4}
+        _ORDER = {"pending_approval":0,"published":1,"closed":2,"rejected":3}
         data.sort(key=lambda j: _ORDER.get(j.get("status",""), 5))
 
         self._jobs_filtered  = data
@@ -1556,13 +1691,65 @@ class AdminDashboard:
         QTimer.singleShot(0, self._fill_jobs_grid)
 
     def _reject_job(self, job_id: int) -> None:
-        try:
-            jobhub_api.admin_reject_job(job_id)
-            _toast(self.win, "Đã từ chối tin tuyển dụng", success=False)
-        except ApiError as e:
-            _toast(self.win, f"Lỗi: {e}", success=False)
-            return
-        QTimer.singleShot(0, self._fill_jobs_grid)
+        nd = QDialog(self.win)
+        nd.setWindowTitle("Từ chối tin tuyển dụng")
+        nd.setMinimumWidth(420)
+        nd.setStyleSheet("QDialog{background:#FFFFFF;}")
+        nd_lo = QVBoxLayout(nd)
+        nd_lo.setContentsMargins(24, 20, 24, 20); nd_lo.setSpacing(12)
+
+        nd_hdr = QLabel("Lý do từ chối")
+        nd_hdr.setStyleSheet("color:#111827; font-size:15px; font-weight:700; border:none; background:transparent;")
+        nd_lo.addWidget(nd_hdr)
+        sub = QLabel("Nhập lý do để HR có thể chỉnh sửa và nộp lại:")
+        sub.setStyleSheet("color:#6B7280; font-size:12px; border:none; background:transparent;")
+        nd_lo.addWidget(sub)
+        txt = QPlainTextEdit()
+        txt.setPlaceholderText("Mô tả lý do từ chối chi tiết...")
+        txt.setFixedHeight(100)
+        txt.setStyleSheet(
+            "QPlainTextEdit{border:1.5px solid #E5E7EB; border-radius:8px; padding:10px;"
+            " font-size:13px; color:#374151; background:#F9FAFB;}"
+            "QPlainTextEdit:focus{border-color:#2563EB;}"
+        )
+        nd_lo.addWidget(txt)
+
+        err_lbl = QLabel("")
+        err_lbl.setStyleSheet("color:#DC2626; font-size:12px; border:none; background:transparent;")
+        nd_lo.addWidget(err_lbl)
+
+        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+        btn_cancel = QPushButton("Hủy")
+        btn_cancel.setFixedHeight(36)
+        btn_cancel.setStyleSheet(
+            "QPushButton{background:#F3F4F6; color:#374151; border:none;"
+            " border-radius:8px; font-size:13px; padding:0 16px;}"
+            "QPushButton:hover{background:#E5E7EB;}"
+        )
+        btn_cancel.clicked.connect(nd.reject)
+        btn_confirm = QPushButton("Xác nhận từ chối")
+        btn_confirm.setFixedHeight(36)
+        btn_confirm.setStyleSheet(
+            "QPushButton{background:#DC2626; color:#FFFFFF; border:none;"
+            " border-radius:8px; font-size:13px; font-weight:600; padding:0 16px;}"
+            "QPushButton:hover{background:#B91C1C;}"
+        )
+        def _do_reject():
+            note = txt.toPlainText().strip()
+            if not note:
+                err_lbl.setText("Vui lòng nhập lý do từ chối")
+                return
+            try:
+                jobhub_api.admin_reject_job(job_id, note)
+                _toast(self.win, "Đã từ chối tin tuyển dụng", success=False)
+                nd.accept()
+                QTimer.singleShot(0, self._fill_jobs_grid)
+            except ApiError as e:
+                _toast(self.win, f"Lỗi: {e}", success=False)
+        btn_confirm.clicked.connect(_do_reject)
+        btn_row.addWidget(btn_cancel); btn_row.addWidget(btn_confirm)
+        nd_lo.addLayout(btn_row)
+        nd.exec()
 
     def _jobs_update_pagination(self, total: int, total_pages: int) -> None:
         """Rebuild the page-number buttons in the pagination bar."""
@@ -1702,6 +1889,7 @@ class AdminDashboard:
         st_label, st_bg, st_fg = STATUS_MAP.get(st_raw, (st_raw, "#F1F5F9","#64748B"))
         title      = j.get("title")       or "—"
         company    = j.get("company_name")or "—"
+        hr_uid     = j.get("hr_user_id")
         dept       = j.get("department")  or ""
         level      = j.get("level")       or "—"
         job_type   = j.get("job_type")    or "—"
@@ -1914,12 +2102,7 @@ class AdminDashboard:
         hero_lo = QHBoxLayout(hero)
         hero_lo.setContentsMargins(28,24,28,24); hero_lo.setSpacing(22)
 
-        logo_lbl = QLabel((company[0].upper()) if company != "—" else "J")
-        logo_lbl.setFixedSize(72,72); logo_lbl.setAlignment(Qt.AlignCenter)
-        logo_lbl.setStyleSheet(
-            f"background:{logo_bg}; color:{logo_fg}; border-radius:18px;"
-            " font-size:28px; font-weight:800; border:none;"
-        )
+        logo_lbl, _ = _make_avatar_circle(company, size=72, user_id=int(hr_uid) if hr_uid else None)
         hero_lo.addWidget(logo_lbl, 0, Qt.AlignTop)
 
         title_col = QVBoxLayout(); title_col.setSpacing(6)
@@ -2055,11 +2238,33 @@ class AdminDashboard:
         else:
             perks_clo.addWidget(_body_lbl("HR chưa nhập quyền lợi/phúc lợi."))
 
-        # Admin note
+        # Admin note / Rejection reason
         if admin_note:
-            _, note_clo = _card_frame(left_lo)
-            _section_hdr(note_clo, "ic_edit.svg", "Ghi chú Admin")
-            note_clo.addWidget(_body_lbl(admin_note))
+            if st_raw == "rejected":
+                reason_f = QFrame()
+                reason_f.setStyleSheet(
+                    "QFrame{background:#FEF2F2; border-radius:14px; border:1.5px solid #FECACA;}"
+                )
+                _shadow(reason_f, blur=8, dy=2, alpha=8)
+                reason_lo = QVBoxLayout(reason_f)
+                reason_lo.setContentsMargins(20, 16, 20, 16)
+                reason_lo.setSpacing(6)
+                reason_hdr = QLabel("Lý do từ chối")
+                reason_hdr.setStyleSheet(
+                    "color:#DC2626; font-size:14px; font-weight:800;"
+                    " border:none; background:transparent;"
+                )
+                reason_txt = _body_lbl(admin_note)
+                reason_txt.setStyleSheet(
+                    "color:#991B1B; font-size:13px; border:none; background:transparent;"
+                )
+                reason_lo.addWidget(reason_hdr)
+                reason_lo.addWidget(reason_txt)
+                left_lo.addWidget(reason_f)
+            else:
+                _, note_clo = _card_frame(left_lo)
+                _section_hdr(note_clo, "ic_edit.svg", "Ghi chú Admin")
+                note_clo.addWidget(_body_lbl(admin_note))
 
         left_lo.addStretch()
 
@@ -2120,12 +2325,7 @@ class AdminDashboard:
         co_clo.addWidget(div1)
 
         co_row = QHBoxLayout(); co_row.setSpacing(12)
-        co_logo = QLabel((company[0].upper()) if company != "—" else "?")
-        co_logo.setFixedSize(44,44); co_logo.setAlignment(Qt.AlignCenter)
-        co_logo.setStyleSheet(
-            f"background:{logo_bg}; color:{logo_fg}; border-radius:11px;"
-            " font-size:18px; font-weight:800; border:none;"
-        )
+        co_logo, _ = _make_avatar_circle(company, size=44, user_id=int(hr_uid) if hr_uid else None)
         co_info = QVBoxLayout(); co_info.setSpacing(2)
         co_name = QLabel(company)
         co_name.setStyleSheet(
@@ -2247,7 +2447,10 @@ class AdminDashboard:
                 "QPushButton:hover{background:#B91C1C;}"
             )
             def _confirm_reject():
-                note = txt_note.toPlainText().strip() or None
+                note = txt_note.toPlainText().strip()
+                if not note:
+                    _toast(self.win, "Vui lòng nhập lý do từ chối", success=False)
+                    return
                 try:
                     jobhub_api.admin_reject_job(job_id, note)
                     _toast(self.win, "Đã từ chối tin tuyển dụng", success=False)
@@ -2367,8 +2570,13 @@ class AdminDashboard:
         except Exception:
             can_list = []
         selected_period = str(getattr(self, "_reports_period", "all") or "all").lower()
+        custom_from = getattr(self, "_reports_date_from", None)
+        custom_to = getattr(self, "_reports_date_to", None)
         try:
-            pay_insights = dict(jobhub_api.admin_payment_insights(limit=200, period=selected_period) or {})
+            pay_insights = dict(jobhub_api.admin_payment_insights(
+                limit=200, period=selected_period,
+                date_from=custom_from, date_to=custom_to,
+            ) or {})
         except Exception:
             pay_insights = {}
 
@@ -2379,18 +2587,28 @@ class AdminDashboard:
         can_rev = int(pay_summary.get("candidate_paid_count") or 0)
         hr_rev = int(pay_summary.get("hr_paid_count") or 0)
 
-        # Smooth monthly data — spread total evenly then vary ±20%
-        import random; random.seed(42)
-        def _smooth(total, n=6):
-            base = total / n if n else 0
-            pts  = [base * (0.8 + 0.4 * random.random()) for _ in range(n)]
-            # scale to sum ≈ total
-            s = sum(pts) or 1
-            return [p * total / s for p in pts]
-
-        base_hr  = _smooth(hr_rev)
-        base_can = _smooth(can_rev)
-        month_labels = [f"Tháng {i+1}" for i in range(6)]
+        # ── Real monthly revenue data from API ──────────────────────
+        monthly_src = list(pay_insights.get("monthly_revenue") or [])
+        if monthly_src:
+            month_labels = [str(r.get("month", "")) for r in monthly_src]
+            base_hr = [float(r.get("hr_amount") or 0) for r in monthly_src]
+            base_can = [float(r.get("candidate_amount") or 0) for r in monthly_src]
+        else:
+            # Fallback: generate last 6 months with zero data
+            from datetime import date as _date
+            today_date = _date.today()
+            month_labels = []
+            base_hr = []
+            base_can = []
+            for i in range(5, -1, -1):
+                y = today_date.year
+                m = today_date.month - i
+                if m <= 0:
+                    m += 12
+                    y -= 1
+                month_labels.append(f"{m:02d}/{y}")
+                base_hr.append(0.0)
+                base_can.append(0.0)
 
         # ── helpers ───────────────────────────────────────────────────
         def _fmt(n):
@@ -2405,6 +2623,8 @@ class AdminDashboard:
                 f"background:{bg}; color:{fg}; border-radius:4px;"
                 " padding:0 8px; font-size:11px; font-weight:700; border:none;"
             )
+            p.adjustSize()
+            p.setMinimumWidth(p.width() + 4)
             return p
 
         # ════════════════════════════════════════════════════════════
@@ -2439,29 +2659,123 @@ class AdminDashboard:
         tc.addWidget(t); tc.addWidget(s)
         hdr_lo.addLayout(tc, 1)
 
-        from datetime import date
+        from datetime import date, timedelta
+        from PySide6.QtWidgets import QDateEdit
+        from PySide6.QtCore import QDate
         today = date.today()
-        date_lbl = QLabel(f"  01/01/{today.year} – {today.strftime('%d/%m/%Y')}")
+
+        def _date_range_text(period_key: str) -> str:
+            if period_key == "month":
+                first = today.replace(day=1)
+                return f"{first.strftime('%d/%m/%Y')} – {today.strftime('%d/%m/%Y')}"
+            return f"01/01/{today.year} – {today.strftime('%d/%m/%Y')}"
+
+        date_lbl = QLabel(f"  {_date_range_text(selected_period)}")
         date_lbl.setFixedHeight(36)
         date_lbl.setStyleSheet(
             f"QLabel {{ background:{CARD}; color:{TXT_M}; border:1px solid {BORDER};"
             " border-radius:8px; font-size:13px; padding:0 14px; }}"
         )
         hdr_lo.addWidget(date_lbl)
+
+        _DATE_CB_SS = (
+            "QComboBox { background:#FFFFFF; border:1px solid #E5E7EB; border-radius:8px;"
+            " padding:0 12px; font-size:12px; color:#374151; }"
+            "QComboBox::drop-down { border:none; width:20px; }"
+        )
+        _DATE_EDIT_SS = (
+            "QDateEdit { background:#FFFFFF; border:1px solid #E5E7EB; border-radius:8px;"
+            " padding:0 10px; font-size:12px; color:#374151; height:36px; }"
+            "QDateEdit:hover { border-color:#2563EB; }"
+            "QDateEdit::drop-down { border:none; width:20px; }"
+        )
+
         period_cb = QComboBox()
         period_cb.addItem("Tổng", userData="all")
         period_cb.addItem("Tháng này", userData="month")
-        period_cb.setCurrentIndex(1 if selected_period == "month" else 0)
+        period_cb.addItem("Tùy chọn", userData="custom")
         period_cb.setFixedHeight(36)
-        period_cb.setStyleSheet(
-            "QComboBox { background:#FFFFFF; border:1px solid #E5E7EB; border-radius:8px; padding:0 12px; font-size:12px; color:#374151; }"
-            "QComboBox::drop-down { border:none; width:20px; }"
-        )
+        period_cb.setStyleSheet(_DATE_CB_SS)
+
+        # Custom date range widgets
+        dt_from = QDateEdit()
+        dt_from.setCalendarPopup(True)
+        dt_from.setDate(QDate(today.year, 1, 1))
+        dt_from.setDisplayFormat("dd/MM/yyyy")
+        dt_from.setFixedHeight(36)
+        dt_from.setMinimumWidth(130)
+        dt_from.setStyleSheet(_DATE_EDIT_SS)
+        dt_to = QDateEdit()
+        dt_to.setCalendarPopup(True)
+        dt_to.setDate(QDate(today.year, today.month, today.day))
+        dt_to.setDisplayFormat("dd/MM/yyyy")
+        dt_to.setFixedHeight(36)
+        dt_to.setMinimumWidth(130)
+        dt_to.setStyleSheet(_DATE_EDIT_SS)
+
+        sep_lbl = QLabel("–")
+        sep_lbl.setStyleSheet(f"color:{TXT_M}; font-size:13px; border:none; background:transparent;")
+
+        # Restore custom dates if set
+        if custom_from:
+            try:
+                dt_from.setDate(QDate.fromString(custom_from, "yyyy-MM-dd"))
+            except Exception:
+                pass
+        if custom_to:
+            try:
+                dt_to.setDate(QDate.fromString(custom_to, "yyyy-MM-dd"))
+            except Exception:
+                pass
+
         def _on_period_changed():
-            self._reports_period = str(period_cb.currentData() or "all")
+            new_period = str(period_cb.currentData() or "all")
+            self._reports_period = new_period
+            is_custom = (new_period == "custom")
+            dt_from.setVisible(is_custom)
+            sep_lbl.setVisible(is_custom)
+            dt_to.setVisible(is_custom)
+            if not is_custom:
+                date_lbl.setText(f"  {_date_range_text(new_period)}")
+                self._reports_date_from = None
+                self._reports_date_to = None
+            else:
+                self._apply_custom_date_range()
             self._fill_reports_page()
+
+        def _apply_custom_date_range():
+            self._reports_date_from = dt_from.date().toString("yyyy-MM-dd")
+            self._reports_date_to = dt_to.date().toString("yyyy-MM-dd")
+            date_lbl.setText(f"  {self._reports_date_from} – {self._reports_date_to}")
+
+        def _on_custom_date_changed():
+            if str(period_cb.currentData() or "") == "custom":
+                _apply_custom_date_range()
+                self._fill_reports_page()
+
+        dt_from.dateChanged.connect(lambda _: _on_custom_date_changed())
+        dt_to.dateChanged.connect(lambda _: _on_custom_date_changed())
+
+        # Set initial combo index
+        if selected_period == "custom":
+            period_cb.setCurrentIndex(2)
+        elif selected_period == "month":
+            period_cb.setCurrentIndex(1)
+        else:
+            period_cb.setCurrentIndex(0)
+
         period_cb.currentIndexChanged.connect(lambda _=0: _on_period_changed())
         hdr_lo.addWidget(period_cb)
+
+        # Show/hide custom date widgets
+        is_custom_init = (selected_period == "custom")
+        dt_from.setVisible(is_custom_init)
+        sep_lbl.setVisible(is_custom_init)
+        dt_to.setVisible(is_custom_init)
+
+        hdr_lo.addWidget(dt_from)
+        hdr_lo.addWidget(sep_lbl)
+        hdr_lo.addWidget(dt_to)
 
         hdr_lo.addStretch()
         page_lo.addWidget(hdr)
@@ -2498,9 +2812,23 @@ class AdminDashboard:
             fl.addWidget(lbl_t); fl.addWidget(lbl_v); fl.addWidget(lbl_p)
             return f
 
-        stat_row.addWidget(_stat("Tổng thanh toán", _fmt(tot_rev), "theo bộ lọc",  12, "#2563EB"))
-        stat_row.addWidget(_stat("Số lần Candidate trả phí",  str(can_rev), "theo bộ lọc",   8, "#06B6D4"))
-        stat_row.addWidget(_stat("Số lần HR thanh toán",     str(hr_rev),  "theo bộ lọc",  -2, "#8B5CF6"))
+        # Compute real % change: compare last month vs previous month
+        def _pct_change(values):
+            if len(values) < 2:
+                return 0
+            prev = values[-2]
+            curr = values[-1]
+            if prev == 0:
+                return 100 if curr > 0 else 0
+            return round((curr - prev) / prev * 100)
+
+        pct_rev = _pct_change(base_hr) if base_hr else 0
+        pct_can = _pct_change(base_can) if base_can else 0
+        pct_hr = pct_rev  # HR invoices drive total revenue change
+
+        stat_row.addWidget(_stat("Tổng thanh toán", _fmt(tot_rev), "theo bộ lọc", pct_rev, "#2563EB"))
+        stat_row.addWidget(_stat("Số lần Candidate trả phí", str(can_rev), "theo bộ lọc", pct_can, "#06B6D4"))
+        stat_row.addWidget(_stat("Số lần HR thanh toán", str(hr_rev), "theo bộ lọc", pct_hr, "#8B5CF6"))
         page_lo.addLayout(stat_row)
 
         # ── CHART ─────────────────────────────────────────────────────
@@ -2542,7 +2870,7 @@ class AdminDashboard:
         ch_lo.addWidget(div0)
 
         canvas = make_revenue_trend_chart(month_labels, base_hr, base_can)
-        canvas.setMinimumHeight(230)
+        canvas.setMinimumHeight(320)
         ch_lo.addWidget(canvas)
         page_lo.addWidget(ch_card)
 
@@ -2577,12 +2905,10 @@ class AdminDashboard:
             tbl_widget.setFixedHeight(ROW_H * max(len(rows), 1) + HDR_H + 2)
             tbl_widget.setStyleSheet(TBL_SS)
             hh = tbl_widget.horizontalHeader()
-            hh.setStretchLastSection(False)
+            hh.setStretchLastSection(True)
+            for ci in range(len(headers)):
+                hh.setSectionResizeMode(ci, QHeaderView.ResizeToContents)
             hh.setSectionResizeMode(0, QHeaderView.Stretch)
-            fw = fixed_widths or [110, 130, 130]
-            for ci in range(1, len(headers)):
-                hh.setSectionResizeMode(ci, QHeaderView.Fixed)
-                tbl_widget.setColumnWidth(ci, fw[min(ci - 1, len(fw) - 1)])
             for r, row in enumerate(rows):
                 tbl_widget.setRowHeight(r, ROW_H)
                 for c2, cell in enumerate(row):
@@ -2665,10 +2991,10 @@ class AdminDashboard:
                 rows.append((co, inv, _pill_lbl(st,sb,sf), f"{amt:,}đ"))
             return rows
 
-        def _view_all_dialog(title, headers, rows, fixed_widths=None):
+        def _view_all_dialog(title, headers, rows, fixed_widths=None, total_row=None):
             dlg = QDialog(self.win)
             dlg.setWindowTitle(title)
-            dlg.setMinimumWidth(720)
+            dlg.setMinimumWidth(880)
             dlg.setStyleSheet(f"QDialog {{ background:{PAGE}; }}")
             lo = QVBoxLayout(dlg); lo.setContentsMargins(24,24,24,24); lo.setSpacing(16)
 
@@ -2700,6 +3026,16 @@ class AdminDashboard:
             c_lo.addWidget(tbl)
             lo.addWidget(card)
 
+            # Total row
+            if total_row:
+                total_lbl = QLabel(total_row)
+                total_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                total_lbl.setStyleSheet(
+                    f"color:{TXT_H}; font-size:14px; font-weight:800;"
+                    " background:transparent; padding:4px 8px;"
+                )
+                lo.addWidget(total_lbl)
+
             # Close button
             btn_close = QPushButton("Đóng")
             btn_close.setFixedHeight(38); btn_close.setCursor(Qt.PointingHandCursor)
@@ -2730,37 +3066,56 @@ class AdminDashboard:
 
         def _make_hr_paid_rows(src):
             rows = []
+            total_amount = 0
             for r in src:
                 company = str(r.get("company_name") or r.get("display_name") or "—")[:24]
                 paid_count = int(r.get("paid_count") or 0)
                 last_paid = _fmt_date(str(r.get("last_paid_at") or ""))
-                rows.append((company, f"{paid_count} lần", _pill_lbl("Đã thanh toán", "#D1FAE5", "#059669"), last_paid))
-            return rows
+                amt = int(r.get("total_paid_amount_vnd") or 0)
+                total_amount += amt
+                rows.append((company, f"{paid_count} lần", last_paid, f"{amt:,}đ"))
+            return rows, total_amount
 
         can_rows_preview = _make_candidate_paid_rows(candidate_paid_src[:6])
-        hr_rows_preview  = _make_hr_paid_rows(hr_paid_src[:6])
+        hr_rows_preview, hr_total = _make_hr_paid_rows(hr_paid_src[:6])
 
         can_headers = ["CANDIDATE","SỐ LẦN THANH TOÁN","LẦN GẦN NHẤT","TỔNG ĐÃ THANH TOÁN"]
-        hr_headers  = ["CÔNG TY","SỐ LẦN THANH TOÁN","TRẠNG THÁI","LẦN GẦN NHẤT"]
+        hr_headers  = ["CÔNG TY","SỐ LẦN THANH TOÁN","LẦN GẦN NHẤT","TỔNG TIỀN"]
 
         def _open_can_all():
+            can_rows_full = _make_candidate_paid_rows(candidate_paid_src)
             _view_all_dialog("Tất cả giao dịch Candidate Pro",
-                             can_headers, _make_candidate_paid_rows(candidate_paid_src),
+                             can_headers, can_rows_full,
                              fixed_widths=[110, 130, 130])
 
         def _open_hr_all():
+            hr_rows_full, hr_total_full = _make_hr_paid_rows(hr_paid_src)
             _view_all_dialog("Tất cả hóa đơn HR",
-                             hr_headers, _make_hr_paid_rows(hr_paid_src),
-                             fixed_widths=[130, 130, 130])
+                             hr_headers, hr_rows_full,
+                             fixed_widths=[110, 130, 100],
+                             total_row=f"Tổng cộng: {hr_total_full:,}đ")
 
         bot.addWidget(_tbl_card("Giao dịch Candidate Pro",
                                 can_headers, can_rows_preview,
                                 on_view_all=_open_can_all,
                                 fixed_widths=[110, 130, 130]), 1)
-        bot.addWidget(_tbl_card("Hóa đơn HR gần đây",
+        hr_card_wrap = QWidget()
+        hr_card_wrap.setStyleSheet("background:transparent;")
+        hr_card_lo = QVBoxLayout(hr_card_wrap)
+        hr_card_lo.setContentsMargins(0, 0, 0, 0)
+        hr_card_lo.setSpacing(6)
+        hr_card_lo.addWidget(_tbl_card("Hóa đơn HR gần đây",
                                 hr_headers, hr_rows_preview,
                                 on_view_all=_open_hr_all,
-                                fixed_widths=[130, 130, 130]), 1)
+                                fixed_widths=[110, 130, 100]))
+        hr_total_lbl = QLabel(f"Tổng cộng: {hr_total:,}đ")
+        hr_total_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        hr_total_lbl.setStyleSheet(
+            f"color:{TXT_H}; font-size:13px; font-weight:800;"
+            " background:transparent; padding:2px 8px;"
+        )
+        hr_card_lo.addWidget(hr_total_lbl)
+        bot.addWidget(hr_card_wrap, 1)
         page_lo.addLayout(bot)
 
         boost_headers = ["#","TIN TUYỂN DỤNG","CÔNG TY","NGÂN SÁCH BOOST","LẦN BOOST GẦN NHẤT"]
@@ -2771,8 +3126,8 @@ class AdminDashboard:
             boost_rows_preview.append(
                 (
                     idx,
-                    str(row.get("job_title") or "—")[:34],
-                    str(row.get("company_name") or "—")[:20],
+                    str(row.get("job_title") or "—"),
+                    str(row.get("company_name") or "—"),
                     f"{int(row.get('boost_budget_vnd') or 0):,}đ {'(active)' if active else '(hết hạn)'}",
                     _fmt_date(str(row.get("boost_expires_at") or row.get("boost_last_paid_at") or "")),
                 )
@@ -3542,21 +3897,8 @@ class AdminDashboard:
             name_h.setSpacing(10)
 
             company = str(hr.get("company_name", "—"))
-            initials = (company[:2].upper()) if company not in ("—", "") else "?"
-            av = QLabel(initials)
-            av.setFixedSize(34, 34)
-            av.setAlignment(Qt.AlignCenter)
-            # Pick a deterministic colour from the id
-            _AVATAR_COLORS = [
-                ("#DBEAFE","#1D4ED8"), ("#D1FAE5","#065F46"),
-                ("#F3E8FF","#6D28D9"), ("#FEF3C7","#92400E"),
-                ("#FCE7F3","#9D174D"), ("#CFFAFE","#0E7490"),
-            ]
-            bg, fg = _AVATAR_COLORS[int(hr.get("id", 0)) % len(_AVATAR_COLORS)]
-            av.setStyleSheet(
-                f"QLabel {{ background:{bg}; color:{fg}; font-size:12px;"
-                " font-weight:700; border-radius:17px; border:none; }}"
-            )
+            hr_uid = int(hr.get("id", 0))
+            av, _ = _make_avatar_circle(company, size=34, user_id=hr_uid)
             name_lbl = QLabel(company)
             name_lbl.setStyleSheet(
                 "QLabel { font-size:13px; font-weight:600; color:#111827;"

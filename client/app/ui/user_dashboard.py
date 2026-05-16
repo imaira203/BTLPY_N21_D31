@@ -23,7 +23,10 @@ from PySide6.QtWidgets import (
 
 from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
+from ..paths import resource_icon
 from ..session_store import clear_session
+from .hr_dashboard import _make_avatar_circle
+from .notification_overlay import NotificationCard, NotificationOverlayController, populate_notification_list
 
 # ══════════════════════════════════════════════════════════════
 #  DESIGN TOKENS
@@ -1646,6 +1649,16 @@ class UserDashboard:
 
         root_lo.addWidget(right, 1)
 
+        # Notification panel (hidden by default, right-side overlay)
+        self._notif_panel = self._build_notif_panel()
+        self._notif_panel.hide()
+        self._notif_overlay = NotificationOverlayController(
+            window=self.win,
+            host=central,
+            panel=self._notif_panel,
+            bell_button=getattr(self, "_btn_bell", None),
+        )
+
         self._nav_btns[0].set_active(True)
         self._stack.setCurrentIndex(0)
 
@@ -1871,6 +1884,37 @@ class UserDashboard:
         lo.addWidget(self._topbar_name_lbl)
         lo.addWidget(self._topbar_pro_badge)
 
+        # ── Bell notification button ────────────────────────
+        bell_wrap = QWidget()
+        bell_wrap.setStyleSheet("background:transparent;")
+        bell_lo = QVBoxLayout(bell_wrap)
+        bell_lo.setContentsMargins(0, 0, 0, 0)
+        bell_lo.setSpacing(0)
+        bell_lo.setAlignment(Qt.AlignCenter)
+
+        self._btn_bell = QPushButton()
+        self._btn_bell.setFixedSize(40, 40)
+        self._btn_bell.setCursor(Qt.PointingHandCursor)
+        self._btn_bell.setIcon(QIcon(str(resource_icon("ic_bell.svg"))))
+        self._btn_bell.setIconSize(QSize(18, 18))
+        self._btn_bell.setStyleSheet(
+            "QPushButton{background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:20px;}"
+            "QPushButton:hover{background:#EFF6FF;border-color:#BFDBFE;}"
+        )
+        self._btn_bell.clicked.connect(self._show_notification_popup)
+        bell_lo.addWidget(self._btn_bell)
+
+        self._bell_badge = QLabel(bell_wrap)
+        self._bell_badge.setFixedSize(18, 18)
+        self._bell_badge.setAlignment(Qt.AlignCenter)
+        self._bell_badge.setStyleSheet(
+            "background:#EF4444;color:white;font-size:10px;font-weight:700;"
+            "border-radius:9px;border:2px solid white;"
+        )
+        self._bell_badge.setVisible(False)
+        self._bell_badge.raise_()
+        lo.addWidget(bell_wrap)
+
         self._refresh_identity_widgets()
 
         return bar
@@ -1976,6 +2020,7 @@ class UserDashboard:
         job_id      = job.get("id", 0)                    if job else 0
 
         bg_col, fg_col = _LOGO_PALETTE[idx % len(_LOGO_PALETTE)]
+        hr_user_id = job.get("hr_user_id") if job else None
         scroll, lo = self._page_scroll_wrapper()
         lo.setSpacing(0)
 
@@ -2005,13 +2050,7 @@ class UserDashboard:
         hero_lo.setSpacing(24)
 
         # Company logo circle
-        logo = QLabel(comp[0].upper())
-        logo.setFixedSize(72, 72)
-        logo.setAlignment(Qt.AlignCenter)
-        logo.setStyleSheet(
-            f"background:{bg_col}; color:{fg_col}; border-radius:18px;"
-            "font-size:28px; font-weight:800; border:none;"
-        )
+        logo, _ = _make_avatar_circle(comp, size=72, user_id=int(hr_user_id) if hr_user_id else None)
 
         # Title + company + dept
         title_col = QVBoxLayout()
@@ -4996,6 +5035,7 @@ class UserDashboard:
                   is_saved_page: bool = False,
                   job_data: dict | None = None) -> QFrame:
         bg_col, fg_col = _LOGO_PALETTE[idx % len(_LOGO_PALETTE)]
+        hr_uid = job_data.get("hr_user_id") if isinstance(job_data, dict) else None
 
         card = QFrame()
         card.setObjectName("jobCard")
@@ -5018,13 +5058,7 @@ class UserDashboard:
         top.setAlignment(Qt.AlignTop)
 
         # Company logo circle
-        logo = QLabel(comp[0].upper())
-        logo.setFixedSize(46, 46)
-        logo.setAlignment(Qt.AlignCenter)
-        logo.setStyleSheet(
-            f"background:{bg_col}; color:{fg_col};"
-            "border-radius:13px; font-size:17px; font-weight:800;"
-        )
+        logo, _ = _make_avatar_circle(comp, size=46, user_id=int(hr_uid) if hr_uid else None)
 
         # Title + company
         title_col = QVBoxLayout()
@@ -5313,9 +5347,17 @@ class UserDashboard:
 
     def _poll_notifications(self) -> None:
         try:
-            rows = list(jobhub_api.my_notifications(limit=8, unread_only=True))
+            rows = list(jobhub_api.my_notifications(limit=100, unread_only=True))
         except Exception:
-            return
+            rows = []
+        unread_count = len(rows)
+        # Update badge
+        if hasattr(self, "_bell_badge"):
+            if unread_count > 0:
+                self._bell_badge.setText(str(min(unread_count, 99)))
+                self._bell_badge.setVisible(True)
+            else:
+                self._bell_badge.setVisible(False)
         if not rows:
             return
         newest_id = max(int(r.get("id") or 0) for r in rows)
@@ -5325,14 +5367,120 @@ class UserDashboard:
         title = str(latest.get("title") or "Thông báo mới")
         msg = str(latest.get("message") or "")
         _Toast(self.win.centralWidget(), f"{title}: {msg}" if msg else title, accent="#2563eb", duration_ms=3200)
+        self._last_seen_notification_id = newest_id
+
+    def _build_notif_panel(self) -> QWidget:
+        panel = QWidget()
+        panel.setObjectName("notifPanel")
+        panel.setFixedWidth(400)
+        panel.setStyleSheet(
+            "#notifPanel{background:#F8FAFC;border-left:1px solid #E2E8F0;}"
+        )
+        self._notif_list_lo = None
+
+        vlo = QVBoxLayout(panel)
+        vlo.setContentsMargins(0, 0, 0, 0)
+        vlo.setSpacing(0)
+
+        hdr = QWidget()
+        hdr.setObjectName("notifHdr")
+        hdr.setStyleSheet("#notifHdr{background:#FFFFFF;border-bottom:1px solid #E2E8F0;}")
+        hdr.setFixedHeight(62)
+        hdr_lo = QHBoxLayout(hdr)
+        hdr_lo.setContentsMargins(18, 0, 14, 0)
+        title_lbl = QLabel("Thông báo")
+        title_lbl.setStyleSheet("font-size:16px;font-weight:700;color:#111827;background:transparent;border:none;")
+        hdr_lo.addWidget(title_lbl)
+        hdr_lo.addStretch()
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(30, 30)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(
+            "QPushButton{background:transparent;color:#6B7280;font-size:15px;border:none;border-radius:15px;}"
+            "QPushButton:hover{background:#E5E7EB;}"
+        )
+        close_btn.clicked.connect(self._close_notif_panel)
+        hdr_lo.addWidget(close_btn)
+        vlo.addWidget(hdr)
+
+        self._notif_scroll_content = QWidget()
+        self._notif_scroll_content.setObjectName("notifListBg")
+        self._notif_scroll_content.setStyleSheet("#notifListBg{background:#F8FAFC;}")
+        self._notif_list_lo = QVBoxLayout(self._notif_scroll_content)
+        self._notif_list_lo.setContentsMargins(12, 8, 12, 12)
+        self._notif_list_lo.setSpacing(8)
+        self._notif_list_lo.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(self._notif_scroll_content)
+        scroll.setObjectName("notifScroll")
+        scroll.setStyleSheet("#notifScroll{background:#F8FAFC;border:none;}")
+        vlo.addWidget(scroll, 1)
+
+        return panel
+
+    def _refresh_notif_panel(self) -> None:
+        lo = self._notif_list_lo
+        if not lo:
+            return
+        try:
+            rows = list(jobhub_api.my_notifications(limit=20, unread_only=False))
+        except Exception:
+            rows = []
+
+        populate_notification_list(
+            lo,
+            rows,
+            build_item=self._build_notif_item,
+            mark_all_cb=lambda: self._mark_all_notif_read(rows),
+        )
+
+    def _show_notification_popup(self) -> None:
+        if self._notif_panel.isVisible():
+            self._close_notif_panel()
+            return
+        self._refresh_notif_panel()
+        self._notif_overlay.show()
+
+    def _close_notif_panel(self) -> None:
+        self._notif_overlay.close()
+
+    def _build_notif_item(self, row: dict) -> QWidget:
+        return NotificationCard(row, self._open_notification)
+
+    def _open_notification(self, row: dict) -> None:
+        nid = int(row.get("id") or 0)
+        if nid > 0 and not bool(row.get("is_read")):
+            try:
+                jobhub_api.mark_notification_read(nid)
+            except Exception:
+                pass
+        category = str(row.get("category") or "").lower()
+        entity_type = str(row.get("entity_type") or "").lower()
+        if category == "application" or entity_type == "application":
+            self._go(1)
+        elif category == "job" or entity_type == "job":
+            self._go(0)
+        elif category == "billing" or entity_type == "invoice":
+            self._go(4)
+        self._refresh_notif_panel()
+        self._poll_notifications()
+        return
+
+    def _mark_all_notif_read(self, rows: list) -> None:
         for row in rows:
             nid = int(row.get("id") or 0)
-            if nid > self._last_seen_notification_id and nid > 0:
+            if nid > 0:
                 try:
                     jobhub_api.mark_notification_read(nid)
                 except Exception:
                     pass
-        self._last_seen_notification_id = newest_id
+        self._last_seen_notification_id = max((int(r.get("id") or 0) for r in rows), default=0)
+        if hasattr(self, "_bell_badge"):
+            self._bell_badge.setVisible(False)
+        self._refresh_notif_panel()
 
     def _sync_subscription(self) -> None:
         try:

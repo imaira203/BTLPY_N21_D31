@@ -143,7 +143,8 @@ def _parse_deadline_text(deadline_text: str | None) -> datetime | None:
 
 def _enforce_job_immutable_rules(db: Session, job: Job) -> None:
     now_utc = datetime.utcnow()
-    if job.boost_expires_at and job.boost_expires_at > now_utc:
+    # Allow editing rejected jobs even if boosted (admin will re-approve and restore boost)
+    if job.status != JobStatus.rejected and job.boost_expires_at and job.boost_expires_at > now_utc:
         raise HTTPException(
             status_code=400,
             detail="Tin đang trong thời gian boost nên không thể chỉnh sửa.",
@@ -396,17 +397,26 @@ def create_job(
         status=st,
     )
     db.add(job)
+    db.flush()
     notify_user(
         db,
         user_id=int(user.id),
         title="Tạo tin tuyển dụng",
         message=f"Tin '{body.title}' đã được tạo thành công.",
+        category="job",
+        action="job_created",
+        entity_type="job",
+        entity_id=int(job.id),
     )
     notify_role(
         db,
         role=UserRole.admin,
         title="Tin chờ duyệt mới",
         message=f"HR vừa gửi tin '{body.title}' cần phê duyệt.",
+        category="job",
+        action="job_pending_approval",
+        entity_type="job",
+        entity_id=int(job.id),
     )
     db.commit()
     db.refresh(job)
@@ -775,6 +785,10 @@ def mark_hr_invoice_paid(
                 role=UserRole.candidate,
                 title="Tin tuyển dụng được đẩy top",
                 message=f"Tin '{job.title}' vừa được boost và sẽ hiển thị ưu tiên.",
+                category="job",
+                action="job_boosted",
+                entity_type="job",
+                entity_id=int(job.id),
             )
     db.commit()
     db.refresh(invoice)
@@ -888,6 +902,10 @@ def create_job_boost_invoice(
         user_id=int(user.id),
         title="Khởi tạo hóa đơn boost",
         message=f"Hóa đơn boost cho tin '{job.title}' đã được tạo.",
+        category="billing",
+        action="boost_invoice_created",
+        entity_type="invoice",
+        entity_id=int(inv.id),
     )
     db.commit()
     db.refresh(inv)
@@ -933,6 +951,10 @@ def update_application_status(
             user_id=int(app.candidate_id),
             title="Hồ sơ được phê duyệt",
             message=f"Hồ sơ ứng tuyển cho tin '{job.title}' đã được nhà tuyển dụng phê duyệt.",
+            category="application",
+            action="application_approved",
+            entity_type="application",
+            entity_id=int(app.id),
         )
     elif body.status == ApplicationStatus.rejected:
         notify_user(
@@ -940,6 +962,10 @@ def update_application_status(
             user_id=int(app.candidate_id),
             title="Hồ sơ bị từ chối",
             message=f"Hồ sơ ứng tuyển cho tin '{job.title}' đã bị từ chối.",
+            category="application",
+            action="application_rejected",
+            entity_type="application",
+            entity_id=int(app.id),
         )
     db.commit()
     return {
