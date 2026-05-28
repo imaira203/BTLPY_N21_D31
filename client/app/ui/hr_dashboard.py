@@ -29,7 +29,7 @@ from ..client import jobhub_api
 from ..client.jobhub_api import ApiError
 from ..paths import resource_icon
 from ..session_store import clear_session
-from .charts import make_bar_chart
+from .charts import make_recruitment_trend_chart
 from .notification_overlay import NotificationCard, NotificationOverlayController, populate_notification_list
 
 _DESC_MARKER = "__JH_V1__"
@@ -1515,8 +1515,17 @@ class HRDashboard:
             f"color:{TXT_M};font-size:11px;font-weight:400;"
             "background:transparent;border:none;"
         )
+        self.lbl_hr_reject_badge = QLabel("")
+        self.lbl_hr_reject_badge.setAlignment(Qt.AlignRight)
+        self.lbl_hr_reject_badge.setWordWrap(True)
+        self.lbl_hr_reject_badge.setVisible(False)
+        self.lbl_hr_reject_badge.setStyleSheet(
+            "color:#B91C1C;font-size:10px;font-weight:700;"
+            "background:#FEF2F2;border:1px solid #FECACA;border-radius:7px;padding:2px 6px;"
+        )
         info_col.addWidget(self.lbl_hr_name)
         info_col.addWidget(self.lbl_hr_role)
+        info_col.addWidget(self.lbl_hr_reject_badge)
         p_lo.addLayout(info_col)
 
         self._btn_hr_avatar = QPushButton("HR")
@@ -1853,6 +1862,7 @@ class HRDashboard:
         profile = profile or {}
         company_name = str(profile.get("company_name") or "").strip()
         status = str(profile.get("approval_status") or "").strip().lower()
+        admin_note = str(profile.get("admin_note") or "").strip()
         if company_name:
             self.lbl_hr_name.setText(company_name)
 
@@ -1878,6 +1888,11 @@ class HRDashboard:
                 "font-size:13px;font-weight:800;border:none;}}"
                 f"QPushButton:hover{{background:{P_DARK};}}"
             )
+        if status == "rejected" and admin_note:
+            self.lbl_hr_reject_badge.setText(f"Lý do từ chối: {admin_note}")
+            self.lbl_hr_reject_badge.setVisible(True)
+        else:
+            self.lbl_hr_reject_badge.setVisible(False)
         self._refresh_hr_profile_form()
 
     def _hr_status_label(self, status: str) -> str:
@@ -2082,6 +2097,14 @@ class HRDashboard:
         self._hr_prof_status_lbl.setAlignment(Qt.AlignCenter)
         self._hr_prof_status_lbl.setStyleSheet(f"color:{TXT_M};font-size:12px;font-weight:600;")
         left_lo.addWidget(self._hr_prof_status_lbl)
+        self._hr_prof_reject_badge = QLabel("")
+        self._hr_prof_reject_badge.setWordWrap(True)
+        self._hr_prof_reject_badge.setVisible(False)
+        self._hr_prof_reject_badge.setStyleSheet(
+            "color:#B91C1C;font-size:11px;font-weight:700;"
+            "background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:6px 8px;"
+        )
+        left_lo.addWidget(self._hr_prof_reject_badge)
 
         div = QFrame()
         div.setFixedHeight(1)
@@ -2171,12 +2194,19 @@ class HRDashboard:
         phone = str(profile.get("contact_phone") or "").strip()
         desc = str(profile.get("company_description") or "").strip()
         status = str(profile.get("approval_status") or "").strip().lower()
+        admin_note = str(profile.get("admin_note") or "").strip()
         email = str((self._hr_me_data or {}).get("email") or "").strip()
 
         self._hr_prof_company_lbl.setText(company or "Công ty")
         self._hr_prof_status_lbl.setText(self._hr_status_label(status))
         self._hr_prof_phone_lbl.setText(f"SĐT liên hệ: {phone or '—'}")
         self._hr_prof_email_lbl.setText(f"Email liên hệ: {email or '—'}")
+        if hasattr(self, "_hr_prof_reject_badge"):
+            if status == "rejected" and admin_note:
+                self._hr_prof_reject_badge.setText(f"Lý do từ chối: {admin_note}")
+                self._hr_prof_reject_badge.setVisible(True)
+            else:
+                self._hr_prof_reject_badge.setVisible(False)
         initials = "".join(part[:1].upper() for part in (company or "HR").split()[:2]) or "HR"
         if self._hr_avatar_pixmap and not self._hr_avatar_pixmap.isNull():
             self._hr_prof_avatar_lbl.setPixmap(_circular_fill_pixmap(self._hr_avatar_pixmap, self._hr_prof_avatar_lbl.size()))
@@ -2291,23 +2321,53 @@ class HRDashboard:
         self._rebuild_chart(period)
 
     def _rebuild_chart(self, period: str) -> None:
-        """Rebuild the bar chart for the given period."""
+        """Rebuild recruitment trend chart (applications + approved) for period."""
         try:
-            dash = jobhub_api.hr_dashboard()
+            dash = jobhub_api.hr_dashboard(period=period)
         except ApiError:
-            dash = {"labels": [], "values": []}
-        labels = list(dash.get("labels", []))
-        values = list(dash.get("values", []))
+            dash = {"labels": [], "values": [], "trend_applications": [], "trend_hired": []}
+        labels = [str(x) for x in list(dash.get("labels", []))]
+        app_raw = list(dash.get("trend_applications") or dash.get("values") or [])
+        hired_raw = list(dash.get("trend_hired") or [])
+        app_values: list[int] = []
+        hired_values: list[int] = []
+
+        for x in app_raw:
+            try:
+                app_values.append(max(0, int(round(float(x)))))
+            except (TypeError, ValueError):
+                app_values.append(0)
+        for x in hired_raw:
+            try:
+                hired_values.append(max(0, int(round(float(x)))))
+            except (TypeError, ValueError):
+                hired_values.append(0)
+
+        if not labels:
+            if period == "week":
+                labels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+            elif period == "month":
+                labels = ["W1", "W2", "W3", "W4"]
+            else:
+                labels = ["Th1", "Th2", "Th3"]
+        if len(app_values) < len(labels):
+            app_values.extend([0] * (len(labels) - len(app_values)))
+        elif len(app_values) > len(labels):
+            app_values = app_values[: len(labels)]
+        if len(hired_values) < len(labels):
+            hired_values.extend([0] * (len(labels) - len(hired_values)))
+        elif len(hired_values) > len(labels):
+            hired_values = hired_values[: len(labels)]
 
         lay = self._chart_holder.layout()
         while lay.count():
             it = lay.takeAt(0)
             if it.widget():
                 it.widget().deleteLater()
-        canvas = make_bar_chart(
-            [str(x) for x in labels],
-            [int(x) for x in values],
-            "#6366f1", dark=False,
+        canvas = make_recruitment_trend_chart(
+            labels,
+            app_values,
+            hired_values,
         )
         canvas.setMinimumHeight(240)
         lay.addWidget(canvas)

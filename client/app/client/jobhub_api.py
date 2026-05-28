@@ -298,8 +298,11 @@ def candidate_track_profile_view(viewed_user_id: int) -> dict:
     return _request("POST", "/candidate/profile/views/track", json={"viewed_user_id": int(viewed_user_id)})
 
 
-def hr_dashboard() -> dict:
-    return _request("GET", "/hr/dashboard")
+def hr_dashboard(period: str | None = None) -> dict:
+    params: dict[str, str] = {}
+    if period:
+        params["period"] = str(period)
+    return _request("GET", "/hr/dashboard", params=params or None)
 
 
 def hr_create_job(payload: dict) -> dict:

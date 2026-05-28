@@ -298,7 +298,11 @@ def _to_job_out(job: Job, db: Session, company_name: str | None = None) -> JobOu
 
 
 @router.get("/dashboard", response_model=StatsOut)
-def hr_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> StatsOut:
+def hr_dashboard(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    period: Annotated[str, Query(pattern="^(week|month|quarter)$")] = "week",
+) -> StatsOut:
     _require_hr(user)
     total_jobs = db.scalar(select(func.count()).select_from(Job).where(Job.hr_user_id == user.id)) or 0
     total_apps = (
@@ -329,12 +333,38 @@ def hr_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annotated
         or 0
     )
     rate = int((responded_apps * 100) / total_apps) if total_apps > 0 else 0
-    monthly = db.execute(
-        select(func.month(Job.created_at), func.count())
-        .where(Job.hr_user_id == user.id)
-        .group_by(func.month(Job.created_at))
-        .order_by(func.month(Job.created_at))
+    now = datetime.utcnow()
+    period_key = str(period or "week").strip().lower()
+    if period_key not in {"week", "month", "quarter"}:
+        period_key = "week"
+
+    if period_key == "quarter":
+        quarter_start_month = ((now.month - 1) // 3) * 3 + 1
+        range_start = datetime(now.year, quarter_start_month, 1, 0, 0, 0)
+    elif period_key == "month":
+        range_start = datetime(now.year, now.month, 1, 0, 0, 0)
+    else:
+        range_start = datetime(now.year, now.month, now.day, 0, 0, 0) - timedelta(days=6)
+
+    app_rows = db.execute(
+        select(JobApplication.created_at, JobApplication.status)
+        .join(Job, Job.id == JobApplication.job_id)
+        .where(
+            Job.hr_user_id == user.id,
+            JobApplication.created_at >= range_start,
+            JobApplication.created_at <= now,
+        )
     ).all()
+    app_events: list[tuple[datetime, ApplicationStatus]] = []
+    for row in app_rows:
+        if not row or not row[0]:
+            continue
+        raw_status = row[1]
+        try:
+            status = _normalized_app_status(raw_status)
+        except Exception:
+            status = ApplicationStatus.pending
+        app_events.append((row[0], status))
     pending_rows = db.execute(
         select(JobApplication, Job, User)
         .join(Job, Job.id == JobApplication.job_id)
@@ -358,11 +388,51 @@ def hr_dashboard(user: Annotated[User, Depends(get_current_user)], db: Annotated
                 "applied_at": app.created_at.isoformat(),
             }
         )
-    labels = [f"T{m[0]}" for m in monthly] if monthly else ["T1", "T2", "T3"]
-    values = [int(m[1]) for m in monthly] if monthly else [0, 0, 0]
+    labels: list[str] = []
+    trend_applications: list[int] = []
+    trend_hired: list[int] = []
+    if period_key == "week":
+        weekday_vi = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+        days = [range_start + timedelta(days=i) for i in range(7)]
+        labels = [weekday_vi[d.weekday()] for d in days]
+        trend_applications = [sum(1 for dt, _ in app_events if dt.date() == d.date()) for d in days]
+        trend_hired = [
+            sum(
+                1
+                for dt, st in app_events
+                if dt.date() == d.date() and st == ApplicationStatus.approved
+            )
+            for d in days
+        ]
+    elif period_key == "month":
+        today_day = now.day
+        num_weeks = max(1, (today_day + 6) // 7)
+        labels = [f"W{i}" for i in range(1, num_weeks + 1)]
+        trend_applications = [0 for _ in range(num_weeks)]
+        trend_hired = [0 for _ in range(num_weeks)]
+        for dt, st in app_events:
+            idx = min(num_weeks, ((dt.day - 1) // 7) + 1) - 1
+            trend_applications[idx] += 1
+            if st == ApplicationStatus.approved:
+                trend_hired[idx] += 1
+    else:
+        quarter_start_month = ((now.month - 1) // 3) * 3 + 1
+        months = [quarter_start_month + i for i in range(3)]
+        labels = [f"Th{m}" for m in months]
+        trend_applications = [0, 0, 0]
+        trend_hired = [0, 0, 0]
+        month_to_idx = {m: i for i, m in enumerate(months)}
+        for dt, st in app_events:
+            idx = month_to_idx.get(dt.month)
+            if idx is not None:
+                trend_applications[idx] += 1
+                if st == ApplicationStatus.approved:
+                    trend_hired[idx] += 1
     return StatsOut(
         labels=labels,
-        values=values,
+        values=trend_applications,
+        trend_applications=trend_applications,
+        trend_hired=trend_hired,
         cards={
             "jobs": int(total_jobs),
             "candidates": int(total_apps),

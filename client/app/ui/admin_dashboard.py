@@ -963,7 +963,7 @@ class AdminDashboard:
     # ══════════════════════════════════════════════════════════════
     #  USER MANAGEMENT PAGE
     # ══════════════════════════════════════════════════════════════
-    def _fill_user_table(self) -> None:
+    def _legacy_fill_user_table_old(self) -> None:
         """Fetch data from API, set up signals (once), then filter."""
         table = self.table_users
         if not table:
@@ -1075,6 +1075,9 @@ class AdminDashboard:
             table.setEditTriggers(QTableWidget.NoEditTriggers)
             table.verticalHeader().setVisible(False)
             table.setAlternatingRowColors(False)
+            table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
             # ── Column widths ─────────────────────────────────────────────
             hdr = table.horizontalHeader()
@@ -1092,7 +1095,7 @@ class AdminDashboard:
 
         self._user_apply_filter()
 
-    def _user_apply_filter(self) -> None:
+    def _legacy_user_apply_filter_old(self) -> None:
         data = list(getattr(self, "_user_all_data", []))
         q    = self.search_user
         text = q.text().strip().lower() if q else ""
@@ -1116,7 +1119,7 @@ class AdminDashboard:
         self._populate_user_table(data)
         self._user_update_pagination()
 
-    def _user_update_pagination(self) -> None:
+    def _legacy_user_update_pagination_old(self) -> None:
         total = len(getattr(self, "_user_filtered", []))
         ps    = getattr(self, "_user_page_size", 10)
         pages = max(1, (total + ps - 1) // ps)
@@ -1314,9 +1317,272 @@ class AdminDashboard:
             act_h.addStretch()
             table.setCellWidget(row, 4, act_w)
 
+        self._user_sync_table_height(len(page), row_height=56)
+
     # ══════════════════════════════════════════════════════════════
     #  JOBS MANAGEMENT PAGE — card grid
     # ══════════════════════════════════════════════════════════════
+    def _user_sync_table_height(self, row_count: int, row_height: int = 56) -> None:
+        table = self.table_users
+        if not table:
+            return
+        header_h = table.horizontalHeader().height() or 42
+        frame_h = table.frameWidth() * 2
+        body_rows = max(1, int(row_count))
+        table.setFixedHeight(header_h + body_rows * row_height + frame_h + 2)
+
+    # NOTE: override legacy user-page implementation above.
+    def _fill_user_table(self) -> None:
+        main = self._user_widget
+        if not main:
+            return
+        if getattr(self, "_user_built", False):
+            self._user_refresh_data()
+            return
+
+        self._user_built = True
+        self._user_page_idx = 0
+        self._user_page_size = 10
+        self._user_all_data = []
+        self._user_filtered = []
+
+        main_lo = main.layout()
+        if not main_lo:
+            return
+
+        while main_lo.count():
+            item = main_lo.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+            elif item.layout():
+                AdminDashboard._clear_layout(item.layout())
+
+        toolbar = QWidget()
+        toolbar.setStyleSheet("background:transparent;")
+        tb_v = QVBoxLayout(toolbar)
+        tb_v.setContentsMargins(0, 0, 0, 12)
+        tb_v.setSpacing(12)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        search = QLineEdit()
+        search.setPlaceholderText("Tìm theo tên hoặc email...")
+        search.setFixedHeight(38)
+        search.setStyleSheet(
+            "QLineEdit { background:#FFFFFF; border:1px solid #E5E7EB;"
+            " border-radius:8px; padding:0 14px; font-size:13px; color:#374151; }"
+            "QLineEdit:focus { border-color:#2563EB; }"
+        )
+        row.addWidget(search, stretch=1)
+
+        status_filter = QComboBox()
+        status_filter.addItems(["Tất cả trạng thái", "Hoạt động", "Vô hiệu"])
+        status_filter.setFixedHeight(38)
+        status_filter.setFixedWidth(160)
+        _CB_SS = (
+            "QComboBox { background:#FFFFFF; border:1px solid #E5E7EB;"
+            " border-radius:8px; padding:0 12px; font-size:13px; color:#374151; }"
+            "QComboBox::drop-down { border:none; width:20px; }"
+            "QComboBox QAbstractItemView { background:#FFFFFF; border:1px solid #E5E7EB;"
+            " selection-background-color:#EEF2FF; color:#374151; outline:none; }"
+        )
+        status_filter.setStyleSheet(_CB_SS)
+        row.addWidget(status_filter)
+
+        sort_box = QComboBox()
+        sort_box.addItems(["Mới nhất", "Cũ nhất", "Tên A-Z", "PRO trước"])
+        sort_box.setFixedHeight(38)
+        sort_box.setFixedWidth(140)
+        sort_box.setStyleSheet(_CB_SS)
+        row.addWidget(sort_box)
+        tb_v.addLayout(row)
+        main_lo.addWidget(toolbar)
+
+        card = QFrame()
+        card.setObjectName("userCard")
+        card.setStyleSheet(
+            "QFrame#userCard { background:#FFFFFF; border-radius:12px;"
+            " border:1px solid #E5E7EB; }"
+        )
+        _shadow(card, blur=16, dy=3, alpha=10)
+        card_v = QVBoxLayout(card)
+        card_v.setContentsMargins(0, 0, 0, 0)
+        card_v.setSpacing(0)
+
+        table = QTableWidget()
+        table.setObjectName("userTable")
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(["Người dùng", "Vai trò", "Trạng thái", "Ngày tạo", "Thao tác"])
+        table.setShowGrid(False)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setSelectionMode(QTableWidget.SingleSelection)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.verticalHeader().setVisible(False)
+        table.setAlternatingRowColors(False)
+        table.setStyleSheet(
+            "QTableWidget { background:#FFFFFF; border:none; font-size:13px;"
+            " color:#374151; gridline-color:transparent; outline:none; }"
+            "QTableWidget::item { padding:0 14px; border-bottom:1px solid #F3F4F6; }"
+            "QTableWidget::item:hover { background:#F8FAFF; }"
+            "QTableWidget::item:selected { background:#EEF2FF; color:#1D4ED8; }"
+            "QHeaderView::section { background:#F9FAFB; color:#6B7280;"
+            " font-size:11px; font-weight:700; letter-spacing:0.5px;"
+            " padding:12px 14px; border:none; border-bottom:2px solid #E5E7EB; }"
+        )
+        table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        hdr = table.horizontalHeader()
+        hdr.setSectionResizeMode(0, QHeaderView.Stretch)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.Fixed)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(4, QHeaderView.Fixed)
+        hdr.setStretchLastSection(False)
+        table.setColumnWidth(2, 130)
+        table.setColumnWidth(4, 118)
+        card_v.addWidget(table)
+
+        footer = QFrame()
+        footer.setFixedHeight(48)
+        footer.setStyleSheet(
+            "QFrame { background:#F9FAFB; border:none;"
+            " border-top:1px solid #E5E7EB; }"
+        )
+        fl = QHBoxLayout(footer)
+        fl.setContentsMargins(16, 0, 16, 0)
+        fl.setSpacing(8)
+        count_lbl = QLabel()
+        count_lbl.setStyleSheet(
+            "QLabel { font-size:12px; color:#6B7280;"
+            " background:transparent; border:none; }"
+        )
+        fl.addWidget(count_lbl)
+        fl.addStretch()
+        PAGE_BTN = (
+            "QPushButton { background:#FFFFFF; color:#374151;"
+            " border:1px solid #E5E7EB; border-radius:6px; font-size:12px;"
+            " font-weight:500; min-width:32px; height:28px; padding:0 10px; }"
+            "QPushButton:hover { border-color:#2563EB; color:#2563EB; }"
+            "QPushButton:disabled { color:#D1D5DB; border-color:#F3F4F6; }"
+        )
+        btn_prev = QPushButton("← Trước")
+        btn_prev.setCursor(Qt.PointingHandCursor)
+        btn_prev.setStyleSheet(PAGE_BTN)
+        page_lbl = QLabel()
+        page_lbl.setStyleSheet(
+            "QLabel { font-size:12px; color:#374151;"
+            " background:transparent; border:none; padding:0 8px; }"
+        )
+        btn_next = QPushButton("Tiếp →")
+        btn_next.setCursor(Qt.PointingHandCursor)
+        btn_next.setStyleSheet(PAGE_BTN)
+        fl.addWidget(btn_prev)
+        fl.addWidget(page_lbl)
+        fl.addWidget(btn_next)
+        card_v.addWidget(footer)
+
+        main_lo.addWidget(card)
+        main_lo.addStretch(1)
+
+        self.table_users = table
+        self._user_search = search
+        self._user_status_cb = status_filter
+        self._user_sort_cb = sort_box
+        self._user_count_lbl = count_lbl
+        self._user_page_lbl = page_lbl
+        self._user_btn_prev = btn_prev
+        self._user_btn_next = btn_next
+
+        btn_prev.clicked.connect(self._user_prev_page)
+        btn_next.clicked.connect(self._user_next_page)
+        search.textChanged.connect(self._user_apply_filter)
+        status_filter.currentIndexChanged.connect(self._user_apply_filter)
+        sort_box.currentIndexChanged.connect(self._user_apply_filter)
+
+        self._user_refresh_data()
+
+    def _user_refresh_data(self) -> None:
+        try:
+            users = list(jobhub_api.admin_candidate_overview())
+        except ApiError as e:
+            _toast(self.win, f"Lỗi tải dữ liệu: {e}", success=False)
+            return
+        self._user_all_data = users
+        self._user_page_idx = 0
+        self._user_apply_filter()
+
+    def _user_apply_filter(self) -> None:
+        data = list(getattr(self, "_user_all_data", []))
+        q = getattr(self, "_user_search", None) or self.search_user
+        text = q.text().strip().lower() if q else ""
+
+        status_cb = getattr(self, "_user_status_cb", None)
+        sidx = status_cb.currentIndex() if status_cb else 0
+        if sidx == 1:
+            data = [u for u in data if bool(u.get("is_active", True))]
+        elif sidx == 2:
+            data = [u for u in data if not bool(u.get("is_active", True))]
+
+        if text:
+            data = [
+                u for u in data
+                if text in str(u.get("full_name", "")).lower()
+                or text in str(u.get("email", "")).lower()
+            ]
+
+        sort_cb = getattr(self, "_user_sort_cb", None)
+        sort_idx = sort_cb.currentIndex() if sort_cb else 0
+        if sort_idx == 1:
+            data.sort(key=lambda u: (str(u.get("created_at") or ""), int(u.get("id") or 0)))
+        elif sort_idx == 2:
+            data.sort(key=lambda u: str(u.get("full_name") or "").lower())
+        elif sort_idx == 3:
+            data.sort(
+                key=lambda u: (
+                    0 if bool(u.get("is_pro_active", False)) else 1,
+                    str(u.get("created_at") or ""),
+                    int(u.get("id") or 0),
+                )
+            )
+        else:
+            data.sort(
+                key=lambda u: (str(u.get("created_at") or ""), int(u.get("id") or 0)),
+                reverse=True,
+            )
+
+        self._user_filtered = data
+        self._user_page_idx = 0
+        self._populate_user_table(data)
+        self._user_update_pagination()
+
+    def _user_update_pagination(self) -> None:
+        total = len(getattr(self, "_user_filtered", []))
+        ps = getattr(self, "_user_page_size", 10)
+        pages = max(1, (total + ps - 1) // ps)
+        idx = max(0, min(getattr(self, "_user_page_idx", 0), pages - 1))
+        self._user_page_idx = idx
+        start = idx * ps + 1
+        end = min((idx + 1) * ps, total)
+
+        info_lbl = getattr(self, "_user_count_lbl", None)
+        page_lbl = getattr(self, "_user_page_lbl", None)
+        if info_lbl:
+            info_lbl.setText(
+                "Không có kết quả"
+                if total == 0
+                else f"Hiển thị {start}–{end} trong tổng số {total} người dùng"
+            )
+        if page_lbl:
+            page_lbl.setText(f"Trang {idx + 1}/{pages}")
+
+        btn_prev = getattr(self, "_user_btn_prev", None)
+        btn_next = getattr(self, "_user_btn_next", None)
+        if btn_prev:
+            btn_prev.setEnabled(idx > 0)
+        if btn_next:
+            btn_next.setEnabled(idx < pages - 1)
+
     _STATUS_VI_JOBS = {
         "published":        ("Đang tuyển",  "#DCFCE7", "#15803D"),
         "draft":            ("Nháp",        "#FEF9C3", "#92400E"),
@@ -2544,12 +2810,21 @@ class AdminDashboard:
             st_row.addWidget(status_lbl); st_row.addStretch()
             act_lo.addLayout(st_row)
             if st_raw == "rejected" and admin_note:
-                note2 = QLabel(f"Lý do: {admin_note}")
-                note2.setWordWrap(True)
-                note2.setStyleSheet(
-                    f"color:{TXT_S}; font-size:12px; background:transparent; border:none;"
+                warn = QFrame()
+                warn.setStyleSheet(
+                    "QFrame { background:#FEF2F2; border:1px solid #FECACA; border-radius:10px; }"
                 )
-                act_lo.addWidget(note2)
+                wlo = QVBoxLayout(warn)
+                wlo.setContentsMargins(10, 8, 10, 8)
+                wlo.setSpacing(4)
+                note_t = QLabel("Lý do từ chối")
+                note_t.setStyleSheet("color:#B91C1C; font-size:11px; font-weight:800; background:transparent; border:none;")
+                note2 = QLabel(admin_note)
+                note2.setWordWrap(True)
+                note2.setStyleSheet("color:#991B1B; font-size:12px; background:transparent; border:none;")
+                wlo.addWidget(note_t)
+                wlo.addWidget(note2)
+                act_lo.addWidget(warn)
 
         right_lo.addWidget(act_card)
         right_lo.addStretch()
@@ -3047,52 +3322,204 @@ class AdminDashboard:
                 rows.append((co, inv, _pill_lbl(st,sb,sf), f"{amt:,}đ"))
             return rows
 
-        def _view_all_dialog(title, headers, rows, fixed_widths=None, total_row=None):
+        def _view_all_dialog_v2(title, headers, records, dialog_kind, fixed_widths=None):
             dlg = QDialog(self.win)
             dlg.setWindowTitle(title)
-            dlg.setMinimumWidth(880)
+            dlg.setMinimumWidth(920)
             dlg.setStyleSheet(f"QDialog {{ background:{PAGE}; }}")
-            lo = QVBoxLayout(dlg); lo.setContentsMargins(24,24,24,24); lo.setSpacing(16)
+            lo = QVBoxLayout(dlg); lo.setContentsMargins(24,24,24,24); lo.setSpacing(14)
 
-            # Dialog header
             hd = QLabel(title)
             hd.setStyleSheet(f"color:{TXT_H}; font-size:18px; font-weight:800; background:transparent;")
             lo.addWidget(hd)
-
             div = QFrame(); div.setFixedHeight(1)
             div.setStyleSheet(f"background:{BORDER}; border:none;")
             lo.addWidget(div)
 
-            card = QFrame()
-            card.setStyleSheet(
-                f"QFrame {{ background:{CARD}; border-radius:12px; border:1px solid {BORDER}; }}"
+            ctrl = QWidget(); ctrl.setStyleSheet("background:transparent;border:none;")
+            ctrl_lo = QHBoxLayout(ctrl); ctrl_lo.setContentsMargins(0,0,0,0); ctrl_lo.setSpacing(8)
+            search = QLineEdit()
+            search.setPlaceholderText("Tìm theo từ khóa…")
+            search.setFixedHeight(36)
+            search.setStyleSheet(
+                "QLineEdit { background:#FFFFFF; border:1px solid #E5E7EB; border-radius:8px;"
+                " padding:0 12px; font-size:13px; color:#374151; }"
+                "QLineEdit:focus { border-color:#2563EB; }"
             )
+            filter_cb = QComboBox(); filter_cb.setFixedHeight(36); filter_cb.setStyleSheet(_DATE_CB_SS)
+            sort_cb = QComboBox(); sort_cb.setFixedHeight(36); sort_cb.setStyleSheet(_DATE_CB_SS)
+            ctrl_lo.addWidget(search, 1); ctrl_lo.addWidget(filter_cb); ctrl_lo.addWidget(sort_cb)
+            lo.addWidget(ctrl)
+
+            card = QFrame()
+            card.setStyleSheet(f"QFrame {{ background:{CARD}; border-radius:12px; border:1px solid {BORDER}; }}")
             _shadow(card, blur=14, dy=3, alpha=10)
             c_lo = QVBoxLayout(card); c_lo.setContentsMargins(0,0,0,0); c_lo.setSpacing(0)
-
-            tbl = QTableWidget()
-            _build_tbl(tbl, headers, rows, fixed_widths=fixed_widths)
-            # Override fixed height for full-list: allow scroll
-            tbl.setFixedHeight(min(52 * len(rows) + 38, 480))
-            tbl.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-            tbl.setStyleSheet(TBL_SS +
-                "QScrollBar:vertical { background:#F0F2F5; width:6px; border-radius:3px; }"
-                "QScrollBar::handle:vertical { background:#D1D5DB; border-radius:3px; }"
-            )
-            c_lo.addWidget(tbl)
+            tbl = QTableWidget(); c_lo.addWidget(tbl)
             lo.addWidget(card)
 
-            # Total row
-            if total_row:
-                total_lbl = QLabel(total_row)
-                total_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                total_lbl.setStyleSheet(
-                    f"color:{TXT_H}; font-size:14px; font-weight:800;"
-                    " background:transparent; padding:4px 8px;"
-                )
+            total_lbl = QLabel("")
+            total_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            total_lbl.setStyleSheet(
+                f"color:{TXT_H}; font-size:14px; font-weight:800;"
+                " background:transparent; padding:2px 6px;"
+            )
+            if dialog_kind == "hr":
                 lo.addWidget(total_lbl)
 
-            # Close button
+            def _parse_dt(raw):
+                s = str(raw or "").strip()
+                if not s:
+                    return None
+                try:
+                    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+                except Exception:
+                    try:
+                        return datetime.strptime(s[:19], "%Y-%m-%dT%H:%M:%S")
+                    except Exception:
+                        return None
+
+            def _ival(v) -> int:
+                try:
+                    return int(v or 0)
+                except Exception:
+                    return 0
+
+            def _candidate_rows(src):
+                return [
+                    (
+                        str(r.get("display_name") or "—")[:24],
+                        f"{_ival(r.get('paid_count'))} lần",
+                        _fmt_date(str(r.get("last_paid_at") or "")),
+                        f"{_ival(r.get('total_paid_amount_vnd')):,}đ",
+                    )
+                    for r in src
+                ]
+
+            def _hr_rows(src):
+                rows = []
+                total_amt = 0
+                for r in src:
+                    amt = _ival(r.get("total_paid_amount_vnd"))
+                    total_amt += amt
+                    rows.append(
+                        (
+                            str(r.get("company_name") or r.get("display_name") or "—")[:26],
+                            f"{_ival(r.get('paid_count'))} lần",
+                            _fmt_date(str(r.get("last_paid_at") or "")),
+                            f"{amt:,}đ",
+                        )
+                    )
+                return rows, total_amt
+
+            def _boost_rows(src):
+                rows = []
+                for i, r in enumerate(src, start=1):
+                    active = bool(r.get("is_boost_active"))
+                    rows.append(
+                        (
+                            i,
+                            str(r.get("job_title") or "—"),
+                            str(r.get("company_name") or "—"),
+                            f"{_ival(r.get('boost_budget_vnd')):,}đ {'(active)' if active else '(hết hạn)'}",
+                            _fmt_date(str(r.get("boost_expires_at") or r.get("boost_last_paid_at") or "")),
+                        )
+                    )
+                return rows
+
+            def _reload():
+                q = search.text().strip().lower()
+                fval = str(filter_cb.currentData() or "all")
+                sval = str(sort_cb.currentData() or "default")
+                src = list(records)
+
+                if dialog_kind == "candidate":
+                    if q:
+                        src = [r for r in src if q in str(r.get("display_name") or "").lower() or q in str(r.get("email") or "").lower()]
+                    if fval == "ge_3":
+                        src = [r for r in src if _ival(r.get("paid_count")) >= 3]
+                    elif fval == "ge_1":
+                        src = [r for r in src if _ival(r.get("paid_count")) >= 1]
+                    if sval == "paid_desc":
+                        src.sort(key=lambda r: _ival(r.get("paid_count")), reverse=True)
+                    elif sval == "paid_asc":
+                        src.sort(key=lambda r: _ival(r.get("paid_count")))
+                    elif sval == "amount_desc":
+                        src.sort(key=lambda r: _ival(r.get("total_paid_amount_vnd")), reverse=True)
+                    elif sval == "name_asc":
+                        src.sort(key=lambda r: str(r.get("display_name") or "").lower())
+                    else:
+                        src.sort(key=lambda r: (_parse_dt(r.get("last_paid_at")) or datetime.min), reverse=True)
+                    rows = _candidate_rows(src)
+                elif dialog_kind == "hr":
+                    if q:
+                        src = [r for r in src if q in str(r.get("company_name") or r.get("display_name") or "").lower() or q in str(r.get("email") or "").lower()]
+                    if fval == "ge_3":
+                        src = [r for r in src if _ival(r.get("paid_count")) >= 3]
+                    elif fval == "ge_1":
+                        src = [r for r in src if _ival(r.get("paid_count")) >= 1]
+                    if sval == "paid_desc":
+                        src.sort(key=lambda r: _ival(r.get("paid_count")), reverse=True)
+                    elif sval == "paid_asc":
+                        src.sort(key=lambda r: _ival(r.get("paid_count")))
+                    elif sval == "amount_desc":
+                        src.sort(key=lambda r: _ival(r.get("total_paid_amount_vnd")), reverse=True)
+                    elif sval == "name_asc":
+                        src.sort(key=lambda r: str(r.get("company_name") or r.get("display_name") or "").lower())
+                    else:
+                        src.sort(key=lambda r: (_parse_dt(r.get("last_paid_at")) or datetime.min), reverse=True)
+                    rows, total_amt = _hr_rows(src)
+                    total_lbl.setText(f"Tổng cộng: {total_amt:,}đ")
+                else:
+                    if q:
+                        src = [r for r in src if q in str(r.get("job_title") or "").lower() or q in str(r.get("company_name") or "").lower()]
+                    if fval == "active":
+                        src = [r for r in src if bool(r.get("is_boost_active"))]
+                    elif fval == "expired":
+                        src = [r for r in src if not bool(r.get("is_boost_active"))]
+                    if sval == "budget_desc":
+                        src.sort(key=lambda r: _ival(r.get("boost_budget_vnd")), reverse=True)
+                    elif sval == "budget_asc":
+                        src.sort(key=lambda r: _ival(r.get("boost_budget_vnd")))
+                    elif sval == "name_asc":
+                        src.sort(key=lambda r: str(r.get("job_title") or "").lower())
+                    else:
+                        src.sort(key=lambda r: (_parse_dt(r.get("boost_last_paid_at")) or datetime.min), reverse=True)
+                    rows = _boost_rows(src)
+
+                if not rows:
+                    rows = [("Không có dữ liệu",) + tuple("—" for _ in range(max(0, len(headers) - 1)))]
+                _build_tbl(tbl, headers, rows, fixed_widths=fixed_widths)
+                tbl.setFixedHeight(min(52 * len(rows) + 38, 480))
+                tbl.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+                tbl.setStyleSheet(TBL_SS +
+                    "QScrollBar:vertical { background:#F0F2F5; width:6px; border-radius:3px; }"
+                    "QScrollBar::handle:vertical { background:#D1D5DB; border-radius:3px; }"
+                )
+
+            if dialog_kind in {"candidate", "hr"}:
+                filter_cb.addItem("Tất cả", userData="all")
+                filter_cb.addItem("Từ 1 lần", userData="ge_1")
+                filter_cb.addItem("Từ 3 lần", userData="ge_3")
+                sort_cb.addItem("Mới thanh toán", userData="newest")
+                sort_cb.addItem("Thanh toán nhiều", userData="paid_desc")
+                sort_cb.addItem("Thanh toán ít", userData="paid_asc")
+                sort_cb.addItem("Tổng tiền cao", userData="amount_desc")
+                sort_cb.addItem("Tên A-Z", userData="name_asc")
+            else:
+                filter_cb.addItem("Tất cả", userData="all")
+                filter_cb.addItem("Đang active", userData="active")
+                filter_cb.addItem("Đã hết hạn", userData="expired")
+                sort_cb.addItem("Boost gần nhất", userData="newest")
+                sort_cb.addItem("Ngân sách cao", userData="budget_desc")
+                sort_cb.addItem("Ngân sách thấp", userData="budget_asc")
+                sort_cb.addItem("Tên tin A-Z", userData="name_asc")
+
+            search.textChanged.connect(_reload)
+            filter_cb.currentIndexChanged.connect(_reload)
+            sort_cb.currentIndexChanged.connect(_reload)
+            _reload()
+
             btn_close = QPushButton("Đóng")
             btn_close.setFixedHeight(38); btn_close.setCursor(Qt.PointingHandCursor)
             btn_close.setStyleSheet(
@@ -3139,17 +3566,22 @@ class AdminDashboard:
         hr_headers  = ["CÔNG TY","SỐ LẦN THANH TOÁN","LẦN GẦN NHẤT","TỔNG TIỀN"]
 
         def _open_can_all():
-            can_rows_full = _make_candidate_paid_rows(candidate_paid_src)
-            _view_all_dialog("Tất cả giao dịch Candidate Pro",
-                             can_headers, can_rows_full,
-                             fixed_widths=[110, 130, 130])
+            _view_all_dialog_v2(
+                "Tất cả giao dịch Candidate Pro",
+                can_headers,
+                candidate_paid_src,
+                dialog_kind="candidate",
+                fixed_widths=[110, 130, 130],
+            )
 
         def _open_hr_all():
-            hr_rows_full, hr_total_full = _make_hr_paid_rows(hr_paid_src)
-            _view_all_dialog("Tất cả hóa đơn HR",
-                             hr_headers, hr_rows_full,
-                             fixed_widths=[110, 130, 100],
-                             total_row=f"Tổng cộng: {hr_total_full:,}đ")
+            _view_all_dialog_v2(
+                "Tất cả hóa đơn HR",
+                hr_headers,
+                hr_paid_src,
+                dialog_kind="hr",
+                fixed_widths=[110, 130, 100],
+            )
 
         bot.addWidget(_tbl_card("Giao dịch Candidate Pro",
                                 can_headers, can_rows_preview,
@@ -3192,19 +3624,11 @@ class AdminDashboard:
             "Xếp hạng Boost Tin Tuyển Dụng",
             boost_headers,
             boost_rows_preview or [(1, "Chưa có dữ liệu boost", "—", "0đ", "—")],
-            on_view_all=lambda: _view_all_dialog(
+            on_view_all=lambda: _view_all_dialog_v2(
                 "Xếp hạng boost đầy đủ",
                 boost_headers,
-                [
-                    (
-                        i,
-                        str(r.get("job_title") or "—"),
-                        str(r.get("company_name") or "—"),
-                        f"{int(r.get('boost_budget_vnd') or 0):,}đ {'(active)' if bool(r.get('is_boost_active')) else '(hết hạn)'}",
-                        _fmt_date(str(r.get("boost_expires_at") or r.get("boost_last_paid_at") or "")),
-                    )
-                    for i, r in enumerate(boost_ranking_src, start=1)
-                ] or [(1, "Chưa có dữ liệu boost", "—", "0đ", "—")],
+                boost_ranking_src,
+                dialog_kind="boost",
                 fixed_widths=[70, 240, 170, 140],
             ),
             fixed_widths=[70, 220, 160, 140],
@@ -3466,6 +3890,9 @@ class AdminDashboard:
         desc      = str(h.get("description")  or h.get("company_description")  or "")
         job_count = int(h.get("job_count")    or base_data.get("job_count")    or 0)
         is_active = bool(h.get("is_active",   base_data.get("is_active", True)))
+        approval_status = str(h.get("approval_status") or "").strip().lower()
+        admin_note = str(h.get("admin_note") or "").strip()
+        hr_profile_id = int(h.get("hr_profile_id") or base_data.get("hr_profile_id") or base_data.get("id") or 0)
         joined    = self._fmt_date(str(h.get("created_at") or base_data.get("created_at") or ""))
 
         dlg = QDialog(self.win)
@@ -3500,9 +3927,14 @@ class AdminDashboard:
             "QLabel { color:rgba(255,255,255,0.8); font-size:13px;"
             " background:transparent; border:none; }"
         )
-        pill_bg = "#DCFCE7" if is_active else "#FEE2E2"
-        pill_fg = "#15803D" if is_active else "#B91C1C"
-        pill_txt = "Đang hoạt động" if is_active else "Bị khóa"
+        if not is_active:
+            pill_bg, pill_fg, pill_txt = "#FEE2E2", "#B91C1C", "Bị khóa"
+        elif approval_status == "pending":
+            pill_bg, pill_fg, pill_txt = "#DBEAFE", "#1D4ED8", "Chờ duyệt"
+        elif approval_status == "rejected":
+            pill_bg, pill_fg, pill_txt = "#FEF3C7", "#B45309", "Từ chối"
+        else:
+            pill_bg, pill_fg, pill_txt = "#DCFCE7", "#15803D", "Đang hoạt động"
         status_pill = QLabel(f"  {pill_txt}  ")
         status_pill.setFixedHeight(22)
         status_pill.setStyleSheet(
@@ -3574,7 +4006,7 @@ class AdminDashboard:
             return c
 
         body_lo.addWidget(_info_card("Thông tin tài khoản", [
-            ("ID",             f"#{hr_id}"),
+            ("ID hồ sơ HR",    f"#{hr_profile_id or '—'}"),
             ("Ngày tham gia",  joined),
             ("Tin đã đăng",    str(job_count)),
             ("Trạng thái",     pill_txt),
@@ -3612,6 +4044,24 @@ class AdminDashboard:
             d_lo.addWidget(d_ttl); d_lo.addWidget(d_div); d_lo.addWidget(d_txt)
             body_lo.addWidget(desc_card)
 
+        if approval_status == "rejected" and admin_note:
+            reject_card = QFrame()
+            reject_card.setStyleSheet(
+                "QFrame { background:#FEF2F2; border-radius:12px; border:1px solid #FECACA; }"
+            )
+            _shadow(reject_card, blur=10, dy=2, alpha=6)
+            r_lo = QVBoxLayout(reject_card)
+            r_lo.setContentsMargins(16, 12, 16, 12)
+            r_lo.setSpacing(6)
+            r_ttl = QLabel("Lý do từ chối hồ sơ HR")
+            r_ttl.setStyleSheet("color:#B91C1C;font-size:12px;font-weight:800;background:transparent;border:none;")
+            r_txt = QLabel(admin_note)
+            r_txt.setWordWrap(True)
+            r_txt.setStyleSheet("color:#991B1B;font-size:12px;background:transparent;border:none;")
+            r_lo.addWidget(r_ttl)
+            r_lo.addWidget(r_txt)
+            body_lo.addWidget(reject_card)
+
         body_lo.addStretch()
 
         # ── Bottom action bar ─────────────────────────────────────
@@ -3621,6 +4071,119 @@ class AdminDashboard:
         )
         bar_lo = QHBoxLayout(bar); bar_lo.setContentsMargins(24,0,24,0); bar_lo.setSpacing(10)
         bar_lo.addStretch()
+
+        if is_active and approval_status in {"pending", "rejected"}:
+            btn_reject = QPushButton("  Từ chối")
+            btn_reject.setIcon(QIcon(str(resource_icon("ic_x.svg"))))
+            btn_reject.setStyleSheet(
+                "QPushButton { background:#FEF2F2; color:#B91C1C; border:1px solid #FECACA;"
+                " border-radius:8px; font-size:13px; font-weight:600; padding:0 16px; height:36px; }"
+                "QPushButton:hover { background:#FEE2E2; }"
+            )
+
+            def _ask_reject_reason() -> str | None:
+                nd = QDialog(dlg)
+                nd.setWindowTitle("Từ chối hồ sơ HR")
+                nd.setMinimumWidth(520)
+                nd.setStyleSheet(
+                    f"QDialog {{ background:{PAGE}; }}"
+                    f"QFrame#ndCard {{ background:{CARD}; border:1px solid {BORDER}; border-radius:12px; }}"
+                )
+                nlo = QVBoxLayout(nd)
+                nlo.setContentsMargins(16, 16, 16, 16)
+                nlo.setSpacing(12)
+
+                card = QFrame(); card.setObjectName("ndCard")
+                clo = QVBoxLayout(card); clo.setContentsMargins(14, 14, 14, 14); clo.setSpacing(10)
+                lbl = QLabel("Nhập lý do từ chối (bắt buộc)")
+                lbl.setStyleSheet("color:#111827;font-size:13px;font-weight:700;background:transparent;border:none;")
+                inp = QPlainTextEdit()
+                inp.setPlaceholderText("Ví dụ: Hồ sơ thiếu thông tin pháp lý công ty, vui lòng bổ sung và gửi lại.")
+                inp.setFixedHeight(96)
+                inp.setStyleSheet(
+                    "QPlainTextEdit { background:#FFFFFF; color:#374151; border:1px solid #E5E7EB;"
+                    " border-radius:10px; padding:10px; font-size:13px; }"
+                    "QPlainTextEdit:focus { border-color:#2563EB; }"
+                )
+                clo.addWidget(lbl)
+                clo.addWidget(inp)
+                nlo.addWidget(card)
+
+                row = QHBoxLayout(); row.addStretch()
+                btn_cancel = QPushButton("Hủy")
+                btn_cancel.setFixedHeight(36)
+                btn_cancel.setStyleSheet(
+                    "QPushButton { background:#F3F4F6; color:#374151; border:1px solid #E5E7EB;"
+                    " border-radius:8px; font-size:13px; font-weight:600; padding:0 16px; }"
+                    "QPushButton:hover { background:#E5E7EB; }"
+                )
+                btn_ok = QPushButton("Xác nhận từ chối")
+                btn_ok.setFixedHeight(36)
+                btn_ok.setStyleSheet(
+                    "QPushButton { background:#DC2626; color:#FFFFFF; border:none;"
+                    " border-radius:8px; font-size:13px; font-weight:700; padding:0 18px; }"
+                    "QPushButton:hover { background:#B91C1C; }"
+                )
+                row.addWidget(btn_cancel); row.addWidget(btn_ok)
+                nlo.addLayout(row)
+
+                out = {"reason": None}
+
+                def _confirm():
+                    reason = inp.toPlainText().strip()
+                    if not reason:
+                        _toast(self.win, "Vui lòng nhập lý do từ chối.", success=False)
+                        return
+                    out["reason"] = reason
+                    nd.accept()
+
+                btn_cancel.clicked.connect(nd.reject)
+                btn_ok.clicked.connect(_confirm)
+                inp.setFocus()
+                if nd.exec() == QDialog.Accepted:
+                    return out["reason"]
+                return None
+
+            def _do_reject_hr():
+                reason = _ask_reject_reason()
+                if not reason:
+                    return
+                try:
+                    jobhub_api.admin_reject_hr(hr_id, reason)
+                    _toast(self.win, "Đã từ chối hồ sơ HR", success=True)
+                except ApiError as e:
+                    _toast(self.win, f"Thất bại: {e}", success=False)
+                    return
+                dlg.accept()
+                QTimer.singleShot(0, self._hr_refresh_data)
+
+            btn_reject.clicked.connect(_do_reject_hr)
+            btn_reject.setIconSize(QSize(14, 14))
+            btn_reject.setCursor(Qt.PointingHandCursor)
+            bar_lo.addWidget(btn_reject)
+
+            btn_approve = QPushButton("  Duyệt lại" if approval_status == "rejected" else "  Duyệt HR")
+            btn_approve.setIcon(QIcon(str(resource_icon("ic_check.svg"))))
+            btn_approve.setStyleSheet(
+                "QPushButton { background:#EEFDF3; color:#15803D; border:1px solid #BBF7D0;"
+                " border-radius:8px; font-size:13px; font-weight:700; padding:0 16px; height:36px; }"
+                "QPushButton:hover { background:#DCFCE7; }"
+            )
+
+            def _do_approve_hr():
+                try:
+                    jobhub_api.admin_approve_hr(hr_id, None)
+                    _toast(self.win, "Đã phê duyệt hồ sơ HR", success=True)
+                except ApiError as e:
+                    _toast(self.win, f"Thất bại: {e}", success=False)
+                    return
+                dlg.accept()
+                QTimer.singleShot(0, self._hr_refresh_data)
+
+            btn_approve.clicked.connect(_do_approve_hr)
+            btn_approve.setIconSize(QSize(14, 14))
+            btn_approve.setCursor(Qt.PointingHandCursor)
+            bar_lo.addWidget(btn_approve)
 
         if is_active:
             btn_toggle = QPushButton("  Khóa tài khoản")
@@ -3713,29 +4276,6 @@ class AdminDashboard:
         tb_v.setContentsMargins(0, 0, 0, 12)
         tb_v.setSpacing(12)
 
-        r1 = QHBoxLayout(); r1.setSpacing(10)
-        r1.addStretch()
-
-        btn_export = QPushButton("Xuất báo cáo")
-        btn_export.setFixedHeight(36); btn_export.setCursor(Qt.PointingHandCursor)
-        btn_export.setStyleSheet(
-            "QPushButton { background:#FFFFFF; color:#374151;"
-            " border:1px solid #D1D5DB; border-radius:8px;"
-            " font-size:13px; font-weight:500; padding:0 16px; }"
-            "QPushButton:hover { border-color:#2563EB; color:#2563EB; }"
-        )
-        btn_schedule = QPushButton("+ Lên lịch phỏng vấn")
-        btn_schedule.setFixedHeight(36); btn_schedule.setCursor(Qt.PointingHandCursor)
-        btn_schedule.setStyleSheet(
-            "QPushButton { background:#2563EB; color:#FFFFFF; border:none;"
-            " border-radius:8px; font-size:13px; font-weight:600; padding:0 16px; }"
-            "QPushButton:hover { background:#1D4ED8; }"
-        )
-        r1.addWidget(btn_export); r1.addWidget(btn_schedule)
-        btn_export.setParent(None)
-        btn_schedule.setParent(None)
-        tb_v.addLayout(r1)
-
         r2 = QHBoxLayout(); r2.setSpacing(8)
         search = QLineEdit()
         search.setPlaceholderText("Tìm kiếm công ty, email, số điện thoại…")
@@ -3748,7 +4288,7 @@ class AdminDashboard:
         r2.addWidget(search, stretch=1)
 
         status_filter = QComboBox()
-        status_filter.addItems(["Tất cả trạng thái", "Hoạt động", "Bị khóa"])
+        status_filter.addItems(["Tất cả trạng thái", "Hoạt động", "Chờ duyệt", "Từ chối", "Bị khóa"])
         status_filter.setFixedHeight(38); status_filter.setFixedWidth(170)
         _CB_SS = (
             "QComboBox { background:#FFFFFF; border:1px solid #E5E7EB;"
@@ -3801,6 +4341,9 @@ class AdminDashboard:
             " font-size:11px; font-weight:700; letter-spacing:0.5px;"
             " padding:12px 14px; border:none; border-bottom:2px solid #E5E7EB; }"
         )
+        table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         hdr = table.horizontalHeader()
         hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         hdr.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -3850,7 +4393,8 @@ class AdminDashboard:
         btn_next.setStyleSheet(PAGE_BTN)
         fl.addWidget(btn_prev); fl.addWidget(page_lbl); fl.addWidget(btn_next)
         card_v.addWidget(footer)
-        main_lo.addWidget(card, stretch=1)
+        main_lo.addWidget(card)
+        main_lo.addStretch(1)
 
         # ── Store refs ────────────────────────────────────────────────────
         self._hr_table     = table
@@ -3896,10 +4440,27 @@ class AdminDashboard:
 
         data: list = list(self._hr_all_data)
 
-        # --- status filter (API trả về is_active: bool) ---
-        if fval == 1:          # Hoạt động
-            data = [r for r in data if bool(r.get("is_active", True))]
-        elif fval == 2:        # Bị khóa
+        # --- status filter ---
+        # "Hoạt động" = account active + HR profile approved.
+        if fval == 1:
+            data = [
+                r for r in data
+                if bool(r.get("is_active", True))
+                and str(r.get("approval_status", "")).strip().lower() == "approved"
+            ]
+        elif fval == 2:
+            data = [
+                r for r in data
+                if bool(r.get("is_active", True))
+                and str(r.get("approval_status", "")).strip().lower() == "pending"
+            ]
+        elif fval == 3:
+            data = [
+                r for r in data
+                if bool(r.get("is_active", True))
+                and str(r.get("approval_status", "")).strip().lower() == "rejected"
+            ]
+        elif fval == 4:
             data = [r for r in data if not bool(r.get("is_active", True))]
 
         # --- text search ---
@@ -3936,14 +4497,16 @@ class AdminDashboard:
         ps    = self._hr_page_size
         start = self._hr_page_idx * ps
         page  = hrs[start : start + ps]
+        row_h = 52
 
-        table.setRowCount(len(page))
         table.setRowCount(len(page))
         for row, hr in enumerate(page):
-            table.setRowHeight(row, 52)
+            table.setRowHeight(row, row_h)
 
             # col 0 – ID
-            id_item = QTableWidgetItem(str(hr.get("id", "")))
+            hr_profile_id = int(hr.get("hr_profile_id", hr.get("id", 0)) or 0)
+            hr_user_id = int(hr.get("user_id", hr.get("id", 0)) or 0)
+            id_item = QTableWidgetItem(str(hr_profile_id or ""))
             id_item.setTextAlignment(Qt.AlignCenter)
             table.setItem(row, 0, id_item)
 
@@ -3955,8 +4518,7 @@ class AdminDashboard:
             name_h.setSpacing(10)
 
             company = str(hr.get("company_name", "—"))
-            hr_uid = int(hr.get("id", 0))
-            av, _ = _make_avatar_circle(company, size=34, user_id=hr_uid)
+            av, _ = _make_avatar_circle(company, size=34, user_id=hr_user_id or hr_profile_id)
             name_lbl = QLabel(company)
             name_lbl.setStyleSheet(
                 "QLabel { font-size:13px; font-weight:600; color:#111827;"
@@ -3989,12 +4551,17 @@ class AdminDashboard:
             jc_item.setTextAlignment(Qt.AlignCenter)
             table.setItem(row, 5, jc_item)
 
-            # col 6 – Status pill  (API field: is_active: bool)
+            # col 6 – Status pill
             is_active = bool(hr.get("is_active", True))
-            if is_active:
-                pill = _pill("Hoạt động", "#DCFCE7", "#15803D")
-            else:
+            approval = str(hr.get("approval_status", "")).strip().lower()
+            if not is_active:
                 pill = _pill("Bị khóa", "#FEE2E2", "#B91C1C")
+            elif approval == "pending":
+                pill = _pill("Chờ duyệt", "#DBEAFE", "#1D4ED8")
+            elif approval == "rejected":
+                pill = _pill("Từ chối", "#FEF3C7", "#B45309")
+            else:
+                pill = _pill("Hoạt động", "#DCFCE7", "#15803D")
             # Give explicit minimum so Qt knows the widget width
             pill.setMinimumWidth(96)
             pill_w = QWidget()
@@ -4026,11 +4593,10 @@ class AdminDashboard:
             btn_view.setIconSize(QSize(16, 16))
             btn_view.setStyleSheet(_BTN_SS)
             btn_view.setToolTip("Xem hồ sơ")
-            hr_id = int(hr.get("id", 0))
             def _mk_view_hr(hid: int, hdata: dict):
                 def _h(): self._show_hr_detail_dialog(hid, hdata)
                 return _h
-            btn_view.clicked.connect(_mk_view_hr(hr_id, hr))
+            btn_view.clicked.connect(_mk_view_hr(hr_user_id, hr))
             act_h.addWidget(btn_view)
 
             # ── Unlock button (mở khóa) ──────────────────────────
@@ -4052,7 +4618,7 @@ class AdminDashboard:
                     QTimer.singleShot(0, self._hr_refresh_data)
                 return _handler
 
-            btn_unlock.clicked.connect(_make_unlock(hr_id))
+            btn_unlock.clicked.connect(_make_unlock(hr_user_id))
             act_h.addWidget(btn_unlock)
 
             # ── Lock button (khóa) ───────────────────────────────
@@ -4074,11 +4640,23 @@ class AdminDashboard:
                     QTimer.singleShot(0, self._hr_refresh_data)
                 return _handler
 
-            btn_lock.clicked.connect(_make_lock(hr_id))
+            btn_lock.clicked.connect(_make_lock(hr_user_id))
             act_h.addWidget(btn_lock)
 
             act_h.addStretch()
             table.setCellWidget(row, 7, act_w)
+
+        self._hr_sync_table_height(len(page), row_h)
+
+    def _hr_sync_table_height(self, row_count: int, row_height: int = 52) -> None:
+        """Keep footer close to content by sizing table to current page rows."""
+        table = getattr(self, "_hr_table", None)
+        if table is None:
+            return
+        header_h = table.horizontalHeader().height() or 42
+        frame_h = table.frameWidth() * 2
+        body_rows = max(1, int(row_count))
+        table.setFixedHeight(header_h + (body_rows * row_height) + frame_h + 2)
 
     def _hr_update_pagination(self) -> None:
         """Refresh the count label and prev/next button states."""

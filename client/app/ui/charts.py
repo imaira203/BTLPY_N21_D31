@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib
 import matplotlib.colors as mc
 import matplotlib.patches as mpatches
+from matplotlib.ticker import MaxNLocator
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
@@ -307,11 +308,42 @@ def make_bar_chart(
     ax = fig.add_subplot(111)
     ax.set_facecolor(bg)
 
-    x = np.arange(len(labels))
-    ax.bar(x, values, color=color, linewidth=0, zorder=2, alpha=0.85, width=0.55)
+    safe_labels = [str(x) for x in labels]
+    safe_values: list[int] = []
+    for raw in values:
+        try:
+            val = int(round(float(raw)))
+        except (TypeError, ValueError):
+            val = 0
+        safe_values.append(max(0, val))
+    if len(safe_values) < len(safe_labels):
+        safe_values.extend([0] * (len(safe_labels) - len(safe_values)))
+    elif len(safe_values) > len(safe_labels):
+        safe_values = safe_values[: len(safe_labels)]
+
+    x = np.arange(len(safe_labels))
+    ax.bar(x, safe_values, color=color, linewidth=0, zorder=2, alpha=0.85, width=0.55)
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9, color=txt_color)
+    ax.set_xticklabels(safe_labels, fontsize=9, color=txt_color)
     ax.yaxis.set_tick_params(labelsize=9, labelcolor=txt_color)
+    ymax = max(safe_values) if safe_values else 0
+    if ymax <= 0:
+        ax.set_ylim(0, 1)
+        ax.set_yticks([0, 1])
+        ax.text(
+            0.5,
+            0.62,
+            "Chưa có dữ liệu tuyển dụng",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=10,
+            color=txt_color,
+            alpha=0.9,
+        )
+    else:
+        ax.set_ylim(0, max(2, int(np.ceil(ymax * 1.20))))
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     for spine in ax.spines.values():
         spine.set_visible(False)
     ax.yaxis.grid(True, linestyle="--", alpha=0.20, color=grid_color)

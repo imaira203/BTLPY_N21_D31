@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from ..db import get_db
 from ..deps import get_current_user
@@ -240,13 +240,16 @@ def reject_hr(
     target = db.get(User, target_user_id)
     if not target or target.role != UserRole.hr or not target.hr_profile:
         raise HTTPException(status_code=404, detail="HR not found")
+    reject_reason = (body.note or "").strip()
+    if not reject_reason:
+        raise HTTPException(status_code=400, detail="Vui lòng nhập lý do từ chối hồ sơ HR.")
     target.hr_profile.approval_status = HRApprovalStatus.rejected
-    target.hr_profile.admin_note = body.note
+    target.hr_profile.admin_note = reject_reason
     notify_user(
         db,
         user_id=int(target.id),
         title="HR bị từ chối",
-        message="Hồ sơ HR của bạn đã bị từ chối. Vui lòng cập nhật và gửi lại.",
+        message=f"Hồ sơ HR của bạn đã bị từ chối. Lý do: {reject_reason}",
         category="hr",
         action="hr_profile_rejected",
         entity_type="hr_profile",
@@ -430,40 +433,62 @@ def candidate_overview(user: Annotated[User, Depends(get_current_user)], db: Ann
 @router.get("/users/hrs")
 def hr_overview(user: Annotated[User, Depends(get_current_user)], db: Annotated[Session, Depends(get_db)]) -> list[dict]:
     _require_admin(user)
+    direct_job_counts = (
+        select(
+            Job.hr_user_id.label("hr_user_id"),
+            func.count(Job.id).label("jobs_count"),
+        )
+        .group_by(Job.hr_user_id)
+        .subquery()
+    )
+    legacy_job_user = aliased(User)
+    legacy_job_counts = (
+        select(
+            HRProfile.user_id.label("hr_user_id"),
+            func.count(Job.id).label("jobs_count"),
+        )
+        .join(HRProfile, HRProfile.id == Job.hr_user_id)
+        .outerjoin(legacy_job_user, legacy_job_user.id == Job.hr_user_id)
+        .where(legacy_job_user.id.is_(None))
+        .group_by(HRProfile.user_id)
+        .subquery()
+    )
     rows = db.execute(
         select(
             User.id,
+            HRProfile.id,
             User.email,
             User.created_at,
             User.is_active,
             HRProfile.company_name,
             HRProfile.contact_phone,
-            func.count(Job.id),
+            HRProfile.approval_status,
+            (
+                func.coalesce(direct_job_counts.c.jobs_count, 0)
+                + func.coalesce(legacy_job_counts.c.jobs_count, 0)
+            ).label("jobs_count"),
         )
         .join(HRProfile, HRProfile.user_id == User.id)
-        .outerjoin(Job, Job.hr_user_id == User.id)
+        .outerjoin(direct_job_counts, direct_job_counts.c.hr_user_id == User.id)
+        .outerjoin(legacy_job_counts, legacy_job_counts.c.hr_user_id == User.id)
         .where(User.role == UserRole.hr)
-        .group_by(
-            User.id,
-            User.email,
-            User.created_at,
-            User.is_active,
-            HRProfile.company_name,
-            HRProfile.contact_phone,
-        )
         .order_by(User.id.desc())
     ).all()
     out: list[dict] = []
-    for user_id, email, created_at, is_active, company_name, contact_phone, jobs_count in rows:
+    for user_id, hr_profile_id, email, created_at, is_active, company_name, contact_phone, approval_status, jobs_count in rows:
         out.append(
             {
-                "id": user_id,
+                "id": int(hr_profile_id or user_id),
+                "user_id": int(user_id),
+                "hr_profile_id": int(hr_profile_id or user_id),
                 "company_name": company_name,
                 "email": email,
                 "phone": contact_phone or "",
                 "created_at": created_at.strftime("%d/%m/%Y"),
+                "job_count": int(jobs_count or 0),
                 "jobs_count": int(jobs_count or 0),
                 "is_active": bool(is_active),
+                "approval_status": approval_status.value if hasattr(approval_status, "value") else str(approval_status or ""),
             }
         )
     return out
@@ -527,6 +552,7 @@ def hr_detail(
     hp = target.hr_profile
     return {
         "user_id": target.id,
+        "hr_profile_id": int(hp.id),
         "email": target.email,
         "full_name": target.full_name,
         "is_active": target.is_active,
